@@ -36,7 +36,8 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Blockers / Notes:**
   * Agents: stopping a background `spring-boot:run` task leaves Maven and the forked app JVM running on Windows. Kill them by PID afterwards (check `Get-NetTCPConnection -LocalPort 8761,8080,8082`).
   * Port 8080 is sometimes taken by the owner's unrelated Node server (`server/src/main.ts`). It isn't ours; don't kill it. The gateway can't start while it runs.
-  * GitHub Actions CI has not run yet (first run on the next push).
+  * GitHub Actions CI: first run on `baa98cd` passed (pushed 2026-10-10 with the owner's approval).
+  * The app was started for the owner to view (2026-10-10) and then terminated at their request: 3 services stopped, `docker compose down` (volumes kept), Docker Desktop stopped. Nothing is running.
 
 ## Task List
 
