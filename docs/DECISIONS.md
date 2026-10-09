@@ -62,7 +62,7 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 
 ## D4: Coordinates and module layout
 
-*2026-10-09 · proposed (owner may rename before Phase 1 code lands; it's cheap now, expensive later)*
+*2026-10-09 · accepted (Phase 1 plan approved with these defaults; code now uses them)*
 
 **Decision.** groupId `com.mitpass`, root artifact `mitpass-parent`, version `0.1.0-SNAPSHOT`, Java packages `com.mitpass.<module>` (for example `com.mitpass.event`). The root POM lists modules by path (`libs/common-web`, `services/event-service`, …), and every module's parent is the root POM. There are no intermediate aggregator POMs.
 
@@ -75,3 +75,19 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 **Decision.** `.gitattributes` keeps LF in the repo and the working tree. `.cmd`, `.bat` and `.ps1` use CRLF, and `mvnw` is always LF. `MITPass App Screens.html` is marked `-diff`, because it is a gzip+base64 bundle and line diffs of it are noise.
 
 **Watch out.** Git on Windows doesn't record the executable bit (`core.filemode=false`), so `mvnw` must get it in the index, or CI on Linux fails with "Permission denied". Done on 2026-10-09 with `git add --chmod=+x mvnw` (`git update-index --chmod=+x` only works on files already tracked). Later `git add` runs keep the bit. Check with `git ls-files -s mvnw`, which should show `100755`.
+
+---
+
+## D6: REST conventions every backend service follows
+
+*2026-10-10 · accepted (built in Phase 1; details in `docs/plans/phase-1.md` §4, §6, §14)*
+
+**Decision.**
+- **Paths.** A service serves its resources under `/api/<resource>` itself. The gateway routes by path prefix **without rewriting**, so Swagger "Try it out" and `Location` headers work through `:8080` unchanged.
+- **API docs at the gateway.** Each service's OpenAPI document is proxied at **`/docs/<service-name>`** (`SetPath=/v3/api-docs`) and listed in `springdoc.swagger-ui.urls`. It is not under `/v3/api-docs/**`, because springdoc's own handler in the gateway would answer first.
+- **Errors.** A service depends on `libs/common-web`, which auto-configures the `GlobalExceptionHandler`. Every error is `application/problem+json` with `type` = `urn:mitpass:problem:<slug>`, `title`, `status`, `detail`, `instance`, `correlationId`, plus `errors[]` (`field`, `message`) for validation. The status map is 400 validation/malformed, 404 not found, 409 conflict (duplicates, wrong state, stale version), 422 business rule needing the database, and 500 generic with no internals leaked.
+- **Correlation ids.** The gateway stamps `X-Correlation-Id` (keeping a safe client value). Services put it in the MDC, the log pattern (`%5p [%X{correlationId:-}]`) and every ProblemDetail.
+- **Paging.** List endpoints return `PageResponse<T>` (`content, page, size, totalElements, totalPages`), never Spring's `PageImpl`. `max-page-size: 100`.
+- **Exceptions to throw.** `NotFoundException`, `ConflictException`, `BusinessRuleException` from `common-web`.
+
+**Consequences.** Adding a service (Phase 2 onward) means adding one `common-web` dependency, one route pair in the gateway and one `swagger-ui.urls` entry. A Phase 2 caveat: `GlobalExceptionHandler` has a catch-all `Exception` → 500 handler, so method-security `AccessDeniedException`s must be mapped to 403 explicitly when Spring Security arrives.

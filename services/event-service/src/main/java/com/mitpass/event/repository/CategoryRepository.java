@@ -1,0 +1,10 @@
+package com.mitpass.event.repository;
+
+import com.mitpass.event.domain.Category;
+import java.util.List;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface CategoryRepository extends JpaRepository<Category, Long> {
+
+    List<Category> findAllByOrderByNameAsc();
+}

@@ -1,0 +1,52 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          # Services serve /api/... themselves, so routes forward the path unchanged (docs/plans/phase-1.md §4).
+          routes:
+            - id: event-service
+              uri: lb://event-service
+              predicates:
+                - Path=/api/events/**,/api/venues/**,/api/categories/**
+            # OpenAPI document of each service, for the Swagger UI below. Not under /v3/api-docs/**: springdoc's own
+            # handler would answer that path before the gateway routes see it.
+            - id: event-service-openapi
+              uri: lb://event-service
+              predicates:
+                - Path=/docs/event-service
+              filters:
+                - SetPath=/v3/api-docs
+          # Send X-Forwarded-* so services build links (Location, OpenAPI servers) that point back at the gateway.
+          trusted-proxies: "127\\.0\\.0\\.1|0:0:0:0:0:0:0:1|::1"
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+  instance:
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs    # the gateway's own (empty) document; Swagger UI shows the services below
+  swagger-ui:
+    path: /swagger-ui.html
+    urls:
+      - name: event-service
+        url: /docs/event-service
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+
+logging:
+  pattern:
+    level: "%5p [%X{correlationId:-}]"

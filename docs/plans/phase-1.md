@@ -180,10 +180,11 @@ spring.cloud.gateway.server.webflux:
       predicates: [ "Path=/api/events/**,/api/venues/**,/api/categories/**" ]
     - id: event-service-openapi
       uri: lb://event-service
-      predicates: [ "Path=/v3/api-docs/event-service" ]
+      predicates: [ "Path=/docs/event-service" ]     # not /v3/api-docs/**: see §14
       filters: [ "SetPath=/v3/api-docs" ]
+  trusted-proxies: "127\\.0\\.0\\.1|0:0:0:0:0:0:0:1|::1"
 springdoc.swagger-ui.urls:
-  - { name: event-service, url: /v3/api-docs/event-service }
+  - { name: event-service, url: /docs/event-service }
 ```
 
 - A `GlobalFilter` adds `X-Correlation-Id` at the edge when it's missing (the gateway is reactive, so the servlet filter in `common-web` doesn't apply).
@@ -270,9 +271,35 @@ Most online examples target Boot 3. Check against these first when something doe
 8. **Windows path with spaces** (`WP Sem 5`). The wrapper handles it (verified). Quote paths in scripts and compose bind mounts.
 9. **Terminals opened before the Docker install** have no `docker` on PATH; open a new one.
 
-## 14. Open questions for the owner
+## 14. As built: deviations and findings (2026-10-10)
 
-Answering these before T03.5 keeps renames cheap. Defaults are in brackets and the plan proceeds with them.
+Phase 1 was implemented as planned. Where the build differs from the sections above, this list is authoritative:
+
+| Topic | Plan said | As built / why |
+|---|---|---|
+| Gateway OpenAPI route | `/v3/api-docs/event-service` | **`/docs/event-service`**. springdoc's own `/v3/api-docs/{group}` handler in the gateway answers before gateway routes are consulted |
+| Forwarded headers | (implicit) | `trusted-proxies` set on the gateway. With it, event-service's `Location` headers and OpenAPI `servers` point at `http://localhost:8080` (verified live) |
+| `X-Correlation-Id` | Gateway sets the response header | Set in `beforeCommit`. Otherwise the service's echo made the header appear twice |
+| 4xx logging | not planned | `GlobalExceptionHandler` logs one INFO line per 4xx, so the correlation id is visible in service logs (exit check for T03.7) |
+| Sort errors | not planned | `?sort=unknown` → 400 (`PropertyReferenceException` handler). In Spring Data 4.1 that class lives in **`org.springframework.data.core`** |
+| Binding failures | — | `?from=notadate` → `errors[].message = "has an invalid value 'notadate'"` instead of Spring's long conversion message |
+| `@Valid` on lists | `@Valid List<…>` | `List<@Valid @NotNull SessionRequest>`. Hibernate Validator 9 deprecates container-level `@Valid` (HV000271) |
+| MapStruct config | root `pluginManagement` | As planned (processor path + `-Amapstruct.*` for all modules); `EventMapper` uses constructor injection so tests can build it without Spring |
+| `EventMapperTest` | separate test | Folded into `EventServiceTest`, which runs the real generated mappers |
+| `EventServiceApplicationIT` | `*IT` | Named `EventServiceApplicationTests`, so plain Surefire runs it (no Failsafe setup) |
+| Mockito `any()` with `delete` | — | Spring Data JPA 4 adds `delete(DeleteSpecification)`, so use `any(Event.class)` |
+| Seed ids | `TECHFEST26` = id 1 | Ids follow insertion order of the seed's join (TECHFEST26 got id 2). The `.http` file looks ids up instead of assuming |
+| Compiler lint | `-Xlint:all,-processing,-serial` | Also `-this-escape` (JPA entity constructors). Build has **0 warnings** |
+
+**Verified live** (compose Postgres, jars on the project JDK): both apps in Eureka; Swagger UI at :8080 lists event-service; create, search, 400, 404, 409, 422, sort and delete scenarios through the gateway as in `docs/http/phase-1.http`; correlation ids from client and gateway in event-service logs. `spring-boot:run` also verified with the repo path containing spaces.
+
+**Tests:** 60 in total (common-web 17, discovery 1, gateway 4, event-service 38), all green with `./mvnw verify`.
+
+**Not yet verified:** the GitHub Actions run. The workflow (`actions/checkout@v7`, `actions/setup-java@v6`) runs on the next push.
+
+## 15. Open questions for the owner (resolved)
+
+The owner approved the plan on 2026-10-09 without changing these, so the defaults in brackets were built. Renaming the package root now means moving every source file; categories and venues can change in a new migration.
 
 1. Java coordinates: groupId / package root **[`com.mitpass`]** (`docs/DECISIONS.md` D4).
 2. Lint: Spotless only, no Checkstyle **[Spotless only]**.

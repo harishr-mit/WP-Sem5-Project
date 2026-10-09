@@ -1,0 +1,53 @@
+server:
+  port: 8082
+  # Honour X-Forwarded-* from the gateway, so Location headers and springdoc server URLs point at :8080.
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: event-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/event_db
+    username: ${DB_USER:event_svc}
+    password: ${DB_PASSWORD:event_svc}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate          # Flyway owns the schema; Hibernate only checks the mapping against it
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    # db/seed holds the repeatable demo data (R__demo_seed.sql); tests switch it off (application-test.yml).
+    locations: classpath:db/migration,classpath:db/seed
+  data:
+    web:
+      pageable:
+        max-page-size: 100
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+  instance:
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+mitpass:
+  # Campus time zone: search dates (from/to) are calendar days here.
+  time-zone: Asia/Kolkata
+
+logging:
+  pattern:
+    level: "%5p [%X{correlationId:-}]"

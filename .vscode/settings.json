@@ -4,5 +4,6 @@
     "PATH": "${workspaceFolder}\\.tools\\jdk-21\\bin;${env:PATH}"
   },
   "java.configuration.updateBuildConfiguration": "automatic",
-  "maven.executable.preferMavenWrapper": true
+  "maven.executable.preferMavenWrapper": true,
+  "java.compile.nullAnalysis.mode": "automatic"
 }

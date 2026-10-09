@@ -1,0 +1,84 @@
+### MITPass Phase 1 demo requests, sent through the gateway.
+### Run with the VS Code "REST Client" extension or IntelliJ's HTTP client (click "Send Request"),
+### or copy them into Swagger UI: http://localhost:8080/swagger-ui.html
+### The expected status is in each request's title.
+
+@gw = http://localhost:8080
+
+### 200 Categories (reference data)
+GET {{gw}}/api/categories
+
+### 200 Venues
+GET {{gw}}/api/venues
+
+### 200 Search: TechFest events in November (dates are campus days, Asia/Kolkata)
+GET {{gw}}/api/events?q=hack&category=TECHNICAL&from=2026-11-01&to=2026-11-30
+
+### 200 Search: everything, newest first, 3 per page
+GET {{gw}}/api/events?sort=startsAt,desc&size=3
+
+### 201 Create an event with two sessions (Location header points at the gateway)
+POST {{gw}}/api/events
+Content-Type: application/json
+
+{
+  "code": "HACKNITE26",
+  "title": "HackNite: 12-hour Build Sprint",
+  "description": "Overnight build sprint for second-year students.",
+  "categoryId": 1,
+  "venueId": 3,
+  "department": "CSE",
+  "capacity": 80,
+  "startsAt": "2026-11-28T12:30:00Z",
+  "endsAt": "2026-11-29T00:30:00Z",
+  "registrationOpensAt": "2026-11-01T03:30:00Z",
+  "registrationClosesAt": "2026-11-27T12:30:00Z",
+  "sessions": [
+    {"title": "Build", "startsAt": "2026-11-28T12:30:00Z", "endsAt": "2026-11-28T21:30:00Z"},
+    {"title": "Demos", "startsAt": "2026-11-28T21:30:00Z", "endsAt": "2026-11-29T00:30:00Z"}
+  ]
+}
+
+### 200 Find it again
+GET {{gw}}/api/events?q=hacknite
+
+### 409 Same code again (conflict)
+POST {{gw}}/api/events
+Content-Type: application/json
+
+{
+  "code": "HACKNITE26", "title": "Duplicate", "categoryId": 1, "venueId": 3, "capacity": 10,
+  "startsAt": "2026-12-28T12:30:00Z", "endsAt": "2026-12-28T14:30:00Z"
+}
+
+### 400 Invalid payload: structured ProblemDetail with errors[] (exit criterion 4)
+POST {{gw}}/api/events
+Content-Type: application/json
+
+{
+  "code": "bad code",
+  "title": "",
+  "categoryId": 1,
+  "venueId": 3,
+  "capacity": 0,
+  "startsAt": "2026-12-01T10:00:00Z",
+  "endsAt": "2026-12-01T09:00:00Z"
+}
+
+### 422 Capacity larger than the venue (Innovation Centre Lab holds 120)
+POST {{gw}}/api/events
+Content-Type: application/json
+
+{
+  "code": "TOOBIG26", "title": "Too big for the lab", "categoryId": 1, "venueId": 3, "capacity": 500,
+  "startsAt": "2026-12-28T12:30:00Z", "endsAt": "2026-12-28T14:30:00Z"
+}
+
+### 404 Unknown event
+GET {{gw}}/api/events/999999
+
+### 400 Unknown sort property
+GET {{gw}}/api/events?sort=bogus
+
+### 409 Seeded TECHFEST26 is not DRAFT, so it can't be deleted (use its id from the search above; 1 on a fresh DB)
+DELETE {{gw}}/api/events/1

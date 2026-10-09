@@ -21,33 +21,38 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-09 (Claude Opus 5.5) — **Project initialized (T13), Phase 1 planned (T14).** Next: T03.1 per `docs/plans/phase-1.md`.
+* **Last updated:** 2026-10-10 (Claude Opus 5.5) — **Phase 1 done (T03).** Eureka + gateway + event-service run on compose Postgres; 60 tests green; exit demo verified live. Next: post-phase commit (owner's call), then Phase 2 (T04): write `docs/plans/phase-2.md` first.
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
 * **Architecture (planned):** Web Portal (Spring MVC + Thymeleaf) → API Gateway (:8080) → auth / event / pass / checkin / notification services, Eureka discovery, PostgreSQL (database per service), RabbitMQ (domain events via transactional outbox), Redis.
 * **Stack (pinned, see `docs/DECISIONS.md`):** Java 21 (project-local Temurin in `.tools/jdk-21`), Spring Boot 4.1.1, Spring Cloud 2025.1.3, Maven 3.9.16 through the wrapper, Docker Desktop 4.94.0.
-* **Commands:**
+* **Built so far:** `libs/common-web` (ProblemDetail errors, PageResponse, correlation ids), `platform/discovery-server` (:8761), `platform/api-gateway` (:8080, Swagger UI), `services/event-service` (:8082; events, sessions, venues, categories). Conventions every new service follows: `docs/DECISIONS.md` D6.
+* **Commands** (full walkthrough: `README.md` "Quick start"):
   * First setup on a clean clone: `powershell -ExecutionPolicy Bypass -File scripts\setup-jdk.ps1`
-  * Build: `./mvnw verify` (Git Bash) / `.\mvnw.cmd verify` (PowerShell). With `JAVA_HOME` unset, the wrapper uses `.tools/jdk-21`. The system `java` on PATH is **Java 8**, so don't call `java` / `javac` directly; first run `. .\scripts\env.ps1` or `source scripts/env.sh`.
-  * Docker: Docker Desktop must be running. Shells opened before the install lack `docker` on PATH (`C:\Program Files\Docker\Docker\resources\bin`).
-* **Blockers / Notes:** None. Phase 1 has three open owner questions with defaults (`docs/plans/phase-1.md` §14). `mvnw` is staged with the executable bit (`100755`); everything else is still uncommitted.
+  * Build + all tests: `./mvnw verify` (Git Bash) / `.\mvnw.cmd verify` (PowerShell); `./mvnw spotless:apply` fixes formatting. With `JAVA_HOME` unset, the wrapper uses `.tools/jdk-21`. The system `java` on PATH is **Java 8**, so don't call `java` directly; use `.tools/jdk-21/bin/java` or first run `. .\scripts\env.ps1` / `source scripts/env.sh`.
+  * Infra: `docker compose -f infra/docker-compose.yml up -d --wait` / `down` (Docker Desktop must be running).
+  * Run: `./mvnw install -DskipTests`, then `./mvnw -pl <module> spring-boot:run` for discovery-server → event-service → api-gateway (or `java -jar <module>/target/<artifact>.jar`).
+* **Blockers / Notes:**
+  * Agents: stopping a background `spring-boot:run` task leaves Maven and the forked app JVM running on Windows. Kill them by PID afterwards (check `Get-NetTCPConnection -LocalPort 8761,8080,8082`).
+  * Port 8080 is sometimes taken by the owner's unrelated Node server (`server/src/main.ts`). It isn't ours; don't kill it. The gateway can't start while it runs.
+  * GitHub Actions CI has not run yet (first run on the next push).
 
 ## Task List
 
 * [x] T01: Reset `log.md` for the new project (old NoBu Shooter history removed)
 * [x] T02: Write `PROJECT.md` — description, goal, architecture, tech stack, 8-phase roadmap
-* [ ] T03: **Phase 1** — Foundation & event catalogue (PROJECT.md §P1; plan and "done when" checks: `docs/plans/phase-1.md` §12)
-  * [ ] T03.1: Build conventions: Spotless (palantir), compiler lint, MapStruct processor config
-  * [ ] T03.2: Infra: `infra/docker-compose.yml` (Postgres 16, RabbitMQ 4, Mailpit) + `infra/postgres/init.sql` (5 DBs)
-  * [ ] T03.3: `platform/discovery-server` (Eureka :8761)
-  * [ ] T03.4: `libs/common-web` (ProblemDetail advice, exceptions, PageResponse, correlation-ID filter, auto-config)
-  * [ ] T03.5: event-service persistence: entities, auditing, Flyway V1/V2, repositories, Testcontainers repo tests
-  * [ ] T03.6: event-service REST: DTOs, MapStruct, services, controllers, Specifications search, validation, tests
-  * [ ] T03.7: springdoc + `platform/api-gateway` (routes, correlation filter, Swagger UI at :8080)
-  * [ ] T03.8: Demo seed (`R__demo_seed.sql`) + `docs/http/phase-1.http`
-  * [ ] T03.9: GitHub Actions CI (`./mvnw verify`)
-  * [ ] T03.10: Exit demo (5 criteria) + docs; nothing left running
+* [x] T03: **Phase 1** — Foundation & event catalogue (PROJECT.md §P1; plan and "done when" checks: `docs/plans/phase-1.md` §12, as built §14). Plan approved by the owner 2026-10-09; pre-phase commit `5c12c51`. Done 2026-10-10; CI's first run pending a push
+  * [x] T03.1: Build conventions: Spotless (palantir), compiler lint, MapStruct processor config
+  * [x] T03.2: Infra: `infra/docker-compose.yml` (Postgres 16, RabbitMQ 4, Mailpit) + `infra/postgres/init.sql` (5 DBs)
+  * [x] T03.3: `platform/discovery-server` (Eureka :8761)
+  * [x] T03.4: `libs/common-web` (ProblemDetail advice, exceptions, PageResponse, correlation-ID filter, auto-config)
+  * [x] T03.5: event-service persistence: entities, auditing, Flyway V1/V2, repositories, Testcontainers repo tests
+  * [x] T03.6: event-service REST: DTOs, MapStruct, services, controllers, Specifications search, validation, tests
+  * [x] T03.7: springdoc + `platform/api-gateway` (routes, correlation filter, Swagger UI at :8080)
+  * [x] T03.8: Demo seed (`R__demo_seed.sql`) + `docs/http/phase-1.http`
+  * [x] T03.9: GitHub Actions CI (`./mvnw verify`): workflow written; first run happens on the next push
+  * [x] T03.10: Exit demo (criteria 1–4 live, 5 locally) + docs (README quick start); nothing left running
 * [ ] T04: **Phase 2** — Identity, authentication & authorization (PROJECT.md §P2)
 * [ ] T05: **Phase 3** — Registration & transactional core (PROJECT.md §P3)
 * [ ] T06: **Phase 4** — Pass issuance & QR generation (PROJECT.md §P4)
@@ -83,6 +88,28 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-10 — Claude (Opus 5.5) — T03: Phase 1 implemented
+
+* **Task:** T03.1–T03.10 (Phase 1: foundation and event catalogue), following the approved `docs/plans/phase-1.md`
+* **Status:** DONE (GitHub Actions run pending the next push)
+* **Files:**
+  * root: `pom.xml` (modules; Spotless 3.10.4 + palantir-java-format 2.102.0; compiler lint; MapStruct processor), `README.md` (quick start), `.github/workflows/ci.yml`
+  * `infra/docker-compose.yml`, `infra/postgres/init.sql`
+  * `libs/common-web/**` (GlobalExceptionHandler, Not-found/Conflict/BusinessRule exceptions, ProblemTypes, FieldViolation, PageResponse, CorrelationIdFilter, auto-config + tests)
+  * `platform/discovery-server/**`, `platform/api-gateway/**` (routes, CorrelationIdGlobalFilter, Swagger UI + tests)
+  * `services/event-service/**`: domain (Event, EventSession, Venue, Category, EventStatus, AuditableEntity), repositories + EventSpecifications, services, controllers, DTO records, MapStruct mappers, `@ValidTimeWindow`, Flyway `V1__init.sql`, `V2__reference_data.sql`, `db/seed/R__demo_seed.sql`, tests (Testcontainers)
+  * docs: `docs/http/phase-1.http`, `docs/plans/phase-1.md` (§8 snippet, new §14 "As built", §15 questions resolved), `docs/DECISIONS.md` (D4 accepted, new D6 REST conventions), `PROJECT.md` (§P1 ticked + status), `log.md`
+* **Details:**
+  * Tests: 60, all green with `./mvnw verify` (common-web 17, discovery 1, gateway 4, event-service 38 including Testcontainers PostgreSQL 16). 0 compiler warnings.
+  * Live exit demo on compose infra, jars on the project JDK: all 3 containers healthy, 5 DBs created; both apps registered in Eureka; Swagger UI at :8080 lists event-service and its OpenAPI `servers` points at :8080; create (201, `Location` on :8080), search, 400 (ProblemDetail with `errors[]` + `correlationId`), 404, 409 duplicate / non-DRAFT delete, 422 capacity, 400 bad sort all returned as expected through the gateway; correlation ids from client and gateway appear in event-service logs. `spring-boot:run` verified too. The demo-created event was deleted afterwards (DB back to the 6 seed events).
+  * Problems found and fixed while building: `PropertyReferenceException` moved to `org.springframework.data.core` (Spring Data 4.1); ambiguous Mockito `delete(any())` (new `DeleteSpecification` overload); gateway sent `X-Correlation-Id` twice (now set in `beforeCommit`); Hibernate Validator 9 HV000271 (moved `@Valid` to the list element); handled 4xx weren't logged (one INFO line added); springdoc in the gateway shadows `/v3/api-docs/**` (proxied docs moved to `/docs/event-service`). All recorded in `docs/plans/phase-1.md` §14.
+  * `.gitignore` reviewed (AGENTS.md mid-run rule): `target/`, `.tools/` ignored; no dependency files untracked.
+* **Notes / Errors:**
+  * Stopping a background `spring-boot:run` task left Maven (PID 49464) and the forked Eureka JVM (PID 15548) running; both were killed by PID. All MITPass processes stopped, `docker compose down` done (volumes kept), Docker Desktop stopped at the end.
+  * A Node process (`server/src/main.ts`, not part of this repo) was listening on :8080 after the run. Left alone; it will block the gateway while it runs.
+  * `.vscode/settings.json` gained `java.compile.nullAnalysis.mode` from the IDE (not this agent); left as is and included in the commit.
+  * Post-phase commit: the owner approved `Phase 1: foundation and event catalogue` (no push).
 
 ### 2026-10-09 — Claude (Opus 5.5) — T15: commit rule + pre-Phase 1 commit
 

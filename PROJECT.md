@@ -271,18 +271,19 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 
 **Goal:** a running microservice skeleton with one real service behind a gateway.
 
-- [ ] Maven multi-module parent; pin Java 21 and a compatible Spring Boot + Spring Cloud pair; Spotless/Checkstyle.
-- [ ] `infra/docker-compose.yml`: PostgreSQL (init script creates one database per service), RabbitMQ, Mailpit.
-- [ ] `discovery-server` (Eureka) and `api-gateway` with route `/api/events/** → lb://event-service`.
-- [ ] `libs/common-web`: global `@RestControllerAdvice` → RFC 7807 `ProblemDetail`, validation error mapping, page DTO, correlation-ID filter.
-- [ ] `event-service`: entities `Venue`, `Category`, `Event`, `EventSession` (one-to-many, with an explicit fetch strategy); JPA auditing (`createdAt/By`); Flyway `V1__init.sql`.
-- [ ] REST CRUD plus search (`/events?category=&from=&to=&q=&page=`) using JPA Specifications; MapStruct DTOs; Bean Validation.
-- [ ] springdoc OpenAPI; Swagger UI available through the gateway.
-- [ ] Tests: `@DataJpaTest` (repositories, specifications), `@WebMvcTest` (validation → 400 `ProblemDetail`).
-- [ ] GitHub Actions: build and test on push.
+- [x] Maven multi-module parent; pin Java 21 and a compatible Spring Boot + Spring Cloud pair; Spotless/Checkstyle.
+- [x] `infra/docker-compose.yml`: PostgreSQL (init script creates one database per service), RabbitMQ, Mailpit.
+- [x] `discovery-server` (Eureka) and `api-gateway` with route `/api/events/** → lb://event-service`.
+- [x] `libs/common-web`: global `@RestControllerAdvice` → RFC 7807 `ProblemDetail`, validation error mapping, page DTO, correlation-ID filter.
+- [x] `event-service`: entities `Venue`, `Category`, `Event`, `EventSession` (one-to-many, with an explicit fetch strategy); JPA auditing (`createdAt/By`); Flyway `V1__init.sql`.
+- [x] REST CRUD plus search (`/events?category=&from=&to=&q=&page=`) using JPA Specifications; MapStruct DTOs; Bean Validation.
+- [x] springdoc OpenAPI; Swagger UI available through the gateway.
+- [x] Tests: `@DataJpaTest` (repositories, specifications), `@WebMvcTest` (validation → 400 `ProblemDetail`).
+- [x] GitHub Actions: build and test on push (workflow added; its first run happens on the next push).
 
 **Concepts:** REST, JPA/Hibernate, microservice skeleton (gateway + discovery).
 **Exit criteria / demo:** `docker compose up` plus the services start cleanly; the Eureka dashboard shows the services; events can be created and searched through `http://localhost:8080` in Swagger; an invalid payload returns a structured 400.
+**Status:** done 2026-10-10. Exit demo verified live; as-built notes in `docs/plans/phase-1.md` §14, run steps in `README.md`.
 
 ---
 

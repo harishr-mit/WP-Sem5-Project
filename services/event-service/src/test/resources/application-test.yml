@@ -1,0 +1,8 @@
+# Active in every test (@ActiveProfiles("test")). The datasource comes from Testcontainers (@ServiceConnection).
+spring:
+  flyway:
+    locations: classpath:db/migration   # schema + reference data only, no demo seed
+
+eureka:
+  client:
+    enabled: false
