@@ -1,0 +1,39 @@
+# Build output
+target/
+*.class
+*.log
+HELP.md
+
+# Project-local toolchain (scripts/setup-jdk.ps1)
+.tools/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Eclipse / STS / VS Code Java
+.apt_generated/
+.classpath
+.factorypath
+.project
+.settings/
+.sts4-cache/
+
+# VS Code: share workspace settings only
+.vscode/*
+!.vscode/settings.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local secrets and dev certificates
+.env
+*.env.local
+infra/certs/*.pem
+infra/certs/*.key
+
+# Front-end tooling (run through npx, never installed globally)
+node_modules/

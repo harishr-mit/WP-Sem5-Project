@@ -204,8 +204,8 @@ All transitions go through one `transition(from, to)` method backed by an enum t
 | Layer | Choice | Why |
 |---|---|---|
 | Language | **Java 21 (LTS)** | Records, sealed types, pattern matching, virtual threads |
-| Framework | **Spring Boot 3.x / 4.x** + **Spring Cloud** release train | Exact pair pinned in Phase 1 so the versions are compatible |
-| Build | Maven multi-module | One parent POM for all services |
+| Framework | **Spring Boot 4.1** (Spring Framework 7, Jakarta EE 11, Jackson 3, Hibernate 7) + **Spring Cloud 2025.1 (Oakwood)** | A supported pair, pinned in the root `pom.xml` (exact versions and reasons: `docs/DECISIONS.md` D1) |
+| Build | Maven multi-module through the committed wrapper (`./mvnw`, Maven 3.9); a project-local JDK in `.tools/jdk-21` | One parent POM for all services; nothing installed globally (`scripts/setup-jdk.ps1`) |
 | Web (server-rendered) | **Spring MVC + Thymeleaf + HTMX**, Tailwind CSS | Shows classic MVC; HTMX gives an SPA feel without a JS framework |
 | REST | Spring Web, Bean Validation, `ProblemDetail`, **springdoc-openapi** | Swagger UI combined at the gateway |
 | Persistence | **Spring Data JPA / Hibernate**, **PostgreSQL 16**, **Flyway** | Database per service; migrations under version control |
@@ -221,7 +221,7 @@ All transitions go through one `transition(from, to)` method backed by an enum t
 | Email | Spring Mail + Thymeleaf templates → **Mailpit** (local SMTP inbox) | Shows real emails without sending any |
 | Resilience | **Resilience4j** | Circuit breaker, retry, timeouts |
 | Observability | Micrometer → **Prometheus + Grafana**, Micrometer Tracing → **Zipkin** | Dashboards and request traces across services |
-| Testing | JUnit 5, Mockito, `@WebMvcTest`/`@DataJpaTest`, **Testcontainers**, **Gatling** (Java DSL) | Unit, slice, integration and load tests |
+| Testing | JUnit Jupiter 6, Mockito, `@WebMvcTest`/`@DataJpaTest`, **Testcontainers 2**, **Gatling** (Java DSL) | Unit, slice, integration and load tests |
 | Ops | Docker Compose, `spring-boot:build-image`, GitHub Actions CI | One-command startup |
 
 ### Repository layout (target)
@@ -229,6 +229,9 @@ All transitions go through one `transition(from, to)` method backed by an enum t
 ```
 mitpass/
 ├── pom.xml                      # parent: versions, plugins, modules
+├── mvnw, mvnw.cmd, .mvn/        # Maven wrapper (falls back to .tools/jdk-21 when JAVA_HOME is unset)
+├── scripts/                     # setup-jdk.ps1, env.ps1 / env.sh
+├── .tools/                      # project-local JDK (gitignored, created by scripts/setup-jdk.ps1)
 ├── libs/
 │   ├── common-web/              # ProblemDetail handler, pagination, correlation IDs
 │   ├── common-security/         # resource-server config, role constants, JWKS client
@@ -249,7 +252,7 @@ mitpass/
 │   ├── postgres/init.sql        # one database per service
 │   ├── prometheus/ grafana/     # provisioned dashboards
 │   └── certs/                   # mkcert dev certs (phone camera needs HTTPS)
-└── docs/                        # API.md, DEMO_SCRIPT.md, DECISIONS.md
+└── docs/                        # API.md, DEMO_SCRIPT.md, DECISIONS.md, plans/ (one plan per phase)
 ```
 
 ---
