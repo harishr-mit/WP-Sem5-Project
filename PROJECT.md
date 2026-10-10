@@ -279,7 +279,7 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 - [x] REST CRUD plus search (`/events?category=&from=&to=&q=&page=`) using JPA Specifications; MapStruct DTOs; Bean Validation.
 - [x] springdoc OpenAPI; Swagger UI available through the gateway.
 - [x] Tests: `@DataJpaTest` (repositories, specifications), `@WebMvcTest` (validation → 400 `ProblemDetail`).
-- [x] GitHub Actions: build and test on push (workflow added; its first run happens on the next push).
+- [x] GitHub Actions: build and test on push (green since `baa98cd`).
 
 **Concepts:** REST, JPA/Hibernate, microservice skeleton (gateway + discovery).
 **Exit criteria / demo:** `docker compose up` plus the services start cleanly; the Eureka dashboard shows the services; events can be created and searched through `http://localhost:8080` in Swagger; an invalid payload returns a structured 400.
@@ -289,15 +289,15 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 
 ### P2 — Identity, Authentication & Authorization
 
-**Goal:** every request is authenticated and every action is authorized.
+**Goal:** every write is authenticated and every action is authorized (catalogue reads stay public, so events can be browsed before sign-up). Plan: `docs/plans/phase-2.md`.
 
-- [ ] `auth-service`: `User`, `Role` (many-to-many); sign-up limited to the college email domain; BCrypt; email verification token (sent to Mailpit).
+- [ ] `auth-service`: `User`, `Role` (many-to-many); sign-up limited to college addresses (`<register number>@student.annauniv.edu`) and Gmail; BCrypt; email verification token (sent to Mailpit).
 - [ ] Login → **RS256 JWT** access token (15 min) with `sub`, `roles`, `dept`, `year` claims; `/.well-known/jwks.json` with `kid` for key rotation.
 - [ ] Refresh tokens: random, stored **hashed**, rotated on every use; reusing an old token revokes the whole token family (theft detection).
 - [ ] `libs/common-security`: shared OAuth2 resource-server config that validates JWTs through JWKS, with no shared secret.
 - [ ] Gateway: rejects missing or expired tokens at the edge, forwards claims, configures CORS.
 - [ ] Authorization: `@PreAuthorize` per endpoint; a custom `@eventSecurity.isOwner(#id)` bean so an organizer can edit only their own events; admin can promote users; organizer assigns volunteers to an event and gate.
-- [ ] Logout and token revocation; account lockout after N failed logins.
+- [ ] Logout and token revocation (stateless: the refresh-token family is revoked, an issued access token expires within 15 min); account lockout after N failed logins.
 - [ ] Tests: a security matrix test that runs every role against every protected endpoint and expects 200/401/403.
 
 **Concepts:** authentication, authorization, stateless security across services.

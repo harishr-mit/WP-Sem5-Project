@@ -295,7 +295,7 @@ Phase 1 was implemented as planned. Where the build differs from the sections ab
 
 **Tests:** 60 in total (common-web 17, discovery 1, gateway 4, event-service 38), all green with `./mvnw verify`.
 
-**Not yet verified:** the GitHub Actions run. The workflow (`actions/checkout@v7`, `actions/setup-java@v6`) runs on the next push.
+**GitHub Actions:** green on `baa98cd` (the Phase 1 commit) and `6b2699d`, checked 2026-10-11. All five exit criteria are met.
 
 ## 15. Open questions for the owner (resolved)
 

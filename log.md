@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-10 (Claude Opus 5.5) — **Phase 1 done (T03).** Eureka + gateway + event-service run on compose Postgres; 60 tests green; exit demo verified live. Next: post-phase commit (owner's call), then Phase 2 (T04): write `docs/plans/phase-2.md` first.
+* **Last updated:** 2026-10-11 (Claude Opus 5.5) — **Phase 1 verified complete** (CI green on `baa98cd` and `6b2699d`). **Phase 2 planned:** `docs/plans/phase-2.md` (T04.1–T04.12 below), waiting for the owner's approval; no Phase 2 code written yet. Next: owner reviews the plan → pre-phase commit (owner's call) → T04.1.
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
@@ -43,7 +43,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 * [x] T01: Reset `log.md` for the new project (old NoBu Shooter history removed)
 * [x] T02: Write `PROJECT.md` — description, goal, architecture, tech stack, 8-phase roadmap
-* [x] T03: **Phase 1** — Foundation & event catalogue (PROJECT.md §P1; plan and "done when" checks: `docs/plans/phase-1.md` §12, as built §14). Plan approved by the owner 2026-10-09; pre-phase commit `5c12c51`. Done 2026-10-10; CI's first run pending a push
+* [x] T03: **Phase 1** — Foundation & event catalogue (PROJECT.md §P1; plan and "done when" checks: `docs/plans/phase-1.md` §12, as built §14). Plan approved by the owner 2026-10-09; pre-phase commit `5c12c51`. Done 2026-10-10; CI green on `baa98cd` (checked 2026-10-11)
   * [x] T03.1: Build conventions: Spotless (palantir), compiler lint, MapStruct processor config
   * [x] T03.2: Infra: `infra/docker-compose.yml` (Postgres 16, RabbitMQ 4, Mailpit) + `infra/postgres/init.sql` (5 DBs)
   * [x] T03.3: `platform/discovery-server` (Eureka :8761)
@@ -52,9 +52,21 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T03.6: event-service REST: DTOs, MapStruct, services, controllers, Specifications search, validation, tests
   * [x] T03.7: springdoc + `platform/api-gateway` (routes, correlation filter, Swagger UI at :8080)
   * [x] T03.8: Demo seed (`R__demo_seed.sql`) + `docs/http/phase-1.http`
-  * [x] T03.9: GitHub Actions CI (`./mvnw verify`): workflow written; first run happens on the next push
+  * [x] T03.9: GitHub Actions CI (`./mvnw verify`): workflow written; first run green on `baa98cd`
   * [x] T03.10: Exit demo (criteria 1–4 live, 5 locally) + docs (README quick start); nothing left running
-* [ ] T04: **Phase 2** — Identity, authentication & authorization (PROJECT.md §P2)
+* [ ] T04: **Phase 2** — Identity, authentication & authorization (PROJECT.md §P2; plan and "done when" checks: `docs/plans/phase-2.md` §13). Plan written 2026-10-11, awaiting owner approval
+  * [ ] T04.1: common-web additions: 401/403 problem types, public `Problems` factory
+  * [ ] T04.2: `libs/common-security` (resource-server auto-config, JWKS via Eureka, roles, CurrentUser, 401/403 ProblemDetail, token relay) + `libs/security-test-support`
+  * [ ] T04.3: auth-service skeleton + persistence (Flyway V1/V2, entities, repos, demo users seed)
+  * [ ] T04.4: Signing keys (encrypted at rest, rotation) + JWKS + access-token minting
+  * [ ] T04.5: Sign-up (email/regno/password policy) + email verification via Mailpit
+  * [ ] T04.6: Login + lockout + refresh rotation with reuse detection + logout
+  * [ ] T04.7: User admin endpoints (me, list, lookup, roles, unlock, sessions, key rotate) + OpenAPI bearer
+  * [ ] T04.8: event-service security (JWT auditor, V3 organizer columns, ownership bean, @PreAuthorize, tests updated)
+  * [ ] T04.9: Gates + volunteer assignments (auth-service lookup via load-balanced RestClient + token relay)
+  * [ ] T04.10: Gateway edge security (reactive resource server, CORS, X-User-Id, auth routes, Swagger)
+  * [ ] T04.11: Security matrix tests → `docs/security-matrix.md`; `scripts/forge-token.sh`
+  * [ ] T04.12: Exit demo + docs (phase-2.http, README, PROJECT ticks, DECISIONS D7/D8, as-built)
 * [ ] T05: **Phase 3** — Registration & transactional core (PROJECT.md §P3)
 * [ ] T06: **Phase 4** — Pass issuance & QR generation (PROJECT.md §P4)
 * [ ] T07: **Phase 5** — Scan, verify & attendance (PROJECT.md §P5)
@@ -72,6 +84,7 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T13.6: Docs: `README.md` stub, `docs/DECISIONS.md`, PROJECT.md §4 version pins, log Current Status commands
 * [x] T14: Plan Phase 1 → `docs/plans/phase-1.md` + T03 sub-tasks
 * [x] T15: AGENTS.md "Git & Commits": prompt to commit before/after each phase (owner permission per commit); exec-bit commands
+* [x] T16: Verify Phase 1 is complete; plan Phase 2 → `docs/plans/phase-2.md` + T04 sub-tasks (no code)
 
 *Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -89,6 +102,21 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-11 — Claude (Opus 5.5) — T16: Phase 1 verified, Phase 2 planned
+
+* **Task:** T16. The owner asked to check Phase 1 and, if it was complete, plan Phase 2 (no code).
+* **Status:** DONE
+* **Files:**
+  * created: `docs/plans/phase-2.md`
+  * edited: `log.md` (status, T03 CI notes, T04.1–T04.12, T16, this entry), `PROJECT.md` (§P1 CI bullet; §P2 goal reworded for public catalogue reads, sign-up domains, stateless revocation, plan link), `docs/plans/phase-1.md` (§14 CI now verified)
+  * outside the repo: security jars (`spring-security-oauth2-jose` / `-resource-server` 7.1.1, two starter POMs) fetched into `~/.m2` to check APIs; UI bundle decoded into the session scratchpad (not the repo)
+* **Details:**
+  * Phase 1 check: every T03 sub-task done; GitHub Actions (public API) shows `ci` green on `baa98cd` and `6b2699d` (HEAD). Since HEAD the working tree only changes `.vscode/settings.json` and `AGENTS.md` (owner edits, no code), so the local `verify` wasn't rerun and Docker Desktop stayed off.
+  * Owner decisions (2026-10-11): sign-up from `<regno>@student.annauniv.edu` **and** Gmail, both as students; register number = admission year + programme code (501–512) + roll no, e.g. `2026509032`, sometimes 2 digits longer (pattern `^\d{10}(\d{2})?$`); catalogue GETs public; stateless access-token revocation (no Redis in P2). A web search didn't find an official register-number breakdown, so the programme-code → department map stays an open question (plan §15).
+  * Verified for the plan: Boot 4.1.1 BOM has `spring-boot-starter-security-oauth2-resource-server` (the `spring-boot-starter-oauth2-resource-server` POM says deprecated), `-security-test`, `-mail`; Spring Security 7.1.1; `NimbusJwtDecoder…restOperations(..)` and `NimbusReactiveJwtDecoder…webClient(..)` exist (JWKS via Eureka); `RestTemplate` isn't deprecated in Framework 7.0.9. The mockup's "Create account" screen has full name, college email, department, year, password.
+  * Plan: own auth-service minting RS256 with `NimbusJwtEncoder` (not Spring Authorization Server); keys in `auth_db`, encrypted at rest, rotatable; hashed rotating refresh tokens with family revocation on reuse; `libs/common-security` + `libs/security-test-support`; ownership via `@eventSecurity.isOwner`; gates and volunteer assignments in event-service; gateway as an edge pre-check; a security matrix test per service; 10 exit criteria, 12 steps.
+* **Notes / Errors:** A stray `python -` call in Git Bash hung (Windows Store stub) and was stopped with TaskStop; nothing changed. No processes, containers or sockets were left running. The pre-phase commit for Phase 2 still needs the owner's approval (AGENTS.md).
 
 ### 2026-10-10 — Claude (Opus 5.5) — T03: Phase 1 implemented
 
