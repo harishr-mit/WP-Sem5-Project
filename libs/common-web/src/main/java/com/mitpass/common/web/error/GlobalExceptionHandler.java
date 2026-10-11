@@ -178,6 +178,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 request);
     }
 
+    @ExceptionHandler(ProblemException.class)
+    public ResponseEntity<Object> handleProblem(ProblemException ex, WebRequest request) {
+        HttpHeaders headers = new HttpHeaders();
+        ex.getHeaders().forEach(headers::set);
+        ProblemDetail body = problem(ex.getStatus(), ex.getType(), ex.getTitle(), ex.getMessage());
+        return handleExceptionInternal(ex, body, headers, ex.getStatus(), request);
+    }
+
     // ---- everything else (500) --------------------------------------------------------------------------------
 
     @ExceptionHandler(Exception.class)

@@ -1,5 +1,6 @@
 package com.mitpass.event.config;
 
+import com.mitpass.common.security.CurrentUser;
 import java.util.Optional;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,9 +15,10 @@ import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 @EnableJpaAuditing(auditorAwareRef = "auditorAware")
 public class JpaConfig {
 
-    /** Phase 1 has no authentication; Phase 2 replaces this with the JWT subject. */
+    /** The caller's user id (JWT {@code sub}); {@code "system"} when there is no caller (seed data, jobs). */
     @Bean
     AuditorAware<String> auditorAware() {
-        return () -> Optional.of("system");
+        return () -> Optional.of(
+                CurrentUser.current().map(user -> user.id().toString()).orElse("system"));
     }
 }

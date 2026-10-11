@@ -2,8 +2,20 @@
 ### Run with the VS Code "REST Client" extension or IntelliJ's HTTP client (click "Send Request"),
 ### or copy them into Swagger UI: http://localhost:8080/swagger-ui.html
 ### The expected status is in each request's title.
+### Since Phase 2 every write needs a token: send the login request first (demo organizer A).
+### Without it the writes below answer 401. Phase 2's own requests: docs/http/phase-2.http.
 
 @gw = http://localhost:8080
+
+### 200 Log in as organizer A (demo account, password Passw0rd!)
+# @name login
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "organizer.a@mitpass.test", "password": "Passw0rd!"}
+
+###
+@token = {{login.response.body.accessToken}}
 
 ### 200 Categories (reference data)
 GET {{gw}}/api/categories
@@ -19,6 +31,7 @@ GET {{gw}}/api/events?sort=startsAt,desc&size=3
 
 ### 201 Create an event with two sessions (Location header points at the gateway)
 POST {{gw}}/api/events
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -44,6 +57,7 @@ GET {{gw}}/api/events?q=hacknite
 
 ### 409 Same code again (conflict)
 POST {{gw}}/api/events
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -53,6 +67,7 @@ Content-Type: application/json
 
 ### 400 Invalid payload: structured ProblemDetail with errors[] (exit criterion 4)
 POST {{gw}}/api/events
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -67,6 +82,7 @@ Content-Type: application/json
 
 ### 422 Capacity larger than the venue (Innovation Centre Lab holds 120)
 POST {{gw}}/api/events
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -80,5 +96,7 @@ GET {{gw}}/api/events/999999
 ### 400 Unknown sort property
 GET {{gw}}/api/events?sort=bogus
 
-### 409 Seeded TECHFEST26 is not DRAFT, so it can't be deleted (use its id from the search above; 1 on a fresh DB)
-DELETE {{gw}}/api/events/1
+### 409 Seeded TECHFEST26 (organizer A's) is not DRAFT, so it can't be deleted (its id from the search above; 2 on a
+### fresh DB). Id 1 is RoboWars, owned by organizer B: as organizer A that answers 403 instead.
+DELETE {{gw}}/api/events/2
+Authorization: Bearer {{token}}

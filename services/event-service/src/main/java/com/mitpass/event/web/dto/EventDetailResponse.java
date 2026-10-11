@@ -3,6 +3,7 @@ package com.mitpass.event.web.dto;
 import com.mitpass.event.domain.EventStatus;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 public record EventDetailResponse(
         Long id,
@@ -18,6 +19,8 @@ public record EventDetailResponse(
         Instant registrationOpensAt,
         Instant registrationClosesAt,
         EventStatus status,
+        UUID organizerId,
+        String organizerName,
         Long version,
         List<SessionResponse> sessions,
         Instant createdAt,

@@ -2,12 +2,15 @@ package com.mitpass.event.repository;
 
 import com.mitpass.event.domain.Event;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Fetch plans per use case (the entity maps every association LAZY):
@@ -26,6 +29,10 @@ public interface EventRepository extends JpaRepository<Event, Long>, JpaSpecific
 
     @EntityGraph(attributePaths = {"category", "venue", "sessions"})
     Optional<Event> findDetailedById(Long id);
+
+    /** Ownership check for {@code @eventSecurity}: one column, no entity loaded. */
+    @Query("select e.organizerId from Event e where e.id = :id")
+    Optional<UUID> findOrganizerIdById(@Param("id") Long id);
 
     boolean existsByCode(String code);
 

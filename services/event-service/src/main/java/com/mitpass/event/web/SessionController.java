@@ -10,6 +10,7 @@ import java.net.URI;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,7 +40,8 @@ public class SessionController {
     }
 
     @PostMapping
-    @Operation(summary = "Add a session (must lie within the event)")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('ORGANIZER') and @eventSecurity.isOwner(#eventId))")
+    @Operation(summary = "Add a session (event organizer or ADMIN; must lie within the event)")
     public ResponseEntity<SessionResponse> add(@PathVariable long eventId, @Valid @RequestBody SessionRequest request) {
         SessionResponse created = sessions.add(eventId, request);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
@@ -50,7 +52,8 @@ public class SessionController {
     }
 
     @PutMapping("/{sessionId}")
-    @Operation(summary = "Edit a session in place")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('ORGANIZER') and @eventSecurity.isOwner(#eventId))")
+    @Operation(summary = "Edit a session in place (event organizer or ADMIN)")
     public SessionResponse update(
             @PathVariable long eventId, @PathVariable long sessionId, @Valid @RequestBody SessionRequest request) {
         return sessions.update(eventId, sessionId, request);
@@ -58,7 +61,8 @@ public class SessionController {
 
     @DeleteMapping("/{sessionId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary = "Remove a session")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('ORGANIZER') and @eventSecurity.isOwner(#eventId))")
+    @Operation(summary = "Remove a session (event organizer or ADMIN)")
     public void delete(@PathVariable long eventId, @PathVariable long sessionId) {
         sessions.delete(eventId, sessionId);
     }

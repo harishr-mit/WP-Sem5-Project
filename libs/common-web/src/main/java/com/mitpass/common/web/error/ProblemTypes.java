@@ -10,6 +10,8 @@ public final class ProblemTypes {
     public static final URI NOT_FOUND = of("not-found");
     public static final URI CONFLICT = of("conflict");
     public static final URI BUSINESS_RULE = of("business-rule");
+    public static final URI UNAUTHORIZED = of("unauthorized");
+    public static final URI FORBIDDEN = of("forbidden");
     public static final URI INTERNAL = of("internal");
 
     private ProblemTypes() {}

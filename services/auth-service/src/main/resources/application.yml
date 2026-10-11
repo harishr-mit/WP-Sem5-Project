@@ -1,0 +1,92 @@
+server:
+  port: 8081
+  # Honour X-Forwarded-* from the gateway (Location headers, springdoc server URLs, client IP for refresh tokens).
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: auth-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/auth_db
+    username: ${DB_USER:auth_svc}
+    password: ${DB_PASSWORD:auth_svc}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    # db/seed holds the demo accounts (R__demo_users.sql); tests switch it off (application-test.yml).
+    locations: classpath:db/migration,classpath:db/seed
+  data:
+    web:
+      pageable:
+        max-page-size: 100
+  mail:
+    # Mailpit from infra/docker-compose.yml: catches every email, UI at http://localhost:8025
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+  instance:
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  health:
+    mail:
+      enabled: false   # Mailpit being down must not mark the service DOWN; sending is best-effort (after commit)
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+mitpass:
+  security:
+    # Everything else needs a valid access token (docs/plans/phase-2.md §6).
+    public-paths:
+      - POST /api/auth/signup
+      - GET /api/auth/verify-email
+      - POST /api/auth/verify-email
+      - POST /api/auth/verify-email/resend
+      - POST /api/auth/login
+      - POST /api/auth/refresh
+      - POST /api/auth/logout
+      - GET /api/departments
+      - GET /.well-known/jwks.json
+  auth:
+    access-token-ttl: 15m
+    refresh-token-ttl: 7d
+    refresh-family-max-lifetime: 30d
+    verification-token-ttl: 24h
+    resend-interval: 1m
+    # Encrypts signing keys at rest. Dev default only: set MITPASS_KEY_SECRET anywhere real.
+    key-secret: ${MITPASS_KEY_SECRET:dev-only-change-me}
+    lockout:
+      max-attempts: 5
+      duration: 15m
+    # P6 points this at a web-portal page instead.
+    verify-link: ${MITPASS_VERIFY_LINK:http://localhost:8080/api/auth/verify-email?token={token}}
+    mail-from: "MITPass <no-reply@mitpass.test>"
+    signup:
+      domains:
+        - domain: student.annauniv.edu
+          # <register number>@student.annauniv.edu: 10 digits (year + programme + roll), 12 for some PG/PhD/staff
+          local-part-pattern: '\d{10}(\d{2})?'
+          register-number-from-local-part: true
+        - domain: gmail.com
+          canonicalize-gmail: true
+
+logging:
+  pattern:
+    level: "%5p [%X{correlationId:-}] [%X{userId:-}]"

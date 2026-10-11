@@ -1,5 +1,6 @@
 package com.mitpass.event.service;
 
+import com.mitpass.common.security.CurrentUser;
 import com.mitpass.common.web.error.BusinessRuleException;
 import com.mitpass.common.web.error.ConflictException;
 import com.mitpass.common.web.error.NotFoundException;
@@ -65,13 +66,15 @@ public class EventService {
         return mapper.toDetail(loadDetailed(id));
     }
 
+    /** The caller becomes the event's organizer (owner). */
     @Transactional
-    public EventDetailResponse create(EventCreateRequest request) {
+    public EventDetailResponse create(CurrentUser organizer, EventCreateRequest request) {
         if (events.existsByCode(request.code())) {
             throw duplicateCode(request.code());
         }
         Event event = new Event();
         mapper.apply(request, event);
+        event.assignOrganizer(organizer.id(), organizer.name() != null ? organizer.name() : organizer.email());
         assignCategoryAndVenue(event, request.categoryId(), request.venueId());
 
         List<SessionRequest> sessions = request.sessions() == null ? List.of() : request.sessions();

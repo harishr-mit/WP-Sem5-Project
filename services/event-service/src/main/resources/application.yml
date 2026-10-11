@@ -47,7 +47,20 @@ springdoc:
 mitpass:
   # Campus time zone: search dates (from/to) are calendar days here.
   time-zone: Asia/Kolkata
+  security:
+    # The catalogue is public to read (owner decision, docs/plans/phase-2.md §2); every write needs a token.
+    public-paths:
+      - GET /api/events
+      - GET /api/events/{id}
+      - GET /api/events/{id}/sessions
+      - GET /api/events/{id}/sessions/**
+      - GET /api/venues/**
+      - GET /api/venues
+      - GET /api/categories
+  clients:
+    # A Eureka service id, resolved by Spring Cloud LoadBalancer.
+    auth-service: http://auth-service
 
 logging:
   pattern:
-    level: "%5p [%X{correlationId:-}]"
+    level: "%5p [%X{correlationId:-}] [%X{userId:-}]"

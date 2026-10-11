@@ -1,5 +1,6 @@
 package com.mitpass.event.web;
 
+import com.mitpass.common.security.CurrentUser;
 import com.mitpass.common.web.paging.PageResponse;
 import com.mitpass.event.service.EventSearchCriteria;
 import com.mitpass.event.service.EventService;
@@ -16,6 +17,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -56,9 +58,13 @@ public class EventController {
     }
 
     @PostMapping
-    @Operation(summary = "Create an event (starts in DRAFT), optionally with its sessions")
-    public ResponseEntity<EventDetailResponse> create(@Valid @RequestBody EventCreateRequest request) {
-        EventDetailResponse created = events.create(request);
+    @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
+    @Operation(
+            summary = "Create an event (ORGANIZER, ADMIN)",
+            description = "Starts in DRAFT, optionally with its sessions. The caller becomes the event's organizer.")
+    public ResponseEntity<EventDetailResponse> create(
+            @Valid @RequestBody EventCreateRequest request, CurrentUser organizer) {
+        EventDetailResponse created = events.create(organizer, request);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
                 .buildAndExpand(created.id())
@@ -67,14 +73,18 @@ public class EventController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Replace an event's fields (not its sessions or status)")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('ORGANIZER') and @eventSecurity.isOwner(#id))")
+    @Operation(
+            summary = "Replace an event's fields (its organizer, or ADMIN)",
+            description = "Not its sessions or status.")
     public EventDetailResponse update(@PathVariable long id, @Valid @RequestBody EventUpdateRequest request) {
         return events.update(id, request);
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('ORGANIZER') and @eventSecurity.isOwner(#id))")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary = "Delete a DRAFT event (any other state: 409)")
+    @Operation(summary = "Delete a DRAFT event (its organizer, or ADMIN; any other state: 409)")
     public void delete(@PathVariable long id) {
         events.delete(id);
     }

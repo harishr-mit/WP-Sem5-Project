@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.mitpass.common.security.Roles;
 import com.mitpass.common.web.CommonWebAutoConfiguration;
 import com.mitpass.common.web.error.BusinessRuleException;
 import com.mitpass.common.web.error.ConflictException;
@@ -26,6 +27,8 @@ import com.mitpass.event.service.EventService;
 import com.mitpass.event.web.dto.CategoryResponse;
 import com.mitpass.event.web.dto.EventDetailResponse;
 import com.mitpass.event.web.dto.VenueResponse;
+import com.mitpass.security.test.TestJwtIssuer;
+import com.mitpass.security.test.TestSecurityConfig;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -35,14 +38,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** The web layer alone: binding, Bean Validation and error mapping, with the service mocked. */
 @WebMvcTest(EventController.class)
-@Import(CommonWebAutoConfiguration.class)
+@Import({CommonWebAutoConfiguration.class, TestSecurityConfig.class})
 class EventControllerTest {
+
+    /** Writes need a token now (Phase 2); these tests are about behaviour, so they act as ADMIN. */
+    static final String ADMIN = "Bearer " + TestJwtIssuer.token(Roles.ADMIN);
 
     private static final String VALID = """
             {
@@ -67,9 +74,12 @@ class EventControllerTest {
 
     @Test
     void createReturns201WithLocation() throws Exception {
-        given(events.create(any())).willReturn(detail(42L));
+        given(events.create(any(), any())).willReturn(detail(42L));
 
-        mvc.perform(post("/api/events").contentType(MediaType.APPLICATION_JSON).content(VALID))
+        mvc.perform(post("/api/events")
+                        .header(HttpHeaders.AUTHORIZATION, ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", "http://localhost/api/events/42"))
                 .andExpect(jsonPath("$.id").value(42))
@@ -91,7 +101,10 @@ class EventControllerTest {
                 }
                 """;
 
-        mvc.perform(post("/api/events").contentType(MediaType.APPLICATION_JSON).content(invalid))
+        mvc.perform(post("/api/events")
+                        .header(HttpHeaders.AUTHORIZATION, ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalid))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.type").value("urn:mitpass:problem:validation"))
@@ -113,7 +126,10 @@ class EventControllerTest {
                 {"code": "OLD01", "title": "Last year", "categoryId": 1, "venueId": 3, "capacity": 10,
                  "startsAt": "2001-01-01T00:00:00Z", "endsAt": "2001-01-01T02:00:00Z"}
                 """;
-        mvc.perform(post("/api/events").contentType(MediaType.APPLICATION_JSON).content(past))
+        mvc.perform(post("/api/events")
+                        .header(HttpHeaders.AUTHORIZATION, ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(past))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].field").value("startsAt"));
     }
@@ -130,15 +146,18 @@ class EventControllerTest {
 
     @Test
     void businessRuleIsA422AndConflictA409() throws Exception {
-        given(events.create(any())).willThrow(new BusinessRuleException("Capacity 100 exceeds the venue"));
-        mvc.perform(post("/api/events").contentType(MediaType.APPLICATION_JSON).content(VALID))
+        given(events.create(any(), any())).willThrow(new BusinessRuleException("Capacity 100 exceeds the venue"));
+        mvc.perform(post("/api/events")
+                        .header(HttpHeaders.AUTHORIZATION, ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.type").value("urn:mitpass:problem:business-rule"));
 
         willThrow(new ConflictException("Only DRAFT events can be deleted"))
                 .given(events)
                 .delete(5L);
-        mvc.perform(delete("/api/events/5"))
+        mvc.perform(delete("/api/events/5").header(HttpHeaders.AUTHORIZATION, ADMIN))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.type").value("urn:mitpass:problem:conflict"));
     }
@@ -171,7 +190,8 @@ class EventControllerTest {
                         "CSE",
                         LocalDate.of(2026, 11, 1),
                         LocalDate.of(2026, 11, 30),
-                        EventStatus.PUBLISHED));
+                        EventStatus.PUBLISHED,
+                        null));
         assertThat(pageable.getValue().getPageNumber()).isEqualTo(1);
         assertThat(pageable.getValue().getPageSize()).isEqualTo(5);
         assertThat(pageable.getValue().getSort().toString()).isEqualTo("title: DESC");
@@ -190,7 +210,8 @@ class EventControllerTest {
 
     @Test
     void deleteReturns204() throws Exception {
-        mvc.perform(delete("/api/events/5")).andExpect(status().isNoContent());
+        mvc.perform(delete("/api/events/5").header(HttpHeaders.AUTHORIZATION, ADMIN))
+                .andExpect(status().isNoContent());
         verify(events).delete(eq(5L));
     }
 
@@ -210,6 +231,8 @@ class EventControllerTest {
                 null,
                 null,
                 EventStatus.DRAFT,
+                java.util.UUID.fromString("00000000-0000-4000-8000-000000000002"),
+                "Anitha Rao",
                 0L,
                 List.of(),
                 Instant.now(),

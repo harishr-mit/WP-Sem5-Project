@@ -10,10 +10,20 @@ spring:
         webflux:
           # Services serve /api/... themselves, so routes forward the path unchanged (docs/plans/phase-1.md §4).
           routes:
+            - id: auth-service
+              uri: lb://auth-service
+              predicates:
+                - Path=/api/auth/**,/api/users/**,/api/departments,/.well-known/jwks.json
+            - id: auth-service-openapi
+              uri: lb://auth-service
+              predicates:
+                - Path=/docs/auth-service
+              filters:
+                - SetPath=/v3/api-docs
             - id: event-service
               uri: lb://event-service
               predicates:
-                - Path=/api/events/**,/api/venues/**,/api/categories/**
+                - Path=/api/events/**,/api/venues/**,/api/categories/**,/api/volunteers/**
             # OpenAPI document of each service, for the Swagger UI below. Not under /v3/api-docs/**: springdoc's own
             # handler would answer that path before the gateway routes see it.
             - id: event-service-openapi
@@ -38,14 +48,51 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
     urls:
+      - name: auth-service
+        url: /docs/auth-service
       - name: event-service
         url: /docs/event-service
+    persist-authorization: true   # keep the pasted bearer token across page reloads
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info,gateway
+
+mitpass:
+  security:
+    # Edge pre-check only: requests on these paths pass without a token, everything else needs a valid one.
+    # Each service enforces its own list (and all role rules) again. Keep this a superset of the services' lists.
+    public-paths:
+      - POST /api/auth/signup
+      - GET /api/auth/verify-email
+      - POST /api/auth/verify-email
+      - POST /api/auth/verify-email/resend
+      - POST /api/auth/login
+      - POST /api/auth/refresh
+      - POST /api/auth/logout
+      - GET /api/departments
+      - GET /.well-known/jwks.json
+      - GET /api/events
+      - GET /api/events/{id}
+      - GET /api/events/{id}/sessions
+      - GET /api/venues
+      - GET /api/venues/**
+      - GET /api/categories
+      - GET /swagger-ui.html
+      - GET /swagger-ui/**
+      - GET /webjars/**
+      - GET /v3/api-docs
+      - GET /v3/api-docs/**
+      - GET /docs/**
+      - GET /actuator/health
+      - GET /actuator/health/**
+      - GET /actuator/info
+  cors:
+    # The web portal (Phase 6). Add the LAN address when phones load the portal.
+    allowed-origins:
+      - http://localhost:8090
 
 logging:
   pattern:

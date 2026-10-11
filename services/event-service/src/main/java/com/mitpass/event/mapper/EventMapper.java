@@ -34,10 +34,14 @@ public interface EventMapper {
     @Mapping(target = "category", ignore = true)
     @Mapping(target = "venue", ignore = true)
     @Mapping(target = "sessions", ignore = true)
+    @Mapping(target = "organizerId", ignore = true)
+    @Mapping(target = "organizerName", ignore = true)
     void apply(EventCreateRequest request, @MappingTarget Event event);
 
     @Mapping(target = "category", ignore = true)
     @Mapping(target = "venue", ignore = true)
     @Mapping(target = "sessions", ignore = true)
+    @Mapping(target = "organizerId", ignore = true)
+    @Mapping(target = "organizerName", ignore = true)
     void apply(EventUpdateRequest request, @MappingTarget Event event);
 }

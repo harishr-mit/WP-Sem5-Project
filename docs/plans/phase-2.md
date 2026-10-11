@@ -101,7 +101,7 @@ com.mitpass.auth
 | Roles on refresh | Read from the DB on every refresh, never copied from the old token | A role change takes effect at the next refresh (≤ 15 min); admin "revoke sessions" forces it now |
 | Passwords | `DelegatingPasswordEncoder` (`{bcrypt}`, strength 10). Policy: 8–72 **bytes** UTF-8, at least one letter and one digit, must not contain the email's local part | BCrypt ignores/rejects input past 72 bytes (Spring Security throws), so the limit is in bytes, validated before encoding |
 | Email policy | `mitpass.auth.signup.domains` (config list). `student.annauniv.edu`: local part must match `^\d{10}(\d{2})?$` and becomes `register_number`. `gmail.com`: dots and `+tag` stripped into `canonical_email` (unique), so `a.b+x@gmail.com` and `ab@gmail.com` are one account. Emails stored lower-case | Owner's rule (§2); canonical form stops duplicate Gmail sign-ups |
-| Register number | Stored as typed (unique, nullable). From an annauniv email it's taken from the local part (a different value in the form → 400); Gmail users may enter one. Programme code (digits 5–7) is **not** mapped to a department yet: department and year come from the form | The programme-code → department map isn't confirmed (§15 Q1) |
+| Register number | Stored as typed (unique, nullable). From an annauniv email it is taken from the local part (a different value in the form → 400); Gmail users may enter one. It is never parsed: department and year come from the form | Owner decision (§15 Q1) |
 | Email verification | Random token, SHA-256 stored, 24 h, single use. Link: `mitpass.auth.verify-link` = `http://localhost:8080/api/auth/verify-email?token={token}` (GET and POST both verify). Resend always answers `202` and sends at most once a minute | No user enumeration. P6 points the link at a portal page instead |
 | Unverified login | Correct password but unverified → `403 email-not-verified` | Wrong password still gives the generic 401 first, so this doesn't leak more than "account exists with this password" |
 | Mail sending | `SignupService` publishes `VerificationRequested`; `VerificationMailer` sends it `@TransactionalEventListener(AFTER_COMMIT)` + `@Async`. Spring Mail → Mailpit `localhost:1025` | No email for a rolled-back sign-up; an SMTP hiccup doesn't fail the sign-up. P7 moves this to notification-service |
@@ -123,7 +123,7 @@ com.mitpass.auth
 
 | Table | Columns | Constraints / indexes |
 |---|---|---|
-| `department` | `code` varchar(16) PK, `name` varchar(120) | reference data (placeholders, §15 Q2) |
+| `department` | `code` varchar(16) PK, `name` varchar(120) | reference data: `CSE, IT, ECE, EIE, MECH, AERO, AUTO, PROD, RPT, ROBO, AIDS` (§15 Q2) |
 | `role` | `id` smallint PK, `name` varchar(16) | `name IN (STUDENT, ORGANIZER, VOLUNTEER, ADMIN)`, unique; seeded in V2 |
 | `app_user` | `id` uuid PK, `email` varchar(254), `canonical_email` varchar(254), `full_name` varchar(120), `department_code` FK, `year_of_study` smallint null, `register_number` varchar(12) null, `password_hash` varchar(100), `email_verified_at` timestamptz null, `enabled` bool, `failed_login_attempts` int, `locked_until` timestamptz null, `last_login_at` null, `version`, audit cols | unique `canonical_email`, unique `register_number`; `year_of_study BETWEEN 1 AND 5`; `register_number ~ '^\d{10}(\d{2})?$'` |
 | `user_role` | `user_id`, `role_id` | PK both; FK `ON DELETE CASCADE` |
@@ -314,9 +314,44 @@ Checked against the 7.1.1 jars and the Boot 4.1.1 BOM on 2026-10-11 unless marke
 11. **Repeatable migrations run after all versioned ones.** V3 makes `organizer_id` NOT NULL, so `R__demo_seed.sql` must supply it, or a fresh DB fails at the seed.
 12. **Gateway + springdoc + security:** permit `/v3/api-docs`, `/swagger-ui*`, `/webjars/**` and `/docs/**`, or Swagger UI itself gets 401.
 
-## 15. Open questions for the owner (defaults in brackets; the build goes ahead with them)
+## 15. Owner questions (resolved 2026-10-11)
 
-1. **Programme code → department.** Which department is each code `501`–`512`? With the map, the form could pre-fill department and admission year from the register number. **[Not mapped in P2; department and year come from the form]**
-2. **Department list.** The mockup shows CSE / ECE / MECH / CIVIL, and the event seed uses CSE / MECH / AERO. **[Seed `CSE, IT, ECE, EIE, MECH, CIVIL, AERO, AUTO, PROD, RPT` as placeholders; replace them in a later migration if you send the real list]**
-3. **12-digit register numbers** (PG / PhD / staff): accepted by the pattern, but year/programme aren't derived from them. **[Accept as typed]**
-4. **Demo password** for seeded accounts. **[`Passw0rd!`, dev only, documented in README]**
+The owner approved the plan on 2026-10-11 with these answers:
+
+1. **Programme code → department:** not needed. The register number is never classified; sign-up asks for the department.
+2. **Department list:** placeholders are fine, with Robotics and AI & DS added and Civil removed: `CSE, IT, ECE, EIE, MECH, AERO, AUTO, PROD, RPT, ROBO, AIDS`.
+3. **12-digit register numbers:** accepted as typed.
+4. **Demo password:** `Passw0rd!` (dev only, documented in README).
+
+## 16. As built: deviations and findings (2026-10-11)
+
+Phase 2 was implemented as planned. Where the build differs from the sections above, this list is authoritative.
+
+| Topic | Plan said | As built / why |
+|---|---|---|
+| Errors with their own status | auth-service problem types | `common-web` gained **`ProblemException`** (status + type + title + headers, handled by `GlobalExceptionHandler`) and a public **`Problems`** factory. auth-service raises 401/403/423 through it (`AuthProblems`); no second advice needed |
+| common-security's own tests | in `common-security` | Unit tests there; the **filter-chain test** (`ResourceServerAutoConfigurationTest`) lives in `security-test-support/src/test`, because a test dependency from common-security on security-test-support would be a reactor cycle |
+| `@WebMvcTest` slices | import `TestSecurityConfig` | common-security registers its auto-config in **`META-INF/spring/org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest.imports`**, so every web slice runs the real filter chain; the test only supplies the `JwtDecoder` |
+| auth-service security | own `SecurityConfig` chain | Only a **`JwtDecoder` bean** (a `JWKSource` over `SigningKeyService`); filter chain, public paths and 401/403 bodies come from common-security |
+| Key encryption | `Encryptors.delux` | `Encryptors.*` and `AesBytesEncryptor` are **deprecated in Security 7.1**. Uses **`AesGcmBytesEncryptor.withPassword(secret, salt)`** (AES-256-GCM, PBKDF2-HMAC-SHA256 600 000 rounds); decrypted keys are cached per `kid` |
+| Token hash columns | `char(64)` | `VARCHAR(64)`: `CHAR` reads back as `bpchar` and trips `ddl-auto=validate` |
+| UUIDs | v7 | `@UuidGenerator(style = TIME)` |
+| `GET /api/departments` | — | Added (public), for the sign-up form's department list |
+| Lockout | 5 failures → locked | The **5th failure itself answers 423** (with `Retry-After`), so the demo shows the lock immediately |
+| Concurrent refresh with one token | exactly one succeeds | Exactly one succeeds; the others count as reuse, so the family (including the winner's new token) is revoked. Strict on purpose: two holders of one refresh token is the theft signal |
+| `expiresIn` | seconds | Rounded **up** (`899.98 s` → `900`) |
+| Gateway correlation id | `GlobalFilter` | **`CorrelationIdWebFilter`** (renamed, `WebFilter` at highest precedence): Spring Security's WebFilter runs before gateway `GlobalFilter`s, so a 401 from the edge also gets an id; it's kept in an exchange attribute for the 401 body |
+| Gateway CORS | `globalcors` | Spring Security's **`.cors()` with a `CorsConfigurationSource`** (`mitpass.cors.allowed-origins`): CORS headers are then on 401s from the edge too, which a browser needs to read them. Disallowed origins get 403 on preflight |
+| event-service → auth-service | load-balanced `RestClient` | `@LoadBalanced RestClient.Builder` bean + `BearerTokenRelayInterceptor`; 404 → 422, unreachable → **503 `dependency-unavailable`** |
+| Gate integrity | gate of the same event (422 in code) | Also in the schema: composite FK `(gate_id, event_id) → event_gate (id, event_id) ON DELETE SET NULL (gate_id)` (PostgreSQL 15+ column list), so deleting a gate keeps its volunteers as "any gate" |
+| Seed ownership | all to organizer A | `ROBOWARS26` and `CRICKET26` belong to organizer B (V3 back-fill and `R__demo_seed.sql`), so the ownership 403 can be shown on seed data. Seed also adds gates (`MAIN`, `NORTH`, `OAT`, `LAB`) |
+| `EventService.create` | `create(request)` | `create(organizer, request)`: the caller becomes the owner; `organizerId` / `organizerName` are in the detail and summary DTOs and a search filter |
+| Matrix "allowed" | not 401/403 | Not a **security** rejection: 401 with type `unauthorized` or 403 with `forbidden`. A business 401 (`invalid-credentials`, `invalid-refresh-token`) or a 4xx from validation still means "passed authorization" (`SecurityMatrix.verdictOf`) |
+| Test wiring | per-class imports | `@AuthIntegrationTest` / `@EventIntegrationTest` meta-annotations (one cached context and one container per service). event-service replaces auth-service with an in-memory `FakeAuthService` |
+| `UserMapper` (MapStruct) | planned | `UserResponse.from(user, now)`: `locked` depends on the clock, roles map to names |
+| Load-balanced client beans | `@LoadBalanced` beans | **`@Bean(defaultCandidate = false)`**, injected by the `@LoadBalanced` qualifier. Found in the live demo, not by tests (Eureka is off there): event-service's load-balanced `RestClient.Builder` became the only `RestClient.Builder`, the Eureka client used it, tried to resolve `localhost:8761` as a service id and never registered. Same fix applied to common-security's JWKS `RestTemplate` and the gateway's `WebClient.Builder` |
+| Phase 1 demo requests | — | `docs/http/phase-1.http` logs in as organizer A first and sends the token on writes; its final delete targets TECHFEST26 (id 2), since id 1 is RoboWars (organizer B → 403) |
+
+**Verified live** (2026-10-11, compose infra, jars on the project JDK, the Phase 1 database volume kept so V3's back-fill ran on existing events): all ten exit criteria. A scripted run of 36 checks passed: Eureka lists the three apps; college sign-up 201, Yahoo and non-register-number 400 on `email`; login before verifying 403; the verification email in Mailpit, link 200, login 200; token `kid` in the JWKS and claims as planned; a forged token 401 at :8080, :8081 and :8082; refresh 200, replay 401 `refresh-token-reused`, rotated token 401; organizer B 403 / A 201 / admin 201 on A's event, A 403 on B's; admin promotion; assignment through the auth-service lookup 201, non-volunteer 422, volunteer sees the gate; lockout 423 (also with the right password), admin unlock, login again; Swagger UI and both API docs (with the bearer scheme) through the gateway. Logs show `[correlationId] [userId]` on every service line.
+
+**Tests:** 158, all green with `./mvnw verify` (common-web 20, common-security 9, security-test-support 15, discovery 1, gateway 17, auth-service 49, event-service 47). 0 compiler warnings. One run of the event-service suite failed once without a captured cause while compose was also running; the next two full runs were green. Watch for a flaky test there.

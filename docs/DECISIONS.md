@@ -90,4 +90,31 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 - **Paging.** List endpoints return `PageResponse<T>` (`content, page, size, totalElements, totalPages`), never Spring's `PageImpl`. `max-page-size: 100`.
 - **Exceptions to throw.** `NotFoundException`, `ConflictException`, `BusinessRuleException` from `common-web`.
 
-**Consequences.** Adding a service (Phase 2 onward) means adding one `common-web` dependency, one route pair in the gateway and one `swagger-ui.urls` entry. A Phase 2 caveat: `GlobalExceptionHandler` has a catch-all `Exception` → 500 handler, so method-security `AccessDeniedException`s must be mapped to 403 explicitly when Spring Security arrives.
+**Consequences.** Adding a service (Phase 2 onward) means adding one `common-web` dependency, one route pair in the gateway and one `swagger-ui.urls` entry. A Phase 2 caveat: `GlobalExceptionHandler` has a catch-all `Exception` → 500 handler, so method-security `AccessDeniedException`s must be mapped to 403 explicitly when Spring Security arrives. *(Resolved in Phase 2: common-security's `SecurityExceptionAdvice` is ordered first; see D7.)* Phase 2 also added `ProblemException` (any status, type and headers) and a public `Problems` factory for filter-level errors.
+
+---
+
+## D7: Security model (stateless JWTs, verified everywhere)
+
+*2026-10-11 · accepted (built in Phase 2; details in `docs/plans/phase-2.md` §4, §8, §9, "As built")*
+
+**Decision.**
+- **Issuer.** `auth-service` mints **RS256** access tokens itself with Spring Security's `NimbusJwtEncoder` (not Spring Authorization Server). Claims: `iss=mitpass-auth`, `aud=mitpass-api`, `sub` (user UUID), `email`, `name`, `roles`, `dept`, `year`, `regNo`, `iat`, `exp` (15 min), `jti`; header `kid`.
+- **Keys.** RSA-2048 in `auth_db.signing_key`, private half encrypted at rest (AES-256-GCM, key from `MITPASS_KEY_SECRET` via PBKDF2). At most one ACTIVE key (partial unique index). `POST /api/auth/keys/rotate` (ADMIN); a retired key stays in `/.well-known/jwks.json` for one token lifetime + 5 min.
+- **Verification.** Every servlet service depends on `libs/common-security`, which auto-configures a stateless resource server: JWK set from `http://auth-service/.well-known/jwks.json` through Eureka (`@LoadBalanced` client), RS256 only, `iss`/`aud`/`exp` (30 s skew)/`sub` validators, `roles` → `ROLE_*`. The gateway does the same reactively as a **pre-check** (valid token or public path) and forwards the token unchanged; services verify again and own every role rule.
+- **Authorization.** URL rules only split public from authenticated (`mitpass.security.public-paths`). Role and ownership rules are `@PreAuthorize` on controller methods (`@eventSecurity.isOwner(#id)` for organizer ownership).
+- **Errors.** 401/403 are ProblemDetails with types `unauthorized` / `forbidden` (filter level: entry point + access-denied handler; method level: `SecurityExceptionAdvice`). Business auth errors have their own types (`invalid-credentials`, `email-not-verified`, `account-locked` 423, `refresh-token-reused`, …).
+- **Sessions.** Refresh tokens are opaque, stored as SHA-256, rotated on every use within a family; reuse revokes the family. Logout is **stateless** (owner decision): it revokes the refresh family, and an issued access token lives out its ≤ 15 min. No denylist until Redis (P8 at the earliest).
+- **Service-to-service.** Calls carry the original caller's token (`BearerTokenRelayInterceptor`), so the callee authorizes the user, not the calling service.
+
+**Consequences.** A new service gets authentication by adding `common-security`, listing its public paths, and putting `@PreAuthorize` on writes. Tests use `libs/security-test-support` (`TestJwtIssuer` + `TestSecurityConfig`), which trust an in-memory key but keep the production validators. Each service has a `SecurityMatrixTest` whose table is in `docs/security-matrix.md`; a new endpoint belongs in it.
+
+---
+
+## D8: Demo accounts and dev secrets
+
+*2026-10-11 · accepted*
+
+**Decision.** `auth-service` seeds six accounts through a repeatable `db/seed/R__demo_users.sql` (off in tests) with fixed UUIDs `00000000-0000-4000-8000-00000000000N` and the password `Passw0rd!`. Staff addresses use the reserved `.test` TLD so they can't belong to real people. event-service's seed and its V3 migration give the demo events to organizer A (`…02`) and organizer B (`…03`) by those ids. The signing-key secret defaults to `dev-only-change-me` (`MITPASS_KEY_SECRET` overrides it).
+
+**Consequences.** Anything beyond a local demo must override `MITPASS_KEY_SECRET` and not load `db/seed`. Changing the seeded organizer ids means changing both services' seeds together.
