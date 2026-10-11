@@ -120,7 +120,7 @@ Shared context for every agent working in this directory. Read this file **befor
   * A first run without `clean` failed with `ClassNotFoundException: VenueRepository`: a stale `target/`, not a code problem. `clean` fixed it.
   * AGENTS.md: agents skip `archive/` unless a past failure is relevant.
 * **Notes / Errors:** The archived log is the GitHub Actions job log `0_build.txt` from the owner's download `logs_103259064280/`. The rest of that folder (`build/system.txt`, 7 lines of runner metadata) was deleted with it. `.gitignore` ignores `*.log`, so an exception keeps `archive/*.log` tracked. Archive naming: `YYYY-MM-DD_<source>_<short-cause>.log`. Docker Desktop stopped at the end.
-* **Git:** owner approved "commit and finish phase 2": this fix is committed on `phase2`, then `phase2` is merged into `main` (`--no-ff`, local). Push is pending owner approval.
+* **Git:** owner approved "commit and finish phase 2": this fix is committed on `phase2`, then `phase2` is merged into `main` (`--no-ff`, local). Owner then approved the push: `phase2` (b8d6446) and `main` (merge 98d7462) pushed; GitHub Actions `ci` green on both (runs 38145876689, 38145797409).
 
 ### 2026-10-11 — GitHub Copilot — T18: Shut down MITPass
 
