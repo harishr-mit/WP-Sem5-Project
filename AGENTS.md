@@ -2,6 +2,8 @@
 
 Before doing anything, read till the latest record of Change log of `log.md` to get the current context and task status. While working, use `log.md` as your todo list: add tasks as `\[ ]`, mark `\[\~]` when you start, `\[x]` when done (or `\[!]` with notes if it fails), and log every change to files in this directory so later agents can diagnose and resume after a mid-run failure.
 
+**`archive/` (skip by default):** old CI and error logs live here. Don't read, search or list it unless the current task needs a past failure (a recurring or similar error, or a regression). Token saving is key.
+
 ## Project & UI reference
 
 The project is **MITPass** (College Event Pass System). The plan is in `PROJECT.md`. For anything user-facing, open `MITPass App Screens.html` (repo root, view it in a browser). It is a rough guide to the flow and visual direction, not a spec: adapt it where that gives a better or simpler result, and follow `PROJECT.md` on behaviour and data. Rules for using it: `PROJECT.md` §2 "UI reference". The owner updates the file, so open the current copy before UI work.

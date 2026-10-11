@@ -87,6 +87,10 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T14: Plan Phase 1 → `docs/plans/phase-1.md` + T03 sub-tasks
 * [x] T15: AGENTS.md "Git & Commits": prompt to commit before/after each phase (owner permission per commit); exec-bit commands
 * [x] T16: Verify Phase 1 is complete; plan Phase 2 → `docs/plans/phase-2.md` + T04 sub-tasks (no code)
+* [x] T17: Start MITPass services for owner preview; leave running on request
+* [x] T18: Safely stop MITPass services, infrastructure, and Docker Desktop
+* [x] T19: Fix CI failure on PR #1 (phase2 → main): order-dependent venue count in event-service test
+* [x] T20: Archive the CI error log under `archive/` + AGENTS.md skip rule
 
 *Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -104,6 +108,35 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-11 — Claude (Opus 5.5) — T19/T20: CI fix + error-log archive rule
+
+* **Task:** T19 (CI red on PR #1, phase2 → main), T20 (archive the CI log)
+* **Status:** DONE
+* **Files:** `services/event-service/src/test/java/com/mitpass/event/EventServiceApplicationTests.java`, `AGENTS.md` (archive rule), `.gitignore` (`!archive/*.log`), `archive/2026-10-11_ci-pr1_event-service-venue-count.log` (created), `log.md`
+* **Details:**
+  * CI failure: `EventServiceApplicationTests.referenceDataEndpoints:177` expected `$.totalElements` 5 but got 128. All event-service test classes share one Testcontainers Postgres, and `SecurityMatrixTest` commits 123 "Matrix Fixture Venue N" rows. On the runner it ran first; locally it ran later, so local `verify` passed. Fix: assert `totalElements >= 5` and that "Main Auditorium" (seeded by V2) is listed.
+  * Verified: `./mvnw -pl services/event-service -am clean verify -Dsurefire.runOrder=reversealphabetical` (forces the CI order) → 47/47 pass, BUILD SUCCESS. Full `./mvnw verify` also passed earlier.
+  * A first run without `clean` failed with `ClassNotFoundException: VenueRepository`: a stale `target/`, not a code problem. `clean` fixed it.
+  * AGENTS.md: agents skip `archive/` unless a past failure is relevant.
+* **Notes / Errors:** The archived log is the GitHub Actions job log `0_build.txt` from the owner's download `logs_103259064280/`. The rest of that folder (`build/system.txt`, 7 lines of runner metadata) was deleted with it. `.gitignore` ignores `*.log`, so an exception keeps `archive/*.log` tracked. Archive naming: `YYYY-MM-DD_<source>_<short-cause>.log`. Docker Desktop stopped at the end.
+* **Git:** owner approved "commit and finish phase 2": this fix is committed on `phase2`, then `phase2` is merged into `main` (`--no-ff`, local). Push is pending owner approval.
+
+### 2026-10-11 — GitHub Copilot — T18: Shut down MITPass
+
+* **Task:** T18 — stop MITPass JVMs, Compose containers, and Docker Desktop
+* **Status:** DONE
+* **Files:** `log.md`
+* **Details:** Stopped the four confirmed service PIDs, ran `docker compose -f infra/docker-compose.yml down` (containers and network removed; volumes retained), then `docker desktop stop`. Verified no listeners remain on the app or infrastructure ports and no Docker Desktop processes remain.
+* **Notes / Errors:** Windows rejected non-forced termination for the detached Java processes; no app shutdown endpoint or window was available, so used `/F` only for the four verified idle MITPass PIDs. `docker compose down` used no `-v`, preserving database data.
+
+### 2026-10-11 — GitHub Copilot — T17: Start MITPass for owner preview
+
+* **Task:** T17 — start the local infrastructure and Phase 1–2 services
+* **Status:** DONE
+* **Files:** `log.md`
+* **Details:** Started Docker Compose infrastructure (PostgreSQL, RabbitMQ, Mailpit; all healthy) and the four packaged Java 21 services: discovery-server (PID 86772), auth-service (105928), event-service (62196), and api-gateway (41604). Verified all four listeners, Swagger UI HTTP 200, event catalogue HTTP 200 through both gateway and direct service, and Eureka registry entries UP. Opened Swagger UI in the integrated browser.
+* **Notes / Errors:** Docker CLI was absent from this terminal's PATH, so used the installed executable under `C:\Program Files\Docker\Docker\resources\bin`. The first gateway catalogue request returned 503 while Eureka discovery warmed up; subsequent request returned 200. Services and containers intentionally remain running per owner request. Logs are under `%TEMP%\mitpass-*.log`.
 
 ### 2026-10-11 — Claude (Opus 5.5) — T04: Phase 2 implemented
 

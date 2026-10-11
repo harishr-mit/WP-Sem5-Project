@@ -1,5 +1,6 @@
 package com.mitpass.event;
 
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -174,7 +175,9 @@ class EventServiceApplicationTests {
                 .andExpect(jsonPath("$[*].code", hasItem("TECHNICAL")));
         mvc.perform(get("/api/venues"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(5));
+                // At least the 5 seeded venues: other tests sharing this database add fixture venues.
+                .andExpect(jsonPath("$.totalElements", greaterThanOrEqualTo(5)))
+                .andExpect(jsonPath("$.content[*].name", hasItem("Main Auditorium")));
     }
 
     @Test
