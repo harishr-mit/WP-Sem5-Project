@@ -23,8 +23,11 @@
     <modules>
         <!-- Modules are added phase by phase (docs/plans/). Libraries first. -->
         <module>libs/common-web</module>
+        <module>libs/common-security</module>
+        <module>libs/security-test-support</module>
         <module>platform/discovery-server</module>
         <module>platform/api-gateway</module>
+        <module>services/auth-service</module>
         <module>services/event-service</module>
     </modules>
 

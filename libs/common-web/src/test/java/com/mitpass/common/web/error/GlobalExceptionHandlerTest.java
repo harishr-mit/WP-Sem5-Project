@@ -91,6 +91,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void problemExceptionKeepsItsStatusTypeAndHeaders() throws Exception {
+        mvc.perform(get("/probe/fail/locked"))
+                .andExpect(status().isLocked())
+                .andExpect(header().string("Retry-After", "900"))
+                .andExpect(jsonPath("$.type").value("urn:mitpass:problem:account-locked"))
+                .andExpect(jsonPath("$.title").value("Account locked"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
     void internalErrorsDoNotLeakDetails() throws Exception {
         mvc.perform(get("/probe/fail/boom"))
                 .andExpect(status().isInternalServerError())

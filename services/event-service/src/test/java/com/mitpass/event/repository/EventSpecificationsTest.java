@@ -107,7 +107,7 @@ class EventSpecificationsTest {
 
     private static EventSearchCriteria criteria(
             String q, String category, String department, LocalDate from, LocalDate to) {
-        return new EventSearchCriteria(q, category, department, from, to, null);
+        return new EventSearchCriteria(q, category, department, from, to, null, null);
     }
 
     private Page<Event> search(EventSearchCriteria criteria, PageRequest page) {

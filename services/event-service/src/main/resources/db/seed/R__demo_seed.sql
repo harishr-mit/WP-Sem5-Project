@@ -1,12 +1,16 @@
 -- Demo events so Swagger has something to search on first start (docs/plans/phase-1.md §4).
 -- Repeatable migration: re-runs whenever this file changes, so every statement is idempotent.
 -- Not loaded in tests (application-test.yml limits Flyway to db/migration). Sample data only.
+-- Organizers are the seeded accounts of auth-service (R__demo_users.sql): A = Anitha Rao, B = Bharath Kumar.
 
 INSERT INTO event (code, title, description, category_id, venue_id, department, capacity,
                    starts_at, ends_at, registration_opens_at, registration_closes_at, status,
-                   created_at, created_by, updated_at, updated_by)
+                   organizer_id, organizer_name, created_at, created_by, updated_at, updated_by)
 SELECT e.code, e.title, e.description, c.id, v.id, e.department, e.capacity,
        e.starts_at, e.ends_at, e.reg_opens, e.reg_closes, e.status,
+       CASE WHEN e.code IN ('ROBOWARS26', 'CRICKET26') THEN '00000000-0000-4000-8000-000000000003'::uuid
+            ELSE '00000000-0000-4000-8000-000000000002'::uuid END,
+       CASE WHEN e.code IN ('ROBOWARS26', 'CRICKET26') THEN 'Bharath Kumar' ELSE 'Anitha Rao' END,
        now(), 'seed', now(), 'seed'
 FROM (VALUES
     ('TECHFEST26', 'TechFest Hackathon',
@@ -56,3 +60,14 @@ FROM (VALUES
 ) AS s(event_code, title, starts_at, ends_at)
 JOIN event ev ON ev.code = s.event_code
 ON CONFLICT (event_id, starts_at) DO NOTHING;
+
+INSERT INTO event_gate (event_id, code, name)
+SELECT ev.id, g.code, g.name
+FROM (VALUES
+    ('TECHFEST26', 'MAIN',  'Main Gate'),
+    ('TECHFEST26', 'NORTH', 'North Gate'),
+    ('RANG26',     'OAT',   'Open Air Theatre Entrance'),
+    ('AIWS26',     'LAB',   'Innovation Centre Lab Door')
+) AS g(event_code, code, name)
+JOIN event ev ON ev.code = g.event_code
+ON CONFLICT (event_id, code) DO NOTHING;

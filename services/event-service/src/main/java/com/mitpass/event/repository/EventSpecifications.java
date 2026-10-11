@@ -8,6 +8,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import org.springframework.data.jpa.domain.Specification;
 
 /** One JPA Specification per search filter; {@link #matching} combines the ones a request actually uses. */
@@ -36,6 +37,9 @@ public final class EventSpecifications {
         if (criteria.status() != null) {
             specs.add(hasStatus(criteria.status()));
         }
+        if (criteria.organizerId() != null) {
+            specs.add(organizedBy(criteria.organizerId()));
+        }
         return specs.isEmpty() ? Specification.unrestricted() : Specification.allOf(specs);
     }
 
@@ -63,6 +67,10 @@ public final class EventSpecifications {
 
     public static Specification<Event> startsBefore(Instant instant) {
         return (root, query, cb) -> cb.lessThan(root.get("startsAt"), instant);
+    }
+
+    public static Specification<Event> organizedBy(UUID organizerId) {
+        return (root, query, cb) -> cb.equal(root.get("organizerId"), organizerId);
     }
 
     public static Specification<Event> hasStatus(EventStatus status) {

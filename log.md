@@ -21,23 +21,25 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-11 (Claude Opus 5.5) — **Phase 1 verified complete** (CI green on `baa98cd` and `6b2699d`). **Phase 2 planned:** `docs/plans/phase-2.md` (T04.1–T04.12 below), waiting for the owner's approval; no Phase 2 code written yet. Next: owner reviews the plan → pre-phase commit (owner's call) → T04.1.
+* **Last updated:** 2026-10-11 (Claude Opus 5.5) — **Phase 2 done (T04)** on branch `phase2` (uncommitted; the post-phase commit is the owner's call). auth-service + common-security + gateway edge security; 158 tests green; security matrix 205/205; live exit demo 36/36. Next: post-phase commit (owner), push/merge as the owner decides, then Phase 3 (T05): write `docs/plans/phase-3.md` first.
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
 * **Architecture (planned):** Web Portal (Spring MVC + Thymeleaf) → API Gateway (:8080) → auth / event / pass / checkin / notification services, Eureka discovery, PostgreSQL (database per service), RabbitMQ (domain events via transactional outbox), Redis.
 * **Stack (pinned, see `docs/DECISIONS.md`):** Java 21 (project-local Temurin in `.tools/jdk-21`), Spring Boot 4.1.1, Spring Cloud 2025.1.3, Maven 3.9.16 through the wrapper, Docker Desktop 4.94.0.
-* **Built so far:** `libs/common-web` (ProblemDetail errors, PageResponse, correlation ids), `platform/discovery-server` (:8761), `platform/api-gateway` (:8080, Swagger UI), `services/event-service` (:8082; events, sessions, venues, categories). Conventions every new service follows: `docs/DECISIONS.md` D6.
+* **Built so far:** `libs/common-web` (ProblemDetail errors, PageResponse, correlation ids), `libs/common-security` (JWT resource server via JWKS/Eureka, roles, `CurrentUser`, 401/403 bodies), `libs/security-test-support` (test tokens, `SecurityMatrix`), `platform/discovery-server` (:8761), `platform/api-gateway` (:8080; JWT pre-check, CORS, Swagger UI), `services/auth-service` (:8081; sign-up/verify/login/refresh/JWKS/users), `services/event-service` (:8082; catalogue, ownership, gates, volunteers). Conventions: `docs/DECISIONS.md` D6 (REST), D7 (security), D8 (demo accounts, password `Passw0rd!`).
 * **Commands** (full walkthrough: `README.md` "Quick start"):
   * First setup on a clean clone: `powershell -ExecutionPolicy Bypass -File scripts\setup-jdk.ps1`
   * Build + all tests: `./mvnw verify` (Git Bash) / `.\mvnw.cmd verify` (PowerShell); `./mvnw spotless:apply` fixes formatting. With `JAVA_HOME` unset, the wrapper uses `.tools/jdk-21`. The system `java` on PATH is **Java 8**, so don't call `java` directly; use `.tools/jdk-21/bin/java` or first run `. .\scripts\env.ps1` / `source scripts/env.sh`.
   * Infra: `docker compose -f infra/docker-compose.yml up -d --wait` / `down` (Docker Desktop must be running).
-  * Run: `./mvnw install -DskipTests`, then `./mvnw -pl <module> spring-boot:run` for discovery-server → event-service → api-gateway (or `java -jar <module>/target/<artifact>.jar`).
+  * Run: `./mvnw install -DskipTests`, then `./mvnw -pl <module> spring-boot:run` for discovery-server → auth-service → event-service → api-gateway (or `.tools/jdk-21/bin/java -jar <module>/target/<artifact>.jar`). Demo requests: `docs/http/phase-2.http`.
 * **Blockers / Notes:**
-  * Agents: stopping a background `spring-boot:run` task leaves Maven and the forked app JVM running on Windows. Kill them by PID afterwards (check `Get-NetTCPConnection -LocalPort 8761,8080,8082`).
+  * Agents: stopping a background `spring-boot:run` task leaves Maven and the forked app JVM running on Windows. Kill them by PID afterwards (check `Get-NetTCPConnection -LocalPort 8761,8080,8081,8082`). Running the jars with `java -jar` as background tasks and stopping the task ended the JVM cleanly (2026-10-11).
+  * Load-balanced client beans must be `@Bean(defaultCandidate = false)` and injected with `@LoadBalanced`; otherwise Eureka's own client picks them up and the service never registers (plan phase-2 §16).
+  * The event-service test suite failed once (cause not captured) while compose was also up; two later full runs were green. Watch for a flaky test.
   * Port 8080 is sometimes taken by the owner's unrelated Node server (`server/src/main.ts`). It isn't ours; don't kill it. The gateway can't start while it runs.
   * GitHub Actions CI: first run on `baa98cd` passed (pushed 2026-10-10 with the owner's approval).
-  * The app was started for the owner to view (2026-10-10) and then terminated at their request: 3 services stopped, `docker compose down` (volumes kept), Docker Desktop stopped. Nothing is running.
+  * After the Phase 2 exit demo (2026-10-11): 4 services stopped, `docker compose down` (volumes kept), Docker Desktop stopped. Nothing is running.
 
 ## Task List
 
@@ -54,19 +56,19 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T03.8: Demo seed (`R__demo_seed.sql`) + `docs/http/phase-1.http`
   * [x] T03.9: GitHub Actions CI (`./mvnw verify`): workflow written; first run green on `baa98cd`
   * [x] T03.10: Exit demo (criteria 1–4 live, 5 locally) + docs (README quick start); nothing left running
-* [ ] T04: **Phase 2** — Identity, authentication & authorization (PROJECT.md §P2; plan and "done when" checks: `docs/plans/phase-2.md` §13). Plan written 2026-10-11, awaiting owner approval
-  * [ ] T04.1: common-web additions: 401/403 problem types, public `Problems` factory
-  * [ ] T04.2: `libs/common-security` (resource-server auto-config, JWKS via Eureka, roles, CurrentUser, 401/403 ProblemDetail, token relay) + `libs/security-test-support`
-  * [ ] T04.3: auth-service skeleton + persistence (Flyway V1/V2, entities, repos, demo users seed)
-  * [ ] T04.4: Signing keys (encrypted at rest, rotation) + JWKS + access-token minting
-  * [ ] T04.5: Sign-up (email/regno/password policy) + email verification via Mailpit
-  * [ ] T04.6: Login + lockout + refresh rotation with reuse detection + logout
-  * [ ] T04.7: User admin endpoints (me, list, lookup, roles, unlock, sessions, key rotate) + OpenAPI bearer
-  * [ ] T04.8: event-service security (JWT auditor, V3 organizer columns, ownership bean, @PreAuthorize, tests updated)
-  * [ ] T04.9: Gates + volunteer assignments (auth-service lookup via load-balanced RestClient + token relay)
-  * [ ] T04.10: Gateway edge security (reactive resource server, CORS, X-User-Id, auth routes, Swagger)
-  * [ ] T04.11: Security matrix tests → `docs/security-matrix.md`; `scripts/forge-token.sh`
-  * [ ] T04.12: Exit demo + docs (phase-2.http, README, PROJECT ticks, DECISIONS D7/D8, as-built)
+* [x] T04: **Phase 2** — Identity, authentication & authorization (PROJECT.md §P2; plan and "done when" checks: `docs/plans/phase-2.md` §13). Plan approved 2026-10-11; pre-phase commit `d1f02c5` on branch `phase2` (by the owner). Done 2026-10-11
+  * [x] T04.1: common-web additions: 401/403 problem types, public `Problems` factory
+  * [x] T04.2: `libs/common-security` (resource-server auto-config, JWKS via Eureka, roles, CurrentUser, 401/403 ProblemDetail, token relay) + `libs/security-test-support`
+  * [x] T04.3: auth-service skeleton + persistence (Flyway V1/V2, entities, repos, demo users seed)
+  * [x] T04.4: Signing keys (encrypted at rest, rotation) + JWKS + access-token minting
+  * [x] T04.5: Sign-up (email/regno/password policy) + email verification via Mailpit
+  * [x] T04.6: Login + lockout + refresh rotation with reuse detection + logout
+  * [x] T04.7: User admin endpoints (me, list, lookup, roles, unlock, sessions, key rotate) + OpenAPI bearer
+  * [x] T04.8: event-service security (JWT auditor, V3 organizer columns, ownership bean, @PreAuthorize, tests updated)
+  * [x] T04.9: Gates + volunteer assignments (auth-service lookup via load-balanced RestClient + token relay)
+  * [x] T04.10: Gateway edge security (reactive resource server, CORS, X-User-Id, auth routes, Swagger)
+  * [x] T04.11: Security matrix tests → `docs/security-matrix.md`; `scripts/forge-token.sh`
+  * [x] T04.12: Exit demo + docs (phase-2.http, README, PROJECT ticks, DECISIONS D7/D8, as-built)
 * [ ] T05: **Phase 3** — Registration & transactional core (PROJECT.md §P3)
 * [ ] T06: **Phase 4** — Pass issuance & QR generation (PROJECT.md §P4)
 * [ ] T07: **Phase 5** — Scan, verify & attendance (PROJECT.md §P5)
@@ -102,6 +104,28 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-11 — Claude (Opus 5.5) — T04: Phase 2 implemented
+
+* **Task:** T04.1–T04.12 per `docs/plans/phase-2.md` (approved; owner made pre-phase commit `d1f02c5` on branch `phase2`)
+* **Status:** DONE (not committed: the post-phase commit is the owner's call)
+* **Files:**
+  * plan/docs: `docs/plans/phase-2.md` (§4/§5/§15 owner answers: departments `CSE, IT, ECE, EIE, MECH, AERO, AUTO, PROD, RPT, ROBO, AIDS`, register number never parsed; new §16 "As built"), `docs/DECISIONS.md` (D6 note, new D7 security model, D8 demo accounts), `docs/security-matrix.md` (new, generated), `docs/http/phase-2.http` (new), `docs/http/phase-1.http` (login + bearer on writes; delete targets id 2), `README.md` (status, 4 services, demo accounts, troubleshooting), `PROJECT.md` (§P2 ticked + status), `log.md`
+  * root `pom.xml` (modules: common-security, security-test-support, auth-service)
+  * T04.1 `libs/common-web`: `ProblemTypes` (+UNAUTHORIZED, FORBIDDEN), new `Problems`, new `ProblemException` (+ handler), `ProblemsTest`, probe case
+  * T04.2 new `libs/common-security/**` (auto-config also in the `@WebMvcTest` imports), new `libs/security-test-support/**` (`TestJwtIssuer`, `TestSecurityConfig`, `TestReactiveSecurityConfig`, `SecurityMatrix`, filter-chain test)
+  * T04.3–T04.7 new `services/auth-service/**` (Flyway V1/V2 + `R__demo_users.sql`, domain, repositories, keys, services, mailer, validation, controllers, tests incl. `SecurityMatrixTest`)
+  * T04.8–T04.9 `services/event-service`: `pom.xml`, `application.yml`, test `application-test.yml`, V3 migration, `R__demo_seed.sql` (owners, gates), `Event` (+organizer), mapper/DTOs/criteria/specifications/repository, `EventService.create(organizer, request)`, `JpaConfig` (JWT auditor), `OpenApiConfig` (bearer), controllers (`@PreAuthorize`), new `security/EventSecurity`, `client/AuthServiceClient`, `config/ClientConfig`, `config/TimeConfig`, `EventGate`, `VolunteerAssignment`, `StaffingService`, `StaffingController`, `StaffingDtos`; tests updated (tokens) + new `EventIntegrationTest`, `OwnershipAndStaffingTests`, `AuthServiceClientTest`, `SecurityMatrixTest`
+  * T04.10 `platform/api-gateway`: `pom.xml`, `application.yml` (auth routes, public paths, CORS, Swagger), `CorrelationIdGlobalFilter` renamed to `CorrelationIdWebFilter` (git mv, test too), new `security/EdgeSecurityConfig`, `CorsProperties`, `ProblemServerAuthenticationEntryPoint`, `UserHeadersGlobalFilter`, tests `EdgeSecurityTest`, `UserHeadersGlobalFilterTest`
+  * T04.11 `scripts/forge-token.sh` (staged `100755` with `git add --chmod=+x`)
+* **Details:**
+  * Tests: 158, all green in two full `./mvnw verify` runs (common-web 20, common-security 9, security-test-support 15, discovery 1, gateway 17, auth-service 49, event-service 47). 0 compiler warnings. Security matrix 85/85 (auth) + 120/120 (event).
+  * Live exit demo on compose infra (Phase 1 volume kept, so V3 back-filled existing events): 36/36 scripted checks covering exit criteria 1–3 and 5–9 (script in the session scratchpad; the same steps are in `docs/http/phase-2.http`). Criteria 4 and 10: the matrix tests and `verify` above; CI runs on the next push.
+  * Found while building (all in plan §16): `Encryptors.*` deprecated in Security 7.1, so `AesGcmBytesEncryptor`; `CHAR(64)` breaks `ddl-auto=validate`; Spring Security's WebFilter runs before gateway GlobalFilters (correlation filter became a WebFilter); a test-bean name clash in the gateway; a load-balanced `RestClient.Builder` bean hijacked the Eureka client (found only live; fixed with `defaultCandidate = false` in three places).
+  * `.gitignore` reviewed: only sources untracked, every `target/` ignored; no change needed.
+* **Notes / Errors:**
+  * One event-service test run failed without a captured cause (compose was up at the same time); not reproduced in two full runs.
+  * Docker Desktop was started for Testcontainers and the demo, then stopped. All 4 service JVMs stopped (checked: no java.exe with `target` in its command line), `docker compose down` (volumes kept).
 
 ### 2026-10-11 — Claude (Opus 5.5) — T16: Phase 1 verified, Phase 2 planned
 

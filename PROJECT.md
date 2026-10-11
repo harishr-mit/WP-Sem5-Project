@@ -291,17 +291,18 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 
 **Goal:** every write is authenticated and every action is authorized (catalogue reads stay public, so events can be browsed before sign-up). Plan: `docs/plans/phase-2.md`.
 
-- [ ] `auth-service`: `User`, `Role` (many-to-many); sign-up limited to college addresses (`<register number>@student.annauniv.edu`) and Gmail; BCrypt; email verification token (sent to Mailpit).
-- [ ] Login → **RS256 JWT** access token (15 min) with `sub`, `roles`, `dept`, `year` claims; `/.well-known/jwks.json` with `kid` for key rotation.
-- [ ] Refresh tokens: random, stored **hashed**, rotated on every use; reusing an old token revokes the whole token family (theft detection).
-- [ ] `libs/common-security`: shared OAuth2 resource-server config that validates JWTs through JWKS, with no shared secret.
-- [ ] Gateway: rejects missing or expired tokens at the edge, forwards claims, configures CORS.
-- [ ] Authorization: `@PreAuthorize` per endpoint; a custom `@eventSecurity.isOwner(#id)` bean so an organizer can edit only their own events; admin can promote users; organizer assigns volunteers to an event and gate.
-- [ ] Logout and token revocation (stateless: the refresh-token family is revoked, an issued access token expires within 15 min); account lockout after N failed logins.
-- [ ] Tests: a security matrix test that runs every role against every protected endpoint and expects 200/401/403.
+- [x] `auth-service`: `User`, `Role` (many-to-many); sign-up limited to college addresses (`<register number>@student.annauniv.edu`) and Gmail; BCrypt; email verification token (sent to Mailpit).
+- [x] Login → **RS256 JWT** access token (15 min) with `sub`, `roles`, `dept`, `year` claims; `/.well-known/jwks.json` with `kid` for key rotation.
+- [x] Refresh tokens: random, stored **hashed**, rotated on every use; reusing an old token revokes the whole token family (theft detection).
+- [x] `libs/common-security`: shared OAuth2 resource-server config that validates JWTs through JWKS, with no shared secret.
+- [x] Gateway: rejects missing or expired tokens at the edge, forwards claims, configures CORS.
+- [x] Authorization: `@PreAuthorize` per endpoint; a custom `@eventSecurity.isOwner(#id)` bean so an organizer can edit only their own events; admin can promote users; organizer assigns volunteers to an event and gate.
+- [x] Logout and token revocation (stateless: the refresh-token family is revoked, an issued access token expires within 15 min); account lockout after N failed logins.
+- [x] Tests: a security matrix test that runs every role against every protected endpoint and expects 200/401/403.
 
 **Concepts:** authentication, authorization, stateless security across services.
 **Exit criteria / demo:** a printed role × endpoint matrix, all green; a forged token (edited payload) is rejected by every service; refresh-token reuse kills the session.
+**Status:** done 2026-10-11. Live exit demo 36/36 checks; security matrix 205/205 cells ([docs/security-matrix.md](docs/security-matrix.md)); 158 tests green. As-built notes in `docs/plans/phase-2.md` §16, decisions in `docs/DECISIONS.md` D7/D8, demo requests in `docs/http/phase-2.http`.
 
 ---
 

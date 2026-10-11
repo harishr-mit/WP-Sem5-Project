@@ -1,0 +1,207 @@
+### MITPass Phase 2 demo: identity, authentication and authorization, all through the gateway.
+### Run with the VS Code "REST Client" extension or IntelliJ's HTTP client, top to bottom.
+### The expected status is in each request's title. Seeded accounts (password Passw0rd!):
+###   admin@mitpass.test, organizer.a@mitpass.test (owns TECHFEST26), organizer.b@mitpass.test,
+###   volunteer@mitpass.test, 2026509001@student.annauniv.edu, 2026505014@student.annauniv.edu
+### Emails land in Mailpit: http://localhost:8025
+
+@gw = http://localhost:8080
+@newStudent = 2026509032@student.annauniv.edu
+
+### ---------------------------------------------------------------------------------------------------
+### 1. Sign up, verify, log in
+### ---------------------------------------------------------------------------------------------------
+
+### 200 Departments for the sign-up form (public)
+GET {{gw}}/api/departments
+
+### 201 Sign up with a college address (a second run gives 409: the account exists)
+POST {{gw}}/api/auth/signup
+Content-Type: application/json
+
+{"fullName": "Priya Raman", "email": "{{newStudent}}", "password": "Techfest2026", "department": "CSE", "year": 1}
+
+### 400 Not an allowed domain: errors[0].field = email
+POST {{gw}}/api/auth/signup
+Content-Type: application/json
+
+{"fullName": "Priya Raman", "email": "priya@yahoo.com", "password": "Techfest2026", "department": "CSE", "year": 1}
+
+### 400 College address that isn't a register number
+POST {{gw}}/api/auth/signup
+Content-Type: application/json
+
+{"fullName": "Priya Raman", "email": "priya.raman@student.annauniv.edu", "password": "Techfest2026", "department": "CSE"}
+
+### 403 email-not-verified: right password, but the link hasn't been clicked yet
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "{{newStudent}}", "password": "Techfest2026"}
+
+### 200 VERIFIED: open the email in Mailpit and click the button, or paste the token from its link here
+GET {{gw}}/api/auth/verify-email?token=PASTE-TOKEN-FROM-MAILPIT
+
+### 200 Log in: accessToken (15 min) + refreshToken
+# @name student
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "{{newStudent}}", "password": "Techfest2026"}
+
+### 200 Who am I (paste the access token into jwt.io to see kid, roles, dept, regNo)
+GET {{gw}}/api/users/me
+Authorization: Bearer {{student.response.body.accessToken}}
+
+### 200 The public keys every service verifies tokens with (match the token's kid)
+GET {{gw}}/.well-known/jwks.json
+
+### ---------------------------------------------------------------------------------------------------
+### 2. Refresh-token rotation and reuse detection (exit criterion 6)
+### ---------------------------------------------------------------------------------------------------
+
+### 200 Refresh: a new pair; the old refresh token is now used up
+# @name rotated
+POST {{gw}}/api/auth/refresh
+Content-Type: application/json
+
+{"refreshToken": "{{student.response.body.refreshToken}}"}
+
+### 401 refresh-token-reused: replaying the old one ends the whole login
+POST {{gw}}/api/auth/refresh
+Content-Type: application/json
+
+{"refreshToken": "{{student.response.body.refreshToken}}"}
+
+### 401 invalid-refresh-token: even the new one from the rotation is dead now
+POST {{gw}}/api/auth/refresh
+Content-Type: application/json
+
+{"refreshToken": "{{rotated.response.body.refreshToken}}"}
+
+### ---------------------------------------------------------------------------------------------------
+### 3. Roles and ownership (exit criterion 7)
+### ---------------------------------------------------------------------------------------------------
+
+# @name orgA
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "organizer.a@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name orgB
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "organizer.b@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name admin
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "admin@mitpass.test", "password": "Passw0rd!"}
+
+### 200 Find TECHFEST26 (public: no token needed). Organizer A owns it.
+# @name techfest
+GET {{gw}}/api/events?q=hackathon
+
+### 401 Writing without a token is stopped at the gateway
+POST {{gw}}/api/events/{{techfest.response.body.$.content[0].id}}/gates
+Content-Type: application/json
+
+{"code": "EAST", "name": "East Gate"}
+
+### 403 Organizer B may not touch organizer A's event
+POST {{gw}}/api/events/{{techfest.response.body.$.content[0].id}}/gates
+Authorization: Bearer {{orgB.response.body.accessToken}}
+Content-Type: application/json
+
+{"code": "EAST", "name": "East Gate"}
+
+### 201 The owner may (a second run gives 409: the gate exists)
+POST {{gw}}/api/events/{{techfest.response.body.$.content[0].id}}/gates
+Authorization: Bearer {{orgA.response.body.accessToken}}
+Content-Type: application/json
+
+{"code": "EAST", "name": "East Gate"}
+
+### 200 The event's gates (any logged-in user)
+# @name gates
+GET {{gw}}/api/events/{{techfest.response.body.$.content[0].id}}/gates
+Authorization: Bearer {{orgA.response.body.accessToken}}
+
+### 403 A student can't list users
+GET {{gw}}/api/users
+Authorization: Bearer {{student.response.body.accessToken}}
+
+### 200 The admin can; look up the new student's id
+# @name newStudentRow
+GET {{gw}}/api/users?q={{newStudent}}
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+### 200 Admin makes the new student a volunteer too (their sessions end, so the next login carries the role)
+PUT {{gw}}/api/users/{{newStudentRow.response.body.$.content[0].id}}/roles
+Authorization: Bearer {{admin.response.body.accessToken}}
+Content-Type: application/json
+
+{"roles": ["STUDENT", "VOLUNTEER"]}
+
+### 201 Organizer A assigns them to TECHFEST26 at the Main Gate (event-service asks auth-service, relaying A's token)
+POST {{gw}}/api/events/{{techfest.response.body.$.content[0].id}}/volunteers
+Authorization: Bearer {{orgA.response.body.accessToken}}
+Content-Type: application/json
+
+{"email": "{{newStudent}}", "gateId": {{gates.response.body.$[0].id}}}
+
+### 422 Assigning someone without the VOLUNTEER role
+POST {{gw}}/api/events/{{techfest.response.body.$.content[0].id}}/volunteers
+Authorization: Bearer {{orgA.response.body.accessToken}}
+Content-Type: application/json
+
+{"email": "2026505014@student.annauniv.edu"}
+
+### 200 The volunteer logs in again (new token has VOLUNTEER) ...
+# @name volunteer
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "{{newStudent}}", "password": "Techfest2026"}
+
+### 200 ... and sees where to scan
+GET {{gw}}/api/volunteers/me/assignments
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+
+### ---------------------------------------------------------------------------------------------------
+### 4. Lockout (exit criterion 8): send this 5 times. 401, 401, 401, 401, then 423 with Retry-After
+### ---------------------------------------------------------------------------------------------------
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "2026505014@student.annauniv.edu", "password": "wrong-pass1"}
+
+### 423 Locked even with the right password
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "2026505014@student.annauniv.edu", "password": "Passw0rd!"}
+
+### 204 Admin lifts the lock (seeded id of 2026505014)
+POST {{gw}}/api/users/00000000-0000-4000-8000-000000000006/unlock
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+### ---------------------------------------------------------------------------------------------------
+### 5. Forged token (exit criterion 5): in Git Bash
+###      FORGED=$(scripts/forge-token.sh "<a student's accessToken>")
+###      curl -i -H "Authorization: Bearer $FORGED" http://localhost:8080/api/users    # gateway       401
+###      curl -i -H "Authorization: Bearer $FORGED" http://localhost:8081/api/users    # auth-service  401
+###      curl -i -X POST -H "Authorization: Bearer $FORGED" -H "Content-Type: application/json" \
+###           -d '{"code":"X1","name":"x"}' http://localhost:8082/api/events/1/gates   # event-service 401
+### ---------------------------------------------------------------------------------------------------
+
+### 204 Log out (the refresh token's family is revoked; the access token expires on its own within 15 min)
+POST {{gw}}/api/auth/logout
+Content-Type: application/json
+
+{"refreshToken": "{{volunteer.response.body.refreshToken}}"}

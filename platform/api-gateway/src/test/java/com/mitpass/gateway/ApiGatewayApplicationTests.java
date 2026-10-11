@@ -15,8 +15,8 @@ class ApiGatewayApplicationTests {
     RouteLocator routes;
 
     @Test
-    void eventServiceRoutesAreConfigured() {
+    void serviceRoutesAreConfigured() {
         assertThat(routes.getRoutes().map(Route::getId).collectList().block())
-                .contains("event-service", "event-service-openapi");
+                .contains("auth-service", "auth-service-openapi", "event-service", "event-service-openapi");
     }
 }

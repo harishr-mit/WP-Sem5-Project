@@ -4,6 +4,7 @@ import com.mitpass.event.domain.EventStatus;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
 
 /** Query parameters of {@code GET /api/events}; every field is optional. Bound from the query string. */
@@ -25,4 +26,7 @@ public record EventSearchCriteria(
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
         LocalDate to,
 
-        @Parameter(description = "Lifecycle state") EventStatus status) {}
+        @Parameter(description = "Lifecycle state") EventStatus status,
+
+        @Parameter(description = "Events of this organizer (user id), e.g. for an organizer's own list")
+        UUID organizerId) {}

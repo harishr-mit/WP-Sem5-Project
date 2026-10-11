@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Fetch strategy is explicit: both {@code @ManyToOne}s are LAZY (JPA's default would be EAGER) and {@code sessions} is
@@ -67,6 +68,14 @@ public class Event extends AuditableEntity {
     @Column(nullable = false, length = 24)
     private EventStatus status = EventStatus.DRAFT;
 
+    /** The organizer who created the event (auth-service user id); only they and admins may change it. */
+    @Column(nullable = false, updatable = false)
+    private UUID organizerId;
+
+    /** Display snapshot of the organizer's name, taken from their token when the event was created. */
+    @Column(nullable = false, updatable = false, length = 120)
+    private String organizerName;
+
     @Version
     private Long version;
 
@@ -84,6 +93,19 @@ public class Event extends AuditableEntity {
     /** True when {@code [from, to]} lies inside this event's own time window. */
     public boolean covers(Instant from, Instant to) {
         return !from.isBefore(startsAt) && !to.isAfter(endsAt);
+    }
+
+    public void assignOrganizer(UUID organizerId, String organizerName) {
+        this.organizerId = organizerId;
+        this.organizerName = organizerName;
+    }
+
+    public UUID getOrganizerId() {
+        return organizerId;
+    }
+
+    public String getOrganizerName() {
+        return organizerName;
     }
 
     public Long getId() {

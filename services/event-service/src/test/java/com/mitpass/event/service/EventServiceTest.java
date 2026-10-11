@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.mitpass.common.security.CurrentUser;
 import com.mitpass.common.web.error.BusinessRuleException;
 import com.mitpass.common.web.error.ConflictException;
 import com.mitpass.common.web.error.NotFoundException;
@@ -28,6 +29,8 @@ import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +43,15 @@ class EventServiceTest {
 
     private static final Instant START = Instant.parse("2099-11-14T03:30:00Z");
     private static final Instant END = START.plusSeconds(86_400);
+    private static final CurrentUser ORGANIZER = new CurrentUser(
+            UUID.fromString("00000000-0000-4000-8000-000000000002"),
+            "organizer.a@mitpass.test",
+            "Anitha Rao",
+            Set.of("ORGANIZER"),
+            "CSE",
+            null,
+            null,
+            "token");
 
     @Mock
     EventRepository events;
@@ -66,23 +78,27 @@ class EventServiceTest {
         givenReferenceData();
         given(events.saveAndFlush(any(Event.class))).willAnswer(call -> call.getArgument(0));
 
-        EventDetailResponse created = service.create(create(
-                100,
-                List.of(
-                        new SessionRequest("Day 1", START, START.plusSeconds(3600)),
-                        new SessionRequest("Day 2", START.plusSeconds(7200), END))));
+        EventDetailResponse created = service.create(
+                ORGANIZER,
+                create(
+                        100,
+                        List.of(
+                                new SessionRequest("Day 1", START, START.plusSeconds(3600)),
+                                new SessionRequest("Day 2", START.plusSeconds(7200), END))));
 
         assertThat(created.code()).isEqualTo("HACK26");
         assertThat(created.category().code()).isEqualTo("TECHNICAL");
         assertThat(created.venue().name()).isEqualTo("Innovation Centre Lab");
         assertThat(created.sessions()).extracting("title").containsExactly("Day 1", "Day 2");
+        assertThat(created.organizerId()).isEqualTo(ORGANIZER.id());
+        assertThat(created.organizerName()).isEqualTo("Anitha Rao");
     }
 
     @Test
     void duplicateCodeIsAConflict() {
         given(events.existsByCode("HACK26")).willReturn(true);
 
-        assertThatThrownBy(() -> service.create(create(100, null)))
+        assertThatThrownBy(() -> service.create(ORGANIZER, create(100, null)))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("already taken");
         verify(events, never()).saveAndFlush(any());
@@ -92,7 +108,7 @@ class EventServiceTest {
     void capacityAboveTheVenueBreaksABusinessRule() {
         givenReferenceData();
 
-        assertThatThrownBy(() -> service.create(create(500, null)))
+        assertThatThrownBy(() -> service.create(ORGANIZER, create(500, null)))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("exceeds the capacity of venue 'Innovation Centre Lab' (120)");
     }
@@ -101,7 +117,7 @@ class EventServiceTest {
     void unknownCategoryBreaksABusinessRule() {
         given(categories.findById(1L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.create(create(100, null)))
+        assertThatThrownBy(() -> service.create(ORGANIZER, create(100, null)))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("Category 1 does not exist");
     }
@@ -111,7 +127,7 @@ class EventServiceTest {
         givenReferenceData();
         SessionRequest late = new SessionRequest("After party", END, END.plusSeconds(3600));
 
-        assertThatThrownBy(() -> service.create(create(100, List.of(late))))
+        assertThatThrownBy(() -> service.create(ORGANIZER, create(100, List.of(late))))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("must lie within the event");
     }
@@ -122,7 +138,7 @@ class EventServiceTest {
         SessionRequest a = new SessionRequest("A", START, START.plusSeconds(60));
         SessionRequest b = new SessionRequest("B", START, START.plusSeconds(120));
 
-        assertThatThrownBy(() -> service.create(create(100, List.of(a, b))))
+        assertThatThrownBy(() -> service.create(ORGANIZER, create(100, List.of(a, b))))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("same time");
     }

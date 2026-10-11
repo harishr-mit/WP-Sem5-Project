@@ -13,12 +13,17 @@
 
     <artifactId>event-service</artifactId>
     <name>MITPass :: Event Service</name>
-    <description>Venues, categories, events and sessions (the event catalogue)</description>
+    <description>Venues, categories, events and sessions (the event catalogue); event ownership, gates and volunteer staffing</description>
 
     <dependencies>
         <dependency>
             <groupId>com.mitpass</groupId>
             <artifactId>common-web</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.mitpass</groupId>
+            <artifactId>common-security</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -65,8 +70,19 @@
         </dependency>
 
         <dependency>
+            <groupId>com.mitpass</groupId>
+            <artifactId>security-test-support</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

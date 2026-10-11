@@ -6,3 +6,7 @@ spring:
 eureka:
   client:
     enabled: false
+
+mitpass:
+  security:
+    load-balanced: false   # tests import TestSecurityConfig (in-memory key); nothing fetches a JWK set
