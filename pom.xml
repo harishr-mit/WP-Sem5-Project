@@ -25,10 +25,12 @@
         <module>libs/common-web</module>
         <module>libs/common-security</module>
         <module>libs/security-test-support</module>
+        <module>libs/common-messaging</module>
         <module>platform/discovery-server</module>
         <module>platform/api-gateway</module>
         <module>services/auth-service</module>
         <module>services/event-service</module>
+        <module>web-portal</module>
     </modules>
 
     <properties>
@@ -89,6 +91,18 @@
                                 <version>${mapstruct.version}</version>
                             </path>
                         </annotationProcessorPaths>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <!--
+                        Always rebuild the jar. Otherwise, when only a library (libs/*) changed, the jar plugin
+                        thinks a service's jar is up to date and spring-boot:repackage keeps the old fat jar, which
+                        still bundles the old library (found in the Phase 3 exit demo, docs/plans/phase-3.md §18).
+                    -->
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <configuration>
+                        <forceCreation>true</forceCreation>
                     </configuration>
                 </plugin>
             </plugins>

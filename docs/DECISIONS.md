@@ -144,5 +144,40 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 | Live QR is an `<img>` reloaded by a plain 30 s timer | P4 | Pass card with a countdown ring (screens 3–4) |
 | Scan page takes a typed pass number or pasted token; plain result page | P5 | `html5-qrcode` camera scanner over HTTPS (mkcert), manual-entry tab, green/red flash, sound, vibration |
 | Attendance page updates on reload | P5 | Styled page in P6; live WebSocket updates in P7 |
+| Registration status and waitlist position update on reload (*My registrations*, event page) | P3 | HTMX refresh in P6; push updates with the P7 notifications |
+| Organizer "My events" loads each event's detail for its buttons (one call per event) | P3 | A list endpoint that carries `allowedTransitions`, or HTMX per row |
 
 **Consequences.** If a slice can't work without a P6 item, build the smallest version that works and add a row to this table. P6 is done when every row above is replaced.
+
+---
+
+## D10: State machines, seat claims and registrations
+
+*2026-10-15 · accepted (owner answers to `docs/plans/phase-3.md` §17; details in the plan §4–§8)*
+
+**Decision.**
+- **One transition method per aggregate.** Each status enum implements `LifecycleState` (common-web) with an `EnumMap` table of allowed next states. An illegal move throws `IllegalTransitionException` → `409 illegal-transition` with `currentState`, `requestedState`, `allowedStates`. Every move writes a history row (`trigger` MANUAL / SCHEDULER / SYSTEM). pass-service (P4) and checkin-service (P5) use the same helper.
+- **Event lifecycle (owner).** The scheduler opens and closes registration, makes the event **LIVE (scheduler only, no button)** at `startsAt − doors-open-lead`, and completes it at `endsAt`. Organizers can open/close registration early, complete, cancel, and **undo LIVE → REGISTRATION_CLOSED** after an accidental early start. Open points: `docs/REVIEW-LATER.md` RL2, RL3.
+- **Registration window.** The status is the gate: registering needs REGISTRATION_OPEN and `now < registrationClosesAt`.
+- **One active registration per student per event (owner).** Partial unique index on `(event_id, user_id)` for PENDING / CONFIRMED / WAITLISTED. Re-registering after a cancellation creates a new row.
+- **Seat claim.** `seats_taken` is read-only in JPA and changed only by queries. Fast path: conditional `UPDATE … WHERE seats_taken < capacity`. Full: `PESSIMISTIC_WRITE` on the event row, re-check, then claim or waitlist. Cancellation locks the event row and promotes the first waitlisted student in the same transaction. A CHECK keeps `seats_taken` within `0..capacity`. READ COMMITTED isolation throughout.
+- **Idempotency-Key** on `POST /api/registrations`: stored per user in the same transaction as the registration (`INSERT … ON CONFLICT DO NOTHING`), replayed with `Idempotent-Replayed: true`, 422 on a different body. Lives in event-service until a second service needs it.
+
+**Consequences.** Any new stateful aggregate gets an enum table and a history table, not ad-hoc `if`s. Code that changes seats must go through the repository queries, never through a setter.
+
+---
+
+## D11: Domain events through a transactional outbox
+
+*2026-10-15 · accepted (Phase 3; details in `docs/plans/phase-3.md` §4, §9)*
+
+**Decision.**
+- **Outbox.** `libs/common-messaging` writes `outbox_message` rows with `JdbcClient` inside the caller's transaction (`propagation = MANDATORY`). Each service creates the table in its own Flyway migration from the lib's reference DDL.
+- **Relay.** A `SmartLifecycle` poller with its own thread: `FOR UPDATE SKIP LOCKED` batches, publisher confirms, `published_at` set after the confirm, retries with `attempts` / `last_error`. At-least-once delivery.
+- **Topology.** Topic exchange `mitpass.events`; routing key = event type (`registration.confirmed`). Producers declare only the exchange; consumers declare their own queues. Dev: `mitpass.events.tap` (bound to `#`, max 1000 messages) to see messages before consumers exist.
+- **Format.** AMQP `messageId` = outbox id, `type` = event type, header `correlationId`. Body = envelope `{messageId, type, schemaVersion, occurredAt, aggregateType, aggregateId, correlationId, payload}`. Contracts are records in `common-messaging`; fields are only added, never renamed or removed.
+- **P3 events.** event-service: `RegistrationConfirmed` (also on promotion, `viaPromotion: true`), `RegistrationCancelled`, `WaitlistPromoted`, `EventStateChanged`. auth-service: `UserRegistered` (owner: "do it here").
+
+- **Startup.** The relay opens one connection when it starts, so the exchange (and the dev tap queue) exist before the first event (as built; Spring AMQP otherwise declares on first use).
+
+**Consequences.** Consumers (P4+) must be idempotent on `messageId` and tolerate reordering across aggregates. Tests switch the relay off unless they test messaging.

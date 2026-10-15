@@ -3,6 +3,7 @@ package com.mitpass.event.web;
 import static com.mitpass.security.test.SecurityMatrix.ANONYMOUS;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.mitpass.common.security.CurrentUser;
 import com.mitpass.common.security.Roles;
 import com.mitpass.event.EventIntegrationTest;
 import com.mitpass.event.EventIntegrationTest.FakeAuthService;
@@ -12,11 +13,13 @@ import com.mitpass.event.domain.Category;
 import com.mitpass.event.domain.Event;
 import com.mitpass.event.domain.EventGate;
 import com.mitpass.event.domain.EventSession;
+import com.mitpass.event.domain.Registration;
 import com.mitpass.event.domain.Venue;
 import com.mitpass.event.domain.VolunteerAssignment;
 import com.mitpass.event.repository.CategoryRepository;
 import com.mitpass.event.repository.EventGateRepository;
 import com.mitpass.event.repository.EventRepository;
+import com.mitpass.event.repository.RegistrationRepository;
 import com.mitpass.event.repository.VenueRepository;
 import com.mitpass.event.repository.VolunteerAssignmentRepository;
 import com.mitpass.security.test.SecurityMatrix;
@@ -27,6 +30,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -55,21 +59,25 @@ class SecurityMatrixTest {
     static final String ADMIN = "admin";
 
     static final UUID OWNER_ID = UUID.randomUUID();
+    static final UUID STUDENT_ID = UUID.randomUUID();
     static final UUID VOLUNTEER_ID = UUID.randomUUID();
     static final AtomicInteger SEQ = new AtomicInteger();
 
     static final Map<String, String> TOKENS = new LinkedHashMap<>();
 
     static {
-        TOKENS.put(STUDENT, TestJwtIssuer.token(Roles.STUDENT));
+        TOKENS.put(STUDENT, TestJwtIssuer.tokenFor(STUDENT_ID, Roles.STUDENT));
         TOKENS.put(VOLUNTEER, TestJwtIssuer.tokenFor(VOLUNTEER_ID, Roles.STUDENT, Roles.VOLUNTEER));
         TOKENS.put(OWNER, TestJwtIssuer.tokenFor(OWNER_ID, Roles.ORGANIZER));
         TOKENS.put(OTHER, TestJwtIssuer.token(Roles.ORGANIZER));
         TOKENS.put(ADMIN, TestJwtIssuer.token(Roles.ADMIN));
     }
 
-    /** A fresh event owned by OWNER with one session, one gate and VOLUNTEER assigned to it. */
-    record Fixture(long event, long session, long gate, long venue, int n) {}
+    /**
+     * A fresh DRAFT event owned by OWNER with one session, one gate, VOLUNTEER assigned to it, and a registration that
+     * belongs to STUDENT.
+     */
+    record Fixture(long event, long session, long gate, long venue, UUID registration, int n) {}
 
     record Endpoint(
             HttpMethod method,
@@ -95,6 +103,9 @@ class SecurityMatrixTest {
 
     @Autowired
     VolunteerAssignmentRepository assignments;
+
+    @Autowired
+    RegistrationRepository registrations;
 
     @Autowired
     TransactionTemplate transaction;
@@ -179,7 +190,39 @@ class SecurityMatrixTest {
                         f -> "/api/events/" + f.event() + "/volunteers/" + VOLUNTEER_ID,
                         f -> null,
                         ownerOrAdmin),
-                get("/api/volunteers/me/assignments", f -> "/api/volunteers/me/assignments", Rule.only(VOLUNTEER)));
+                get("/api/volunteers/me/assignments", f -> "/api/volunteers/me/assignments", Rule.only(VOLUNTEER)),
+                // Phase 3: lifecycle and registrations (docs/plans/phase-3.md §7)
+                write(
+                        HttpMethod.POST,
+                        "/api/events/{id}/transitions",
+                        f -> "/api/events/" + f.event() + "/transitions",
+                        f -> "{\"to\":\"PUBLISHED\"}",
+                        ownerOrAdmin),
+                get("/api/events/{id}/history", f -> "/api/events/" + f.event() + "/history", ownerOrAdmin),
+                get("/api/events/{id}/registrations", f -> "/api/events/" + f.event() + "/registrations", ownerOrAdmin),
+                get(
+                        "/api/events/{id}/eligibility",
+                        f -> "/api/events/" + f.event() + "/eligibility",
+                        Rule.authenticated()),
+                // The volunteer token also holds STUDENT. The fixture event is a DRAFT, so an allowed call gets
+                // 409 registration-closed: past security, which is what the matrix checks.
+                write(
+                        HttpMethod.POST,
+                        "/api/registrations",
+                        f -> "/api/registrations",
+                        f -> "{\"eventId\":%d}".formatted(f.event()),
+                        Rule.only(STUDENT, VOLUNTEER)),
+                get("/api/registrations/me", f -> "/api/registrations/me", Rule.authenticated()),
+                get(
+                        "/api/registrations/{id}",
+                        f -> "/api/registrations/" + f.registration(),
+                        Rule.only(STUDENT, OWNER, ADMIN)),
+                write(
+                        HttpMethod.POST,
+                        "/api/registrations/{id}/cancel",
+                        f -> "/api/registrations/" + f.registration() + "/cancel",
+                        f -> null,
+                        Rule.only(STUDENT, OWNER, ADMIN)));
 
         List<String> callers = List.of(ANONYMOUS, STUDENT, VOLUNTEER, OWNER, OTHER, ADMIN);
         SecurityMatrix matrix = new SecurityMatrix("event-service", callers);
@@ -226,7 +269,20 @@ class SecurityMatrixTest {
             EventGate gate = gates.save(new EventGate(event, "MAIN", "Main Gate"));
             assignments.save(new VolunteerAssignment(
                     event, gate, VOLUNTEER_ID, "Matrix Volunteer", "matrix.self@gmail.com", Instant.now(), "seed"));
-            return new Fixture(event.getId(), session.getId(), gate.getId(), venue.getId(), n);
+            Registration registration = new Registration(
+                    event,
+                    new CurrentUser(
+                            STUDENT_ID,
+                            "matrix.student@test",
+                            "Matrix Student",
+                            Set.of("STUDENT"),
+                            "CSE",
+                            2,
+                            null,
+                            ""));
+            registration.confirm(Instant.now(), false);
+            registrations.save(registration);
+            return new Fixture(event.getId(), session.getId(), gate.getId(), venue.getId(), registration.getId(), n);
         });
     }
 

@@ -4,12 +4,14 @@ import com.mitpass.event.validation.TimeWindow;
 import com.mitpass.event.validation.ValidTimeWindow;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.util.List;
 
 /**
  * Body of {@code PUT /api/events/{id}}: replaces the event's own fields (not its sessions or status). Send the
@@ -32,5 +34,12 @@ public record EventUpdateRequest(
         Instant registrationClosesAt,
 
         @Schema(description = "Version from the last GET; optional, but without it the update can't detect conflicts")
-        Long version)
+        Long version,
+
+        @Schema(description = "Departments allowed to register; empty = all")
+        List<@NotNull @Pattern(regexp = EventCodes.DEPARTMENT_PATTERN, message = EventCodes.DEPARTMENT_MESSAGE) String>
+                eligibleDepartments,
+
+        @Min(1) @Max(5) Integer minYear,
+        @Min(1) @Max(5) Integer maxYear)
         implements TimeWindow {}

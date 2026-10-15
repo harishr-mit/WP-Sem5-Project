@@ -25,6 +25,11 @@ spring:
     web:
       pageable:
         max-page-size: 100
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    username: ${RABBITMQ_USER:mitpass}
+    password: ${RABBITMQ_PASSWORD:mitpass}
+    publisher-confirm-type: simple   # the outbox relay waits for the broker's confirms (D11)
 
 eureka:
   client:
@@ -60,6 +65,26 @@ mitpass:
   clients:
     # A Eureka service id, resolved by Spring Cloud LoadBalancer.
     auth-service: http://auth-service
+  events:
+    scheduler:
+      # Time-based lifecycle moves (docs/DECISIONS.md D10): open/close registration, LIVE, COMPLETED.
+      enabled: true
+      interval: 30s
+      doors-open-lead: 30m   # LIVE this long before startsAt, so early arrivals can check in
+  idempotency:
+    ttl: 24h                 # an Idempotency-Key replays its first result this long
+    cleanup-interval: 1h
+  messaging:
+    # Transactional outbox → RabbitMQ (docs/DECISIONS.md D11; defaults in libs/common-messaging MessagingProperties).
+    exchange: mitpass.events
+    relay:
+      poll-interval: 500ms
+      batch-size: 100
+      retention: 7d
+    tap-queue:
+      enabled: true          # dev only: see every event in the RabbitMQ UI before consumers exist (P4+)
+      name: mitpass.events.tap
+      max-length: 1000
 
 logging:
   pattern:

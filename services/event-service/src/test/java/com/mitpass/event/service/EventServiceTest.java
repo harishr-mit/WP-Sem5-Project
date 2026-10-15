@@ -62,6 +62,15 @@ class EventServiceTest {
     @Mock
     VenueRepository venues;
 
+    @Mock
+    EventLifecycleService lifecycle;
+
+    @Mock
+    WaitlistService waitlist;
+
+    @Mock
+    jakarta.persistence.EntityManager entityManager;
+
     EventService service;
 
     final Category technical = new Category("TECHNICAL", "Technical");
@@ -70,7 +79,8 @@ class EventServiceTest {
     @BeforeEach
     void setUp() {
         EventMapperImpl mapper = new EventMapperImpl(new CategoryMapperImpl(), new VenueMapperImpl());
-        service = new EventService(events, categories, venues, mapper, "Asia/Kolkata");
+        service = new EventService(
+                events, categories, venues, mapper, lifecycle, waitlist, entityManager, "Asia/Kolkata");
     }
 
     @Test
@@ -148,8 +158,8 @@ class EventServiceTest {
         Event stored = storedEvent(3L);
         given(events.findDetailedById(1L)).willReturn(Optional.of(stored));
 
-        EventUpdateRequest update =
-                new EventUpdateRequest("HACK26", "New title", null, 1L, 1L, null, 100, START, END, null, null, 2L);
+        EventUpdateRequest update = new EventUpdateRequest(
+                "HACK26", "New title", null, 1L, 1L, null, 100, START, END, null, null, 2L, null, null, null);
 
         assertThatThrownBy(() -> service.update(1L, update))
                 .isInstanceOf(ConflictException.class)
@@ -182,7 +192,49 @@ class EventServiceTest {
 
     private static EventCreateRequest create(int capacity, List<SessionRequest> sessions) {
         return new EventCreateRequest(
-                "HACK26", "TechFest Hackathon", null, 1L, 3L, "CSE", capacity, START, END, null, null, sessions);
+                "HACK26",
+                "TechFest Hackathon",
+                null,
+                1L,
+                3L,
+                "CSE",
+                capacity,
+                START,
+                END,
+                null,
+                null,
+                sessions,
+                List.of("CSE"),
+                null,
+                null);
+    }
+
+    @Test
+    void createdEventRecordsItsFirstHistoryRowAndEligibility() {
+        givenReferenceData();
+        given(events.saveAndFlush(any(Event.class))).willAnswer(call -> call.getArgument(0));
+
+        EventDetailResponse created = service.create(ORGANIZER, create(100, null));
+
+        assertThat(created.eligibleDepartments()).containsExactly("CSE");
+        assertThat(created.allowedTransitions()).containsExactly(EventStatus.PUBLISHED);
+        verify(lifecycle)
+                .recordCreated(
+                        any(Event.class),
+                        org.mockito.ArgumentMatchers.eq(ORGANIZER.id().toString()));
+    }
+
+    @Test
+    void liveEventsAreReadOnly() throws Exception {
+        Event live = storedEvent(0L);
+        setField(live, "status", EventStatus.LIVE);
+        given(events.findDetailedById(1L)).willReturn(Optional.of(live));
+        EventUpdateRequest update = new EventUpdateRequest(
+                "HACK26", "New title", null, 1L, 1L, null, 100, START, END, null, null, 0L, null, null, null);
+
+        assertThatThrownBy(() -> service.update(1L, update))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("LIVE");
     }
 
     private Event storedEvent(long version) throws Exception {

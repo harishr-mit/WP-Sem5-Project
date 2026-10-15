@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(${event.title()})}"></head>
+<body>
+<header th:replace="~{fragments :: header}"></header>
+<main class="narrow">
+    <div th:replace="~{fragments :: flash}"></div>
+
+    <p><span class="status" th:text="${event.status()}">REGISTRATION_OPEN</span> <code th:text="${event.code()}">TECHFEST26</code></p>
+    <h1 th:text="${event.title()}">TechFest Hackathon</h1>
+    <p class="hint">
+        <span th:text="${event.category() != null ? event.category().name() : ''}">Technical</span> ·
+        <span th:text="${event.venue() != null ? event.venue().name() : ''}">Innovation Centre Lab</span> ·
+        <span th:text="${@fmt.when(event.startsAt())}">Sat 14 Nov 2026, 09:00</span>
+    </p>
+    <p th:if="${event.description() != null}" th:text="${event.description()}">Description</p>
+
+    <dl class="facts">
+        <dt>Eligibility</dt><dd th:text="${event.eligibilityText()}">CSE, IT · years 2-4</dd>
+        <dt>Organised by</dt><dd th:text="${event.organizerName()}">Anitha Rao</dd>
+        <dt>Seats</dt>
+        <dd><strong th:text="${event.seatsLeft() + ' seats left'}">12 seats left</strong>
+            <span th:text="${'(' + event.seatsTaken() + ' / ' + event.capacity() + ' taken)'}">(88 / 100 taken)</span></dd>
+        <dt th:if="${event.registrationClosesAt() != null}">Registration closes</dt>
+        <dd th:if="${event.registrationClosesAt() != null}" th:text="${@fmt.when(event.registrationClosesAt())}">Thu</dd>
+    </dl>
+
+    <section class="box" th:if="${currentUser == null}">
+        <a th:href="@{/login}">Log in</a> to register.
+    </section>
+
+    <section class="box" th:if="${eligibility != null}">
+        <th:block th:if="${eligibility.myRegistration() != null}" th:with="r=${eligibility.myRegistration()}">
+            <p>You're registered: <strong th:text="${@fmt.status(r.status(), r.waitlistPosition())}">CONFIRMED</strong></p>
+            <form th:action="@{/my/registrations/{id}/cancel(id=${r.id()})}" method="post">
+                <button type="submit" class="secondary">Cancel my registration</button>
+            </form>
+        </th:block>
+
+        <th:block th:if="${eligibility.myRegistration() == null}">
+            <th:block th:if="${eligibility.eligible()}">
+                <p class="ok-text" th:text="${'You''re eligible' + (currentUser.department() != null ? ': ' + currentUser.department() : '') + (currentUser.year() != null ? ' · year ' + currentUser.year() : '')}">You're eligible: CSE · year 1</p>
+                <p th:if="${eligibility.seatsLeft() == 0}"
+                   th:text="${'Full: you''ll join the waitlist (' + eligibility.waitlistCount() + ' waiting).'}">Full: you'll join the waitlist.</p>
+                <form th:action="@{/events/{id}/register(id=${event.id()})}" method="post">
+                    <input type="hidden" name="idempotencyKey" th:value="${idempotencyKey}">
+                    <button type="submit" th:text="${eligibility.seatsLeft() == 0 ? 'Join the waitlist' : 'Register'}">Register</button>
+                </form>
+            </th:block>
+            <th:block th:if="${!eligibility.eligible()}">
+                <p>You can't register:</p>
+                <ul><li th:each="reason : ${eligibility.reasons()}" th:text="${reason}">Open to CSE only</li></ul>
+            </th:block>
+        </th:block>
+    </section>
+
+    <p><a th:href="@{/events}">← All events</a></p>
+</main>
+</body>
+</html>

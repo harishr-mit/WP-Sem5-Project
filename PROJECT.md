@@ -184,6 +184,7 @@ stateDiagram-v2
         REGISTRATION_OPEN --> REGISTRATION_CLOSED
         REGISTRATION_CLOSED --> LIVE
         LIVE --> COMPLETED
+        LIVE --> REGISTRATION_CLOSED: undo early start
         PUBLISHED --> CANCELLED
         REGISTRATION_OPEN --> CANCELLED
         REGISTRATION_CLOSED --> CANCELLED
@@ -192,8 +193,8 @@ stateDiagram-v2
 
 | Aggregate | States | Notes |
 |---|---|---|
-| **Event** | DRAFT → PUBLISHED → REGISTRATION_OPEN → REGISTRATION_CLOSED → LIVE → COMPLETED; CANCELLED from any pre-LIVE state | Time-based transitions happen through `@Scheduled`. Each transition is written to `event_state_history`. |
-| **Registration** | PENDING → CONFIRMED / WAITLISTED → CANCELLED; WAITLISTED → CONFIRMED (promotion) | Promotion happens in the same transaction as the cancellation that freed the seat. |
+| **Event** | DRAFT → PUBLISHED → REGISTRATION_OPEN → REGISTRATION_CLOSED → LIVE → COMPLETED; CANCELLED from any pre-LIVE state; LIVE → REGISTRATION_CLOSED (undo an accidental early start) | Time-based transitions happen through `@Scheduled`. **LIVE is entered only by the scheduler** (owner decision, 2026-10-15); organizers can open/close registration early, complete, cancel, and undo LIVE. Each transition is written to `event_state_history`. |
+| **Registration** | PENDING → CONFIRMED / WAITLISTED → CANCELLED; WAITLISTED → CONFIRMED (promotion) | Promotion happens in the same transaction as the cancellation that freed the seat. One *active* registration per student per event; after cancelling, a student may register again (new row). |
 | **Pass** | ISSUED → ACTIVE → EXPIRED; ISSUED/ACTIVE → REVOKED | Owned by `pass-service` (is the pass *valid*?). |
 | **Presence** | NOT_ARRIVED → IN ⇄ OUT | Owned by `checkin-service` (where is the attendee?). Re-entry is allowed only if the event allows it. |
 
@@ -314,18 +315,19 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 
 **Goal:** registrations that cannot overbook, with correct lifecycle state, under heavy concurrency. Plan: `docs/plans/phase-3.md`.
 
-- [ ] Event state machine (enum transition table, `transition()` guard, `event_state_history`); `@Scheduled` job opens and closes registration at configured times; illegal transition → 409.
-- [ ] `Registration` aggregate (PENDING → CONFIRMED / WAITLISTED → CANCELLED); unique `(event_id, user_id)`.
-- [ ] Seat claim inside one `@Transactional` method: a conditional update (`UPDATE … SET seats_taken = seats_taken + 1 WHERE seats_taken < capacity`) or `PESSIMISTIC_WRITE`; `@Version` optimistic locking for organizer edits (a concurrent edit → 409 with a "reload" hint).
-- [ ] Waitlist: FIFO position; a cancellation promotes the next waitlisted student **in the same transaction**.
-- [ ] Eligibility rules: department/year restrictions and the registration window, checked in the domain layer.
-- [ ] `Idempotency-Key` header: stored with the response, so a retry returns the original result instead of creating a duplicate.
-- [ ] `libs/common-messaging`: **transactional outbox** (the business row and outbox row commit together) plus a relay that publishes to RabbitMQ.
-- [ ] **Concurrency test:** 500 parallel registrations for 100 seats → exactly 100 CONFIRMED, 400 WAITLISTED, `seats_taken == 100`. Also show the failing naive version for contrast.
-- [ ] **Portal slice** (rules and intended shortcuts: `docs/DECISIONS.md` D9): create `web-portal` (:8090, Spring MVC + Thymeleaf) with sign-up and login against `auth-service` (tokens in the server-side session; the user logs in again when the access token expires, automatic refresh comes in P6). Pages: event catalogue and event detail with seats left; register/cancel showing CONFIRMED, or WAITLISTED with the position; an organizer "My events" list with buttons for the allowed lifecycle transitions only.
+- [x] Event state machine (enum transition table, `transition()` guard, `event_state_history`); `@Scheduled` job opens and closes registration, starts the event (LIVE, scheduler only) and completes it at configured times; organizers can undo an early LIVE; illegal transition → 409.
+- [x] `Registration` aggregate (PENDING → CONFIRMED / WAITLISTED → CANCELLED); one active registration per `(event_id, user_id)` (partial unique index), so re-registering after a cancellation creates a new row.
+- [x] Seat claim inside one `@Transactional` method: a conditional update (`UPDATE … SET seats_taken = seats_taken + 1 WHERE seats_taken < capacity`) or `PESSIMISTIC_WRITE`; `@Version` optimistic locking for organizer edits (a concurrent edit → 409 with a "reload" hint).
+- [x] Waitlist: FIFO position; a cancellation promotes the next waitlisted student **in the same transaction**.
+- [x] Eligibility rules: department/year restrictions and the registration window, checked in the domain layer.
+- [x] `Idempotency-Key` header: stored with the response, so a retry returns the original result instead of creating a duplicate.
+- [x] `libs/common-messaging`: **transactional outbox** (the business row and outbox row commit together) plus a relay that publishes to RabbitMQ. auth-service publishes `UserRegistered` through it.
+- [x] **Concurrency test:** 500 parallel registrations for 100 seats → exactly 100 CONFIRMED, 400 WAITLISTED, `seats_taken == 100`. Also show the failing naive version for contrast.
+- [x] **Portal slice** (rules and intended shortcuts: `docs/DECISIONS.md` D9): create `web-portal` (:8090, Spring MVC + Thymeleaf) with sign-up and login against `auth-service` (tokens in the server-side session; the user logs in again when the access token expires, automatic refresh comes in P6). Pages: event catalogue and event detail with seats left; register/cancel showing CONFIRMED, or WAITLISTED with the position; an organizer "My events" list with buttons for the allowed lifecycle transitions only.
 
 **Concepts:** transactional DB operations, locking strategies, state management, reliable messaging.
 **Exit criteria / demo:** the concurrency test runs live and the numbers are exact; a cancellation promotes waitlist #1 and the outbox row shows up in the RabbitMQ management UI. In the portal: sign up, register for an event, cancel, and see a waitlisted student's status change to CONFIRMED.
+**Status:** done 2026-10-16. Live exit demo 56 checks (two failures on the first run led to two fixes, both verified); concurrency test exact in three runs; security matrix 253/253 cells. As-built notes in `docs/plans/phase-3.md` §18, decisions in `docs/DECISIONS.md` D10/D11, demo requests in `docs/http/phase-3.http`.
 
 ---
 
@@ -419,6 +421,12 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 
 **Concepts:** microservice operations (observability, resilience), verification of everything above.
 **Exit criteria / demo:** a clean clone runs `docker compose up`, the seed loads and the demo script runs start to finish; stopping pass-service during scanning degrades gracefully, as the Grafana and Zipkin views show.
+
+---
+
+### After P8 — Review for later
+
+**Once all eight phases are done, go through [`docs/REVIEW-LATER.md`](docs/REVIEW-LATER.md) and discuss every open item with the owner.** It collects questions parked during the build that didn't block a phase.
 
 ---
 

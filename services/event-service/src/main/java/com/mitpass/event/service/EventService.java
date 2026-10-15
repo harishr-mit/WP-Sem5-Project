@@ -20,6 +20,7 @@ import com.mitpass.event.web.dto.EventDetailResponse;
 import com.mitpass.event.web.dto.EventSummaryResponse;
 import com.mitpass.event.web.dto.EventUpdateRequest;
 import com.mitpass.event.web.dto.SessionRequest;
+import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.HashSet;
@@ -42,6 +43,9 @@ public class EventService {
     private final CategoryRepository categories;
     private final VenueRepository venues;
     private final EventMapper mapper;
+    private final EventLifecycleService lifecycle;
+    private final WaitlistService waitlist;
+    private final EntityManager entityManager;
     private final ZoneId zone;
 
     public EventService(
@@ -49,11 +53,17 @@ public class EventService {
             CategoryRepository categories,
             VenueRepository venues,
             EventMapper mapper,
+            EventLifecycleService lifecycle,
+            WaitlistService waitlist,
+            EntityManager entityManager,
             @Value("${mitpass.time-zone:Asia/Kolkata}") String timeZone) {
         this.events = events;
         this.categories = categories;
         this.venues = venues;
         this.mapper = mapper;
+        this.lifecycle = lifecycle;
+        this.waitlist = waitlist;
+        this.entityManager = entityManager;
         this.zone = ZoneId.of(timeZone);
     }
 
@@ -72,8 +82,10 @@ public class EventService {
         if (events.existsByCode(request.code())) {
             throw duplicateCode(request.code());
         }
+        CatalogRules.requireYearRange(request.minYear(), request.maxYear());
         Event event = new Event();
         mapper.apply(request, event);
+        event.setEligibleDepartments(request.eligibleDepartments());
         event.assignOrganizer(organizer.id(), organizer.name() != null ? organizer.name() : organizer.email());
         assignCategoryAndVenue(event, request.categoryId(), request.venueId());
 
@@ -87,7 +99,9 @@ public class EventService {
             }
             event.addSession(new EventSession(session.title(), session.startsAt(), session.endsAt()));
         }
-        return mapper.toDetail(events.saveAndFlush(event));
+        Event saved = events.saveAndFlush(event);
+        lifecycle.recordCreated(saved, organizer.id().toString());
+        return mapper.toDetail(saved);
     }
 
     @Transactional
@@ -98,15 +112,33 @@ public class EventService {
                     "Event %d was changed by someone else (now version %d). Reload it and try again."
                             .formatted(id, event.getVersion()));
         }
+        CatalogRules.requireEditable(event);
+        CatalogRules.requireCodeUnchanged(event, request.code());
+        CatalogRules.requireYearRange(request.minYear(), request.maxYear());
         if (events.existsByCodeAndIdNot(request.code(), id)) {
             throw duplicateCode(request.code());
         }
+        int oldCapacity = event.getCapacity();
+        int seatsTaken = events.findSeatsTakenById(id);
+        if (request.capacity() < seatsTaken) {
+            // A claim committing right after this check is still caught by the ck_event_seats constraint (409).
+            throw new BusinessRuleException(
+                    "Capacity %d is too low: %d seats are already taken".formatted(request.capacity(), seatsTaken));
+        }
         mapper.apply(request, event);
+        event.setEligibleDepartments(request.eligibleDepartments());
         assignCategoryAndVenue(event, request.categoryId(), request.venueId());
         for (EventSession session : event.getSessions()) {
             CatalogRules.requireInsideEvent(event, session.getTitle(), session.getStartsAt(), session.getEndsAt());
         }
-        return mapper.toDetail(events.saveAndFlush(event));
+        Event saved = events.saveAndFlush(event);
+
+        // New seats go to the waitlist first, in this transaction. The UPDATE above holds the event row lock.
+        int added = saved.getCapacity() - oldCapacity;
+        if (added > 0 && waitlist.promoteUpTo(id, added) > 0) {
+            entityManager.refresh(saved); // the seat counter changed underneath the managed entity
+        }
+        return mapper.toDetail(saved);
     }
 
     @Transactional

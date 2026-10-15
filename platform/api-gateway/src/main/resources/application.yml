@@ -23,7 +23,7 @@ spring:
             - id: event-service
               uri: lb://event-service
               predicates:
-                - Path=/api/events/**,/api/venues/**,/api/categories/**,/api/volunteers/**
+                - Path=/api/events/**,/api/venues/**,/api/categories/**,/api/volunteers/**,/api/registrations/**
             # OpenAPI document of each service, for the Swagger UI below. Not under /v3/api-docs/**: springdoc's own
             # handler would answer that path before the gateway routes see it.
             - id: event-service-openapi

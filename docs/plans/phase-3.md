@@ -24,15 +24,15 @@
 
 **Built in Phases 1–2:** `libs/common-web` (D6), `libs/common-security` + `libs/security-test-support` (D7), discovery, gateway (JWT pre-check), auth-service (sign-up, login, refresh, JWKS, user admin), event-service (catalogue, ownership, gates, volunteers). `EventStatus` exists but only as a stored value (every event starts DRAFT; the seed sets other states directly). `Event` already has `@Version`, and `PUT /api/events/{id}` already rejects a stale `version` with 409. compose already runs RabbitMQ 4 (management UI on :15672), and `event_db` exists, so **no `docker compose down -v` is needed** in this phase.
 
-**Defaults this plan assumes** (owner questions in §17; change them before T05.2 starts):
+**Owner decisions for this phase** (answers to §17, 2026-10-15; recorded in `docs/DECISIONS.md` D10/D11):
 
 | Question | Default |
 |---|---|
 | One registration per student per event | **One *active* registration** (partial unique index on `(event_id, user_id)` where the status is PENDING, CONFIRMED or WAITLISTED). A student who cancelled can register again and gets a new registration (and in P4 a new pass). PROJECT.md says "unique `(event_id, user_id)`"; this keeps that for active rows and keeps the cancelled ones as history |
-| Time-based transitions | The scheduler does all four time-based moves: open registration at `registrationOpensAt`, close it at `registrationClosesAt` (or `startsAt`), go LIVE `doors-open-lead` (30 min) before `startsAt`, COMPLETED at `endsAt`. Organizers can also press each button early |
+| Time-based transitions | The scheduler does all four time-based moves: open registration at `registrationOpensAt`, close it at `registrationClosesAt` (or `startsAt`), go LIVE `doors-open-lead` (30 min) before `startsAt`, COMPLETED at `endsAt`. **LIVE is scheduler-only** (a button would be redundant). Organizers can open/close registration early, complete, cancel, and **undo LIVE → REGISTRATION_CLOSED** after an accidental early start (then move `startsAt`, or the scheduler makes it LIVE again). Open points: `docs/REVIEW-LATER.md` RL2, RL3 |
 | Registration window | **The state is the gate.** Registration needs status REGISTRATION_OPEN and, as a domain check, `now < registrationClosesAt`. An organizer may open early by hand, so `registrationOpensAt` only drives the scheduler |
 | Event cancellation | Registrations are left as they are; the event's status says CANCELLED, and new registrations and cancellations are refused (409). P4's saga revokes the passes from `EventStateChanged` |
-| `UserRegistered` | auth-service publishes it through the same outbox (phase-2 plan §2 deferred it to P3). Nothing consumes it until P7 |
+| `UserRegistered` | auth-service publishes it through the same outbox in P3 (owner: "don't postpone good things"). Nothing consumes it until P7 |
 
 **Out of scope (and where it lands):**
 
@@ -126,9 +126,11 @@ com.mitpass.event
 | DRAFT | PUBLISHED | owner, admin |
 | PUBLISHED | REGISTRATION_OPEN, CANCELLED | owner, admin; scheduler at `registrationOpensAt` |
 | REGISTRATION_OPEN | REGISTRATION_CLOSED, CANCELLED | owner, admin; scheduler at `registrationClosesAt` (or `startsAt` if unset) |
-| REGISTRATION_CLOSED | LIVE, CANCELLED | owner, admin; scheduler at `startsAt − doors-open-lead` |
-| LIVE | COMPLETED | owner, admin; scheduler at `endsAt` |
+| REGISTRATION_CLOSED | LIVE, CANCELLED | LIVE: **scheduler only**, at `startsAt − doors-open-lead`; CANCELLED: owner, admin |
+| LIVE | COMPLETED, REGISTRATION_CLOSED | COMPLETED: owner, admin, scheduler at `endsAt`; REGISTRATION_CLOSED (undo an early start): owner, admin |
 | COMPLETED, CANCELLED | — | terminal |
+
+`allowedTransitions` in responses lists only the moves the *caller* may make (no LIVE for organizers). A manual request for LIVE gets `409 illegal-transition` whose `allowedStates` leaves LIVE out.
 
 Extra guards on top of the table: PUBLISHED needs at least the fields a student sees (already required at create); REGISTRATION_OPEN needs `startsAt` in the future. Each transition writes one `event_state_history` row and one `EventStateChanged` outbox row in the same transaction.
 
@@ -234,7 +236,7 @@ D9 rules kept from the start: tokens only in the server-side session, CSRF on, P
 | My events (organizer) | `GET /organizer/events`, `POST /organizer/events/{id}/transitions` | ORGANIZER, ADMIN | `GET /api/events?organizerId=me`, `GET /api/events/{id}` (for `allowedTransitions` and counts), `POST /api/events/{id}/transitions` |
 
 - Layout: one Thymeleaf layout fragment (header with the user's name and role-dependent links via `sec:authorize`, flash area). Minimal CSS in one static file; the maroon header colour from the UI reference is the only nod to the design.
-- The event page follows the mockup's screen 2 content: eligibility line ("CSE, IT, AIDS · any year"), seats left (`588 / 600`), registration close time, "You're eligible: CSE · 1st year" or the reasons, a Register button. Deviation from the mockup: its note "after closing you can join the waitlist" is wrong for this plan (the waitlist is for a full event while registration is open); the page says "Full: you'll join the waitlist" instead.
+- The event page follows the mockup's screen 2 content: eligibility line ("CSE, IT, AIDS · any year"), seats left (`588 / 600`), registration close time, "You're eligible: CSE · 1st year" or the reasons, a Register button. Deviation from the mockup: its note "after closing you can join the waitlist" doesn't match this plan (the waitlist is for a full event while registration is open); the page says "Full: you'll join the waitlist" instead. Parked for the owner as `docs/REVIEW-LATER.md` RL1.
 - `PortalAccessTest` plays the security-matrix role for the portal: anonymous → redirect to `/login` on `/my/**` and `/organizer/**`; STUDENT → 403 on `/organizer/**`; POST without CSRF → 403.
 - D9 shortcuts used here and already listed in D9: re-login on expiry, minimal styling and full reloads, verification link opens the API, Spring's default error page. **New shortcut to add to D9** at T05.12 if it survives the build: "the waitlist position updates on reload" (P6: HTMX refresh; P7: push).
 
@@ -346,11 +348,39 @@ Order: T05.1 → T05.2 → T05.3 → T05.4 → T05.5 → T05.6 → T05.7 → T05
 14. **Repeatable seed + new NOT NULL columns:** V5's `seats_taken` has a default, so `R__demo_seed.sql` keeps working; the new seed rows must still be idempotent inserts.
 15. **Scheduler and tests:** `@Scheduled` beans must be conditional on `mitpass.events.scheduler.enabled`, or a test context closes events under the tests' feet.
 
-## 17. Owner questions
+## 17. Owner questions (resolved 2026-10-15)
 
-Defaults are in §2; the plan above already uses them.
+1. **Re-registration after cancelling:** allowed: one *active* registration per student per event (partial unique index). PROJECT.md §3 and §P3 updated.
+2. **Scheduler scope:** the event goes LIVE as scheduled, with no LIVE button. Organizers can undo an accidental early LIVE (LIVE → REGISTRATION_CLOSED, new edge in PROJECT.md §3). COMPLETED by hand and undo after check-ins are parked as RL2 / RL3 in `docs/REVIEW-LATER.md`.
+3. **`UserRegistered`:** in P3.
+4. **Pre-phase commit:** made by the owner.
 
-1. **Re-registration after cancelling:** allow it (one *active* registration per student per event, partial unique index), or keep PROJECT.md's literal `unique (event_id, user_id)` so a cancellation is final?
-2. **Scheduler scope:** should the scheduler also move events to LIVE (30 min before the start) and COMPLETED (at the end), or only open and close registration, leaving LIVE / COMPLETED to the organizer's buttons?
-3. **`UserRegistered` from auth-service in P3:** include it (small, deferred here by the phase-2 plan), or leave it for P7 when notification-service consumes it?
-4. **Pre-phase commit:** the working tree is clean on `phase3` apart from this plan and `log.md`. Commit them as `chore: plan Phase 3` before T05.1?
+The waitlist-after-closing question from the mockup (§10) is parked as RL1.
+
+## 18. As built: deviations and findings (2026-10-16)
+
+Phase 3 was implemented as planned, with the owner's answers (§17). Where the build differs from the sections above, this list is authoritative.
+
+| Topic | Plan said | As built / why |
+|---|---|---|
+| Problem extensions | — | `common-web`'s `ProblemException` gained `properties` (extension members such as `reasons`, `allowedStates`); `IllegalTransitionException` extends it |
+| Caller-specific moves | table only | `LifecycleState.require(from, to, allowedForCaller)`: the 409 lists the *caller's* options. `EventStatus.manualNext()` (no LIVE) and `scheduledNext()` (time-based only) |
+| Small integer columns | `smallint` | `Integer` fields need `@JdbcTypeCode(SqlTypes.SMALLINT)`, or `ddl-auto=validate` fails (`min_year`, `max_year`, `year_of_study`) |
+| `eligibleDepartments` mapping | MapStruct | Set by the service: MapStruct update methods `clear()` the target collection through its getter, which returns a read-only copy |
+| Scheduler runs | one move per run | One run can chain moves (OPEN → CLOSED → LIVE when the start time has passed and there is no closing time): intended catch-up |
+| Slow-path lock | `@Lock(PESSIMISTIC_WRITE)` query | `EntityManager.refresh(event, PESSIMISTIC_WRITE)`: refreshes the already-loaded entity *and* locks its row. No deadlocks seen: Hibernate's lock doesn't conflict with the KEY SHARE lock the registration insert takes through its FK |
+| `waitlistCount` | in the event detail | On `GET /api/events/{id}/eligibility` (and countable through `GET /api/events/{id}/registrations?status=WAITLISTED`); MapStruct can't fill it without a query |
+| Idempotency storage | JPA or JDBC | `JdbcClient` in the business transaction, like the outbox; `RegistrationService.register(student, eventId, key)` returns `RegisterOutcome(response, replayed)` |
+| Outbox order | `ORDER BY occurred_at` | Identity column `seq`: rows of one transaction share `occurred_at` |
+| Relay startup | — | The relay opens one connection when it starts, so RabbitMQ declares the exchange and tap queue right away. **Found in the live demo:** Spring AMQP declares only on the first connection, which came with the first event. Test: `TopologyOnStartupTest` (management API) |
+| Build | — | **Found in the live demo:** after a change in `libs/*` only, `install` kept the services' old fat jars (maven-jar-plugin thought them up to date; `repackage` then skipped). Root POM: `maven-jar-plugin` `forceCreation=true` |
+| RabbitMQ 4 | — | Refuses transient non-exclusive queues (`transient_nonexcl_queues` deprecated): test queues are durable |
+| Portal models | records | Numbers and flags boxed: Jackson 3 turns `FAIL_ON_NULL_FOR_PRIMITIVES` on by default, so a missing field would break a page |
+| Portal user | `PortalTokens` + principal | One `PortalUser` principal (display fields + tokens, `toString` without tokens) in the session's SecurityContext |
+| Portal pages | — | `@AuthenticationPrincipal PortalUser` (null for visitors); dates via a `fmt` bean in campus time. Eureka registration kept (the dashboard shows `WEB-PORTAL`) |
+| Test names | `OutboxRelayIT` | `OutboxRelayTest`: there is no failsafe plugin, so `*IT` classes would never run |
+| Tooling | — | Python on Windows writes cp1252 and CRLF by default (mangled a `§` once): edit files with `encoding="utf-8", newline=""` |
+
+**Verified live** (2026-10-16, compose infra, jars on the project JDK, the Phase 2 database volume kept so V4–V6 and the new seed ran on existing data): a scripted run of 56 checks covering exit criteria 1, 2, 4–9 (script in the session scratchpad; the same steps are in `docs/http/phase-3.http`). 54 passed on the first run; the two failures (exchange and tap queue missing before the first event) led to the relay-startup and build fixes above, after which both exist right after a restart. Criterion 3: `SeatClaimConcurrencyTest`, three runs in a row (always 100 / 400 / 100; naive 118, 117, 116). Criterion 10: `./mvnw verify`.
+
+**Tests:** see log.md (T05.12) for the final count per module.

@@ -238,6 +238,12 @@ class EventControllerTest {
                 Instant.now(),
                 "system",
                 Instant.now(),
-                "system");
+                "system",
+                List.of(),
+                null,
+                null,
+                List.of(EventStatus.PUBLISHED),
+                0,
+                100);
     }
 }

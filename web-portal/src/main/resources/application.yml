@@ -1,0 +1,41 @@
+server:
+  port: 8090
+  servlet:
+    session:
+      timeout: 30m
+      cookie:
+        http-only: true      # the session cookie is the only credential the browser holds (BFF, D9)
+        same-site: lax
+
+spring:
+  application:
+    name: web-portal
+  thymeleaf:
+    cache: false             # a slice: pages change often; P6 decides on caching
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+  instance:
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+mitpass:
+  portal:
+    # Every backend call goes through the gateway (docs/DECISIONS.md D9), server to server.
+    gateway-url: ${GATEWAY_URL:http://localhost:8080}
+    # Shown after sign-up so the demo can open the verification email (dev only; empty hides the link).
+    mailpit-url: ${MAILPIT_URL:http://localhost:8025}
+    timeouts:
+      connect: 2s
+      read: 10s
+
+logging:
+  pattern:
+    level: "%5p [%X{correlationId:-}]"

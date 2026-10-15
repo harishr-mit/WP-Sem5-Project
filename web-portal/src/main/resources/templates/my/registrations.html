@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('My registrations')}"></head>
+<body>
+<header th:replace="~{fragments :: header}"></header>
+<main>
+    <h1>My registrations</h1>
+    <div th:replace="~{fragments :: flash}"></div>
+    <p class="hint">Reload to see changes, for example a waitlist promotion. (Live updates come later.)</p>
+
+    <table th:if="${!registrations.isEmpty()}">
+        <thead><tr><th>Event</th><th>Starts</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+        <tr th:each="r : ${registrations}">
+            <td><a th:href="@{/events/{id}(id=${r.eventId()})}" th:text="${r.eventTitle()}">TechFest Hackathon</a></td>
+            <td th:text="${@fmt.when(r.eventStartsAt())}">Sat 14 Nov 2026, 09:00</td>
+            <td>
+                <span class="status" th:text="${@fmt.status(r.status(), r.waitlistPosition())}">WAITLISTED #1</span>
+                <small th:if="${r.viaPromotion()}">(moved up from the waitlist)</small>
+            </td>
+            <td>
+                <form th:if="${r.isActive()}" th:action="@{/my/registrations/{id}/cancel(id=${r.id()})}" method="post">
+                    <button type="submit" class="secondary">Cancel</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <p th:if="${registrations.isEmpty()}">You haven't registered for anything yet. <a th:href="@{/events}">Browse events</a>.</p>
+</main>
+</body>
+</html>

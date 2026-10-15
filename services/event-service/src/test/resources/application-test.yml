@@ -2,6 +2,9 @@
 spring:
   flyway:
     locations: classpath:db/migration   # schema + reference data only, no demo seed
+  datasource:
+    hikari:
+      maximum-pool-size: 20             # the concurrency tests run 32 threads against one event
 
 eureka:
   client:
@@ -10,3 +13,16 @@ eureka:
 mitpass:
   security:
     load-balanced: false   # tests import TestSecurityConfig (in-memory key); nothing fetches a JWK set
+  events:
+    scheduler:
+      enabled: false       # tests call EventLifecycleScheduler.runOnce(at) themselves
+  messaging:
+    relay:
+      enabled: false       # outbox rows are written and asserted; only MessagingFlowTest sends them to RabbitMQ
+    tap-queue:
+      enabled: false
+
+management:
+  health:
+    rabbit:
+      enabled: false       # no broker in most tests

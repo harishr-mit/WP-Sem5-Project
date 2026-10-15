@@ -7,3 +7,13 @@ spring:
 eureka:
   client:
     enabled: false
+
+mitpass:
+  messaging:
+    relay:
+      enabled: false   # outbox rows are written and asserted, never sent (no broker in these tests)
+
+management:
+  health:
+    rabbit:
+      enabled: false

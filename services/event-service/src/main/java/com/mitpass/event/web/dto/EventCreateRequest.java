@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -48,5 +49,15 @@ public record EventCreateRequest(
         @Schema(example = "2026-11-29T00:30:00Z") @NotNull Instant endsAt,
         @Schema(example = "2026-11-01T03:30:00Z") Instant registrationOpensAt,
         @Schema(example = "2026-11-27T12:30:00Z") Instant registrationClosesAt,
-        List<@Valid @NotNull SessionRequest> sessions)
+        List<@Valid @NotNull SessionRequest> sessions,
+
+        @Schema(example = "[\"CSE\", \"IT\"]", description = "Departments allowed to register; empty = all")
+        List<@NotNull @Pattern(regexp = EventCodes.DEPARTMENT_PATTERN, message = EventCodes.DEPARTMENT_MESSAGE) String>
+                eligibleDepartments,
+
+        @Schema(example = "2", description = "Lowest year of study allowed; empty = no limit") @Min(1) @Max(5)
+        Integer minYear,
+
+        @Schema(example = "4", description = "Highest year of study allowed; empty = no limit") @Min(1) @Max(5)
+        Integer maxYear)
         implements TimeWindow {}

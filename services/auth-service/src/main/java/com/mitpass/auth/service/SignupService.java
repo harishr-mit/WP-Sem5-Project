@@ -7,14 +7,20 @@ import com.mitpass.auth.repository.DepartmentRepository;
 import com.mitpass.auth.repository.RoleRepository;
 import com.mitpass.auth.repository.UserRepository;
 import com.mitpass.auth.web.dto.SignupRequest;
+import com.mitpass.common.messaging.OutboxPublisher;
+import com.mitpass.common.messaging.contract.UserRegistered;
 import com.mitpass.common.web.error.BusinessRuleException;
 import com.mitpass.common.web.error.ConflictException;
+import java.time.Clock;
 import java.util.Locale;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Creates a student account and sends the verification email (after commit). */
+/**
+ * Creates a student account, sends the verification email (after commit) and publishes {@code UserRegistered} through
+ * the outbox in the same transaction (docs/DECISIONS.md D11).
+ */
 @Service
 public class SignupService {
 
@@ -24,6 +30,8 @@ public class SignupService {
     private final EmailPolicy emailPolicy;
     private final PasswordEncoder passwordEncoder;
     private final EmailVerificationService verification;
+    private final OutboxPublisher outbox;
+    private final Clock clock;
 
     public SignupService(
             UserRepository users,
@@ -31,13 +39,17 @@ public class SignupService {
             DepartmentRepository departments,
             EmailPolicy emailPolicy,
             PasswordEncoder passwordEncoder,
-            EmailVerificationService verification) {
+            EmailVerificationService verification,
+            OutboxPublisher outbox,
+            Clock clock) {
         this.users = users;
         this.roles = roles;
         this.departments = departments;
         this.emailPolicy = emailPolicy;
         this.passwordEncoder = passwordEncoder;
         this.verification = verification;
+        this.outbox = outbox;
+        this.clock = clock;
     }
 
     /** The request has passed Bean Validation (including the email policy); these checks need the database. */
@@ -68,8 +80,18 @@ public class SignupService {
                 registerNumber,
                 passwordEncoder.encode(request.password()));
         user.addRole(roles.findByName(RoleName.STUDENT).orElseThrow());
-        users.save(user);
+        users.saveAndFlush(user); // flush: the id must exist for the outbox row
         verification.issueFor(user);
+        outbox.publish(
+                "User",
+                user.getId().toString(),
+                new UserRegistered(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getFullName(),
+                        department.getCode(),
+                        user.getYearOfStudy(),
+                        clock.instant()));
         return user;
     }
 

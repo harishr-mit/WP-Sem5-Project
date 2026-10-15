@@ -78,6 +78,24 @@ class EdgeSecurityTest {
                 .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
     }
 
+    /** Phase 3: registrations are routed to event-service (503 = route found, no instance in this test; 404 = none). */
+    @Test
+    void registrationsAreRoutedToEventServiceAndNeedAToken() {
+        web.post()
+                .uri("/api/registrations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"eventId\":1}")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized();
+        web.get()
+                .uri("/api/registrations/me")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtIssuer.token(Roles.STUDENT))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
     static Stream<Arguments> badTokens() {
         return Stream.of(
                 Arguments.of("forged payload", TestJwtIssuer.forged(TestJwtIssuer.token(Roles.STUDENT))),

@@ -1,0 +1,225 @@
+### MITPass Phase 3 demo: event lifecycle, registrations, waitlist, idempotency, eligibility. All through the gateway.
+### Run with the VS Code "REST Client" extension or IntelliJ's HTTP client, top to bottom, on fresh seed data.
+### The expected status is in each request's title. Seeded accounts (password Passw0rd!):
+###   organizer.a@mitpass.test (owns TECHFEST26, AIWS26, MINIQUIZ26), 2026509001@student.annauniv.edu (Priya, CSE, year 1),
+###   2026505014@student.annauniv.edu (Arun, AERO, year 1)
+### Domain events: RabbitMQ UI http://localhost:15672 (mitpass/mitpass) → Queues → mitpass.events.tap → Get messages.
+### Portal: http://localhost:8090 shows the same flows in a browser.
+
+@gw = http://localhost:8080
+
+### --- log in ------------------------------------------------------------------------------------------------------
+
+# @name organizer
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "organizer.a@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name priya
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "2026509001@student.annauniv.edu", "password": "Passw0rd!"}
+
+###
+# @name arun
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "2026505014@student.annauniv.edu", "password": "Passw0rd!"}
+
+### --- 1. Event lifecycle (state machine, D10) ----------------------------------------------------------------------
+
+### 201 Organizer A creates a 1-seat event (starts DRAFT; allowedTransitions = [PUBLISHED]). Change the code on a rerun.
+# @name created
+POST {{gw}}/api/events
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"code": "HTTPDEMO1", "title": "HTTP demo event", "categoryId": 1, "venueId": 1, "capacity": 1,
+ "startsAt": "2099-11-14T03:30:00Z", "endsAt": "2099-11-14T09:30:00Z",
+ "registrationOpensAt": "2099-10-01T03:30:00Z", "registrationClosesAt": "2099-11-13T12:30:00Z",
+ "eligibleDepartments": [], "minYear": null, "maxYear": null}
+
+### 409 illegal-transition: DRAFT can't go LIVE; allowedStates = ["PUBLISHED"]
+POST {{gw}}/api/events/{{created.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "LIVE"}
+
+### 200 DRAFT → PUBLISHED, with a reason for the history
+POST {{gw}}/api/events/{{created.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "PUBLISHED", "reason": "Programme confirmed"}
+
+### 200 PUBLISHED → REGISTRATION_OPEN (allowedTransitions: REGISTRATION_CLOSED, CANCELLED; never LIVE: only the scheduler starts events)
+POST {{gw}}/api/events/{{created.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "REGISTRATION_OPEN"}
+
+### 200 The audited history: creation, PUBLISHED, REGISTRATION_OPEN (who, when, why, MANUAL/SCHEDULER)
+GET {{gw}}/api/events/{{created.response.body.id}}/history
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### --- 2. Register, waitlist, promotion ---------------------------------------------------------------------------
+
+### 200 Priya checks first: eligible, seatsLeft 1
+GET {{gw}}/api/events/{{created.response.body.id}}/eligibility
+Authorization: Bearer {{priya.response.body.accessToken}}
+
+### 201 Priya registers: CONFIRMED (and a RegistrationConfirmed event goes to RabbitMQ)
+# @name priyaReg
+POST {{gw}}/api/registrations
+Authorization: Bearer {{priya.response.body.accessToken}}
+Content-Type: application/json
+
+{"eventId": {{created.response.body.id}}}
+
+### 201 Arun registers: the event is full → WAITLISTED, waitlistPosition 1
+# @name arunReg
+POST {{gw}}/api/registrations
+Authorization: Bearer {{arun.response.body.accessToken}}
+Content-Type: application/json
+
+{"eventId": {{created.response.body.id}}}
+
+### 200 Priya cancels: promotedRegistrationId = Arun's registration (same transaction).
+### The tap queue now shows registration.cancelled, registration.waitlist-promoted, registration.confirmed with this correlation id.
+POST {{gw}}/api/registrations/{{priyaReg.response.body.id}}/cancel
+Authorization: Bearer {{priya.response.body.accessToken}}
+X-Correlation-Id: http-demo-promotion
+Content-Type: application/json
+
+{"reason": "Can't make it"}
+
+### 200 Arun is CONFIRMED, viaPromotion true
+GET {{gw}}/api/registrations/{{arunReg.response.body.id}}
+Authorization: Bearer {{arun.response.body.accessToken}}
+
+### 409 illegal-transition: a cancelled registration can't be cancelled again (allowedStates [])
+POST {{gw}}/api/registrations/{{priyaReg.response.body.id}}/cancel
+Authorization: Bearer {{priya.response.body.accessToken}}
+
+### 200 The organizer's view of the event's registrations
+GET {{gw}}/api/events/{{created.response.body.id}}/registrations
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### 200 Priya's registrations, newest first (the cancelled one stays as history)
+GET {{gw}}/api/registrations/me
+Authorization: Bearer {{priya.response.body.accessToken}}
+
+### --- 3. Idempotency-Key (D10) ----------------------------------------------------------------------------------
+
+### 201 Priya registers again with a key (re-registering after a cancellation is allowed: a new registration)
+POST {{gw}}/api/registrations
+Authorization: Bearer {{priya.response.body.accessToken}}
+Idempotency-Key: http-demo-key-1
+Content-Type: application/json
+
+{"eventId": {{created.response.body.id}}}
+
+### 201 The same request again: the same body, header Idempotent-Replayed: true, nothing new created
+POST {{gw}}/api/registrations
+Authorization: Bearer {{priya.response.body.accessToken}}
+Idempotency-Key: http-demo-key-1
+Content-Type: application/json
+
+{"eventId": {{created.response.body.id}}}
+
+### 422 idempotency-key-mismatch: the same key for a different request
+POST {{gw}}/api/registrations
+Authorization: Bearer {{priya.response.body.accessToken}}
+Idempotency-Key: http-demo-key-1
+Content-Type: application/json
+
+{"eventId": 1}
+
+### 409 already-registered: without a key, a second registration is refused
+POST {{gw}}/api/registrations
+Authorization: Bearer {{priya.response.body.accessToken}}
+Content-Type: application/json
+
+{"eventId": {{created.response.body.id}}}
+
+### --- 4. Eligibility ----------------------------------------------------------------------------------------------
+
+### 200 Find AIWS26 (open to CSE, IT, AIDS only)
+# @name aiws
+GET {{gw}}/api/events?q=Applied
+
+### 200 Arun (AERO) is not eligible: reasons = ["Open to AIDS, CSE, IT only (you are in AERO)"]
+GET {{gw}}/api/events/{{aiws.response.body.content[0].id}}/eligibility
+Authorization: Bearer {{arun.response.body.accessToken}}
+
+### 422 not-eligible with the same reasons
+POST {{gw}}/api/registrations
+Authorization: Bearer {{arun.response.body.accessToken}}
+Content-Type: application/json
+
+{"eventId": {{aiws.response.body.content[0].id}}}
+
+### 403 Organizers can't register (STUDENT only)
+POST {{gw}}/api/registrations
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"eventId": {{aiws.response.body.content[0].id}}}
+
+### --- 5. Optimistic locking and capacity ---------------------------------------------------------------------------
+
+### 200 Read the event: note "version" and seatsTaken (1: Arun)
+# @name current
+GET {{gw}}/api/events/{{created.response.body.id}}
+
+### 200 Raise capacity to 2 with the version just read. A new seat goes to the waitlist first, in the same
+### transaction (Priya's second registration, if it was waitlisted, becomes CONFIRMED).
+PUT {{gw}}/api/events/{{created.response.body.id}}
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"code": "HTTPDEMO1", "title": "HTTP demo event", "categoryId": 1, "venueId": 1, "capacity": 2,
+ "startsAt": "2099-11-14T03:30:00Z", "endsAt": "2099-11-14T09:30:00Z",
+ "registrationOpensAt": "2099-10-01T03:30:00Z", "registrationClosesAt": "2099-11-13T12:30:00Z",
+ "version": {{current.response.body.version}}}
+
+### 409 The same edit with the version read before: "changed by someone else ... Reload it and try again"
+PUT {{gw}}/api/events/{{created.response.body.id}}
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"code": "HTTPDEMO1", "title": "HTTP demo event", "categoryId": 1, "venueId": 1, "capacity": 3,
+ "startsAt": "2099-11-14T03:30:00Z", "endsAt": "2099-11-14T09:30:00Z",
+ "registrationOpensAt": "2099-10-01T03:30:00Z", "registrationClosesAt": "2099-11-13T12:30:00Z",
+ "version": {{current.response.body.version}}}
+
+### 422 Capacity 1 while 2 seats are taken (no version: the check still applies)
+PUT {{gw}}/api/events/{{created.response.body.id}}
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"code": "HTTPDEMO1", "title": "HTTP demo event", "categoryId": 1, "venueId": 1, "capacity": 1,
+ "startsAt": "2099-11-14T03:30:00Z", "endsAt": "2099-11-14T09:30:00Z",
+ "registrationOpensAt": "2099-10-01T03:30:00Z", "registrationClosesAt": "2099-11-13T12:30:00Z"}
+
+### --- 6. Closing ------------------------------------------------------------------------------------------------
+
+### 200 Organizer closes registration early (the scheduler does it at registrationClosesAt)
+POST {{gw}}/api/events/{{created.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "REGISTRATION_CLOSED"}
+
+### 409 registration-closed
+POST {{gw}}/api/registrations
+Authorization: Bearer {{arun.response.body.accessToken}}
+Content-Type: application/json
+
+{"eventId": {{created.response.body.id}}}

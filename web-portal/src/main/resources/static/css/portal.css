@@ -1,0 +1,34 @@
+/* P3 slice styling: minimal on purpose (docs/DECISIONS.md D9). P6 replaces it with the UI reference's design. */
+:root { --maroon: #6b1d2a; --ground: #e8edf2; --ink: #1d2430; --ok: #1e7b45; --err: #a3262f; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.5 system-ui, sans-serif; background: var(--ground); color: var(--ink); }
+.top { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; padding: .75rem 1rem; background: var(--maroon); color: #fff; }
+.top a, .top .link { color: #fff; }
+.brand { font-weight: 800; letter-spacing: .15em; text-decoration: none; }
+.top nav { display: flex; gap: 1rem; flex: 1; }
+.who { display: flex; gap: .75rem; align-items: center; }
+main { max-width: 64rem; margin: 1.5rem auto; padding: 0 1rem; }
+main.narrow { max-width: 36rem; }
+table { width: 100%; border-collapse: collapse; background: #fff; }
+th, td { padding: .5rem; border-bottom: 1px solid #d5dbe3; text-align: left; vertical-align: top; }
+.row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.stack { display: flex; flex-direction: column; gap: .75rem; }
+.stack label { display: flex; flex-direction: column; gap: .25rem; }
+input, select, button { font: inherit; padding: .4rem .6rem; }
+button { background: var(--maroon); color: #fff; border: 0; border-radius: 4px; cursor: pointer; }
+button.secondary { background: #fff; color: var(--maroon); border: 1px solid var(--maroon); }
+button.danger { background: var(--err); }
+button.link { background: none; padding: 0; text-decoration: underline; }
+form.inline { display: inline; }
+.flash { padding: .6rem .8rem; border-radius: 4px; }
+.flash.ok { background: #e3f4ea; color: var(--ok); }
+.flash.err { background: #fbe6e7; color: var(--err); }
+.field-error { color: var(--err); font-size: .9em; }
+.hint { color: #556070; }
+.ok-text { color: var(--ok); font-weight: 600; }
+.status { font-family: ui-monospace, monospace; font-size: .85em; background: #fff; border: 1px solid #c6ced8; padding: .1rem .35rem; border-radius: 3px; }
+.box { background: #fff; padding: 1rem; border-radius: 6px; margin: 1rem 0; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: .25rem 1rem; }
+.facts dt { font-weight: 600; }
+.facts dd { margin: 0; }
+code { font-family: ui-monospace, monospace; }

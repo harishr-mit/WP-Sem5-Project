@@ -27,15 +27,18 @@ public interface EventMapper {
     @Mapping(target = "venueName", source = "venue.name")
     EventSummaryResponse toSummary(Event event);
 
+    @Mapping(target = "allowedTransitions", expression = "java(java.util.List.copyOf(event.getStatus().manualNext()))")
     EventDetailResponse toDetail(Event event);
 
     SessionResponse toResponse(EventSession session);
 
+    // eligibleDepartments is set by the service: MapStruct would clear() the entity's read-only getter list.
     @Mapping(target = "category", ignore = true)
     @Mapping(target = "venue", ignore = true)
     @Mapping(target = "sessions", ignore = true)
     @Mapping(target = "organizerId", ignore = true)
     @Mapping(target = "organizerName", ignore = true)
+    @Mapping(target = "eligibleDepartments", ignore = true)
     void apply(EventCreateRequest request, @MappingTarget Event event);
 
     @Mapping(target = "category", ignore = true)
@@ -43,5 +46,6 @@ public interface EventMapper {
     @Mapping(target = "sessions", ignore = true)
     @Mapping(target = "organizerId", ignore = true)
     @Mapping(target = "organizerName", ignore = true)
+    @Mapping(target = "eligibleDepartments", ignore = true)
     void apply(EventUpdateRequest request, @MappingTarget Event event);
 }

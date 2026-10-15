@@ -26,4 +26,11 @@ public record EventDetailResponse(
         Instant createdAt,
         String createdBy,
         Instant updatedAt,
-        String updatedBy) {}
+        String updatedBy,
+        List<String> eligibleDepartments,
+        Integer minYear,
+        Integer maxYear,
+        /** The moves an organizer or admin may make now (never LIVE: only the scheduler starts an event). */
+        List<EventStatus> allowedTransitions,
+        int seatsTaken,
+        int seatsLeft) {}

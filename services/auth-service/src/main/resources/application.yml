@@ -29,6 +29,12 @@ spring:
     # Mailpit from infra/docker-compose.yml: catches every email, UI at http://localhost:8025
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
+  rabbitmq:
+    # UserRegistered goes out through the transactional outbox (docs/DECISIONS.md D11).
+    host: ${RABBITMQ_HOST:localhost}
+    username: ${RABBITMQ_USER:mitpass}
+    password: ${RABBITMQ_PASSWORD:mitpass}
+    publisher-confirm-type: simple
 
 eureka:
   client:
