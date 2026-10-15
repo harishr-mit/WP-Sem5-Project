@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-11 (Claude Opus 5.5) — **Phase 2 done (T04)** on branch `phase2` (uncommitted; the post-phase commit is the owner's call). auth-service + common-security + gateway edge security; 158 tests green; security matrix 205/205; live exit demo 36/36. Next: post-phase commit (owner), push/merge as the owner decides, then Phase 3 (T05): write `docs/plans/phase-3.md` first. Since 2026-10-15 (T21) P3–P5 each also include a thin `web-portal` slice (PROJECT.md §5). The shortcuts are intended, and P6 replaces them (`docs/DECISIONS.md` D9).
+* **Last updated:** 2026-10-15 (Claude Opus 5.5) — **Phase 3 planned (T24)** on branch `phase3`: `docs/plans/phase-3.md`, sub-tasks T05.1–T05.12 below. Next: owner approves the plan and answers its §17 questions (re-registration, scheduler scope, `UserRegistered`, pre-phase commit), then T05.1. Phase 2 is done and merged to `main` (158 tests, matrix 205/205). Since 2026-10-15 (T21) P3–P5 each also include a thin `web-portal` slice (PROJECT.md §5). The shortcuts are intended, and P6 replaces them (`docs/DECISIONS.md` D9).
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
@@ -69,7 +69,19 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T04.10: Gateway edge security (reactive resource server, CORS, X-User-Id, auth routes, Swagger)
   * [x] T04.11: Security matrix tests → `docs/security-matrix.md`; `scripts/forge-token.sh`
   * [x] T04.12: Exit demo + docs (phase-2.http, README, PROJECT ticks, DECISIONS D7/D8, as-built)
-* [ ] T05: **Phase 3** — Registration & transactional core (PROJECT.md §P3)
+* [ ] T05: **Phase 3** — Registration & transactional core (PROJECT.md §P3; plan and "done when" checks: `docs/plans/phase-3.md` §15). Plan written 2026-10-15, awaiting owner approval + answers to §17
+  * [ ] T05.1: common-web: LifecycleState, IllegalTransitionException (409 + allowedStates), new problem types
+  * [ ] T05.2: Event state machine: transition table, V4 (history, eligibility), lifecycle service + endpoints, edits-by-state rules
+  * [ ] T05.3: Lifecycle scheduler (time-based transitions, Clock, off in tests)
+  * [ ] T05.4: libs/common-messaging: outbox publisher (JdbcClient), relay (confirms, SKIP LOCKED), topology + tap queue, contracts
+  * [ ] T05.5: Registrations: V5, state machine, eligibility, seat claim (conditional update + row lock), cancel + promote, endpoints
+  * [ ] T05.6: Idempotency-Key on POST /api/registrations (V6, replay, mismatch 422, cleanup)
+  * [ ] T05.7: Outbox wiring: event-service events + auth-service UserRegistered; messages visible in RabbitMQ
+  * [ ] T05.8: Concurrency tests: 500/100 seats, naive contrast, cancel/promote race
+  * [ ] T05.9: Gateway route /api/registrations/** + security matrix rows + docs/security-matrix.md
+  * [ ] T05.10: web-portal skeleton + auth (form login via auth-service, session tokens, expiry, sign-up page)
+  * [ ] T05.11: web-portal pages: catalogue, detail, register/cancel, my registrations, organizer transitions
+  * [ ] T05.12: Exit demo + docs (phase-3.http, README, PROJECT ticks, DECISIONS D10/D11, as-built)
 * [ ] T06: **Phase 4** — Pass issuance & QR generation (PROJECT.md §P4)
 * [ ] T07: **Phase 5** — Scan, verify & attendance (PROJECT.md §P5)
 * [ ] T08: **Phase 6** — Web portal, Spring MVC (PROJECT.md §P6)
@@ -94,6 +106,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T21: PROJECT.md: thin web-portal slice in P3–P5 so each backend phase is visible in a browser; P6 becomes the full portal; schedule the admin health overview
 * [x] T22: AGENTS.md "Workflow for any change": owner's workflow adapted to MITPass
 * [x] T23: AGENTS.md "Parts to keep in mind" + "Working rules", adapted to MITPass
+* [x] T24: Plan Phase 3 → `docs/plans/phase-3.md` + T05 sub-tasks (no code)
 
 *Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -111,6 +124,17 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-15 — Claude (Opus 5.5) — T24: Phase 3 planned
+
+* **Task:** T24 — owner asked to plan the implementation of Phase 3 (no code)
+* **Status:** DONE (plan awaits owner approval)
+* **Files:** created `docs/plans/phase-3.md`; edited `log.md` (status, T05.1–T05.12, T24, this entry), `PROJECT.md` (§P3 goal line links the plan)
+* **Details:**
+  * Read: PROJECT.md, DECISIONS D1–D9, phase-2 plan + as-built, event-service domain/service/migrations/seed, gateway config, auth seed and sign-up DTO. Checked in `~/.m2`: the Boot 4.1.1 BOM has `spring-boot-starter-amqp`, `-thymeleaf`, `-restclient`, `-security` (+ `-test` variants) and `thymeleaf-extras-springsecurity6`; the Testcontainers 2.0.5 BOM has `testcontainers-rabbitmq`. common-web already maps optimistic-lock failures to 409.
+  * UI mockup decoded into the session scratchpad (not the repo). Screen 2 (event detail) shows the eligibility line, seats left, close time, "You're eligible", Register. One deviation recorded in plan §10: the mockup's "after closing you can join the waitlist" note doesn't match this plan's waitlist rule.
+  * Plan: enum transition tables via a shared `LifecycleState` (409 with `allowedStates`), history tables, a scheduler with per-event transactions; seat claim = conditional UPDATE (fast path) + `PESSIMISTIC_WRITE` re-check (slow path); cancel locks the event row and promotes in the same transaction; read-only `seats_taken` mapping; `Idempotency-Key` stored atomically with the registration (`ON CONFLICT DO NOTHING`); new `libs/common-messaging` (JdbcClient outbox, SmartLifecycle relay with confirms + SKIP LOCKED, `mitpass.events` topic exchange, dev tap queue); `web-portal` D9 slice with form login against auth-service and tokens in the session. 10 exit criteria, 12 steps.
+* **Notes / Errors:** Defaults the owner may change (plan §2/§17): one *active* registration per student per event (partial unique index, deviates from PROJECT.md's literal `unique (event_id, user_id)`), the scheduler also moves LIVE/COMPLETED, `UserRegistered` included in P3. PROJECT.md §P3 bullets left as they are until the owner answers. Nothing started or left running.
 
 ### 2026-10-15 — Claude (Opus 5.5) — T23: parts table + working rules in AGENTS.md
 

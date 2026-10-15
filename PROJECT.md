@@ -312,7 +312,7 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 
 ### P3 — Registration & Transactional Core
 
-**Goal:** registrations that cannot overbook, with correct lifecycle state, under heavy concurrency.
+**Goal:** registrations that cannot overbook, with correct lifecycle state, under heavy concurrency. Plan: `docs/plans/phase-3.md`.
 
 - [ ] Event state machine (enum transition table, `transition()` guard, `event_state_history`); `@Scheduled` job opens and closes registration at configured times; illegal transition → 409.
 - [ ] `Registration` aggregate (PENDING → CONFIRMED / WAITLISTED → CANCELLED); unique `(event_id, user_id)`.
