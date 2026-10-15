@@ -118,3 +118,31 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 **Decision.** `auth-service` seeds six accounts through a repeatable `db/seed/R__demo_users.sql` (off in tests) with fixed UUIDs `00000000-0000-4000-8000-00000000000N` and the password `Passw0rd!`. Staff addresses use the reserved `.test` TLD so they can't belong to real people. event-service's seed and its V3 migration give the demo events to organizer A (`…02`) and organizer B (`…03`) by those ids. The signing-key secret defaults to `dev-only-change-me` (`MITPASS_KEY_SECRET` overrides it).
 
 **Consequences.** Anything beyond a local demo must override `MITPASS_KEY_SECRET` and not load `db/seed`. Changing the seeded organizer ids means changing both services' seeds together.
+
+---
+
+## D9: Thin portal slices in P3–P5, finished in P6
+
+*2026-10-15 · accepted (owner request; PROJECT.md §5 "Portal slices")*
+
+**Decision.** P3, P4 and P5 each add a thin `web-portal` page set so the owner can see that phase's backend working in a browser. The slices are deliberately rough. P6 turns them into the full portal. The owner wanted early visibility without pulling P6's work forward.
+
+**Slices get these right from the start**, because they are hard to retrofit:
+- Tokens stay in the server-side session and never reach the browser (BFF, PROJECT.md §3).
+- Spring Security's CSRF protection stays on.
+- Form posts use Post/Redirect/Get.
+- Calls go through the gateway.
+
+**Everything else is a known shortcut.** Don't fix one early, and don't treat one as a bug:
+
+| Slice shortcut | From | P6 replaces it with |
+|---|---|---|
+| User logs in again when the 15 min access token expires | P3 | Automatic refresh with the refresh token held in the session |
+| Minimal styling, plain search form, full page reloads | P3 | UI reference visual language (Tailwind), HTMX live search and filters, dark mode, responsive layout |
+| Email verification link opens the auth-service API (`mitpass.auth.verify-link`) | P3 | Link to a portal page |
+| Spring's default error page | P3 | Custom 403/404/500 pages, i18n message bundles |
+| Live QR is an `<img>` reloaded by a plain 30 s timer | P4 | Pass card with a countdown ring (screens 3–4) |
+| Scan page takes a typed pass number or pasted token; plain result page | P5 | `html5-qrcode` camera scanner over HTTPS (mkcert), manual-entry tab, green/red flash, sound, vibration |
+| Attendance page updates on reload | P5 | Styled page in P6; live WebSocket updates in P7 |
+
+**Consequences.** If a slice can't work without a P6 item, build the smallest version that works and add a row to this table. P6 is done when every row above is replaced.

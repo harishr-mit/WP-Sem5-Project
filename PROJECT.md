@@ -65,15 +65,17 @@ Payments, native mobile apps, and multi-college tenancy. These are listed as pos
 
 [`MITPass App Screens.html`](MITPass%20App%20Screens.html) in the repo root is a mockup of the main flow, with seven screens in order. Open it in a browser (it is a self-contained export and needs JavaScript). The owner updates the file when the design changes, so open the current copy before UI work instead of relying on an older description of it.
 
-| # | Screen | Who uses it | Backed by | Page built in |
-|---|--------|-------------|-----------|---------------|
-| 1 | Register (sign-up) | Student | `auth-service` (P2) | P6 |
-| 2 | Event detail | Student | `event-service` (P1, P3) | P6 |
-| 3 | Pass issued | Student | `event-service` + `pass-service` (P3, P4) | P6 |
-| 4 | QR code (wallet) | Student | `pass-service` (P4) | P6 |
-| 5 | Scan | Volunteer | `checkin-service` (P5) | P6 |
-| 6 | Verify (result) | Volunteer | `checkin-service` (P5) | P6 |
-| 7 | Mark attendance (dashboard) | Organizer | `checkin-service` (P5) | P6, live updates in P7 |
+| # | Screen | Who uses it | Backed by | Thin page in | Finished in |
+|---|--------|-------------|-----------|--------------|-------------|
+| 1 | Register (sign-up) | Student | `auth-service` (P2) | P3 | P6 |
+| 2 | Event detail | Student | `event-service` (P1, P3) | P3 | P6 |
+| 3 | Pass issued | Student | `event-service` + `pass-service` (P3, P4) | P4 | P6 |
+| 4 | QR code (wallet) | Student | `pass-service` (P4) | P4 | P6 |
+| 5 | Scan | Volunteer | `checkin-service` (P5) | P5 (manual entry) | P6 (camera) |
+| 6 | Verify (result) | Volunteer | `checkin-service` (P5) | P5 | P6 |
+| 7 | Mark attendance (dashboard) | Organizer | `checkin-service` (P5) | P5 (static counts) | P6, live updates in P7 |
+
+A "thin page" is a plain Thymeleaf page added in the same phase as its backend, just enough to see that phase working in a browser (see [§5](#5-roadmap-8-phases)).
 
 How to use it:
 
@@ -261,6 +263,8 @@ mitpass/
 
 Each phase is about the same size: one main backend capability plus its tests, and a **demo checkpoint** that can be shown on its own. Every phase leaves the system runnable. Task IDs in `log.md` are T03–T10 (one per phase).
 
+**Portal slices (P3–P5).** The backend phases each add a thin `web-portal` slice so their effects can be seen in a browser, not only in Swagger. A slice is plain Thymeleaf with minimal styling. It has no HTMX, camera, dark mode or polish. It still keeps tokens in the server-side session (the BFF rule in §3). P6 turns these slices into the full portal. The reasons, the rules every slice keeps, and each shortcut with its P6 replacement are in `docs/DECISIONS.md` D9. Shortcuts listed there are intended, not bugs.
+
 ```
 P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► P5 Scan+Verify ─► P6 MVC Portal ─► P7 Realtime+Offline ─► P8 Hardening+Showcase
 ```
@@ -318,9 +322,10 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 - [ ] `Idempotency-Key` header: stored with the response, so a retry returns the original result instead of creating a duplicate.
 - [ ] `libs/common-messaging`: **transactional outbox** (the business row and outbox row commit together) plus a relay that publishes to RabbitMQ.
 - [ ] **Concurrency test:** 500 parallel registrations for 100 seats → exactly 100 CONFIRMED, 400 WAITLISTED, `seats_taken == 100`. Also show the failing naive version for contrast.
+- [ ] **Portal slice** (rules and intended shortcuts: `docs/DECISIONS.md` D9): create `web-portal` (:8090, Spring MVC + Thymeleaf) with sign-up and login against `auth-service` (tokens in the server-side session; the user logs in again when the access token expires, automatic refresh comes in P6). Pages: event catalogue and event detail with seats left; register/cancel showing CONFIRMED, or WAITLISTED with the position; an organizer "My events" list with buttons for the allowed lifecycle transitions only.
 
 **Concepts:** transactional DB operations, locking strategies, state management, reliable messaging.
-**Exit criteria / demo:** the concurrency test runs live and the numbers are exact; a cancellation promotes waitlist #1 and the outbox row shows up in the RabbitMQ management UI.
+**Exit criteria / demo:** the concurrency test runs live and the numbers are exact; a cancellation promotes waitlist #1 and the outbox row shows up in the RabbitMQ management UI. In the portal: sign up, register for an event, cancel, and see a waitlisted student's status change to CONFIRMED.
 
 ---
 
@@ -337,9 +342,10 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 - [ ] Revocation: an organizer revokes a pass (→ `PassRevoked`); `GET /revocations?since=` gives scanners a delta feed.
 - [ ] Saga step: `EventStateChanged(CANCELLED)` → revoke all passes for that event.
 - [ ] Tests: JWS sign/verify round trip, a tampered payload fails, consumer idempotency (deliver the same message twice).
+- [ ] **Portal slice** (rules and intended shortcuts: `docs/DECISIONS.md` D9): a "My Passes" page listing each pass with its number, state and QR; a pass page whose live QR image reloads every 30 s; a PDF download link; an organizer registrations list with a revoke button.
 
 **Concepts:** QR generation, digital signatures, event-driven microservices, state management.
-**Exit criteria / demo:** register → the pass exists within about 1 s; decode the QR with any phone app → a JWS that verifies against the public JWKS; edit one character → verification fails.
+**Exit criteria / demo:** register → the pass exists within about 1 s; decode the QR with any phone app → a JWS that verifies against the public JWKS; edit one character → verification fails. In the portal: register → the pass appears in "My Passes" → the organizer revokes it → it shows REVOKED.
 
 ---
 
@@ -356,23 +362,25 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 - [ ] `AttendanceMarked` via the outbox; pass-service listens and marks single-entry passes as used.
 - [ ] Reports: per-event attendance %, CSV export, certificate eligibility (attended ≥ N sessions).
 - [ ] Tests: one test per result code, plus a double-scan race test.
+- [ ] **Portal slice** (rules and intended shortcuts: `docs/DECISIONS.md` D9): a volunteer scan page with a gate selector and a text field for a pass number or pasted QR token (no camera yet), and a result page showing the result code, message and color; an organizer attendance page with counts and the attendee list (reload to update) and the CSV export link.
 
 **Concepts:** QR verification, authorization at the domain level, transactional DB operations, state management.
-**Exit criteria / demo:** a `.http` / Postman collection runs every scenario and gets the expected code; the race test shows 1 accepted and N−1 `ALREADY_CHECKED_IN`.
+**Exit criteria / demo:** a `.http` / Postman collection runs every scenario and gets the expected code; the race test shows 1 accepted and N−1 `ALREADY_CHECKED_IN`. In the portal: enter a pass number → green ACCEPTED; enter it again → ALREADY_CHECKED_IN; the attendance page shows the new count.
 
 ---
 
 ### P6 — Web Portal (Spring MVC)
 
-**Goal:** a polished, server-rendered UI for all four roles, built with Spring MVC.
+**Goal:** turn the thin slices from P3–P5 into a polished, server-rendered UI for all four roles, built with Spring MVC.
 
-- [ ] Start from the [UI reference](#ui-reference) (screens 1–7) for flow and look. It's a guide, not a spec; adapt it where Thymeleaf/HTMX makes something simpler.
+- [ ] Restyle and complete the slice pages from the [UI reference](#ui-reference) (screens 1–7) for flow and look. It's a guide, not a spec; adapt it where Thymeleaf/HTMX makes something simpler.
+- [ ] Replace every slice shortcut in `docs/DECISIONS.md` D9. P6 isn't done while any of them is left.
 - [ ] `web-portal` as a **BFF**: form login against `auth-service`; tokens are kept in the server-side session and never reach the browser; RestClient calls through the gateway with automatic token refresh.
 - [ ] MVC fundamentals done properly: `@Controller` + `Model`, `@ModelAttribute` form objects, `BindingResult` errors shown inline, **Post/Redirect/Get**, flash messages, CSRF, a `HandlerInterceptor` for the current user, custom 403/404/500 pages, i18n message bundles.
 - [ ] Student: event catalogue with HTMX live search and filters, event detail, register/cancel, waitlist position; **"My Passes" wallet** with glassmorphism pass cards, a rotating QR with a countdown ring, PDF download.
 - [ ] Organizer: event create/edit form (sessions as a dynamic sub-form), lifecycle buttons that show only the allowed transitions, registrations table, revoke pass, volunteer assignment.
 - [ ] Volunteer: **full-screen camera scanner** (`html5-qrcode`) with a gate selector, a large green/red flash, sound and vibration, the attendee's name on success, and a manual-entry tab.
-- [ ] Admin: user and role management.
+- [ ] Admin: user and role management, and a system health overview (each service's status from its actuator health endpoint).
 - [ ] Dark mode, responsive (the scanner is phone-first); HTTPS dev cert (mkcert) so phone cameras work over the LAN.
 
 **Concepts:** Spring MVC (the main showcase), authentication and session handling, authorization in views (`sec:authorize`).

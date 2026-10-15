@@ -21,13 +21,13 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-11 (Claude Opus 5.5) — **Phase 2 done (T04)** on branch `phase2` (uncommitted; the post-phase commit is the owner's call). auth-service + common-security + gateway edge security; 158 tests green; security matrix 205/205; live exit demo 36/36. Next: post-phase commit (owner), push/merge as the owner decides, then Phase 3 (T05): write `docs/plans/phase-3.md` first.
+* **Last updated:** 2026-10-11 (Claude Opus 5.5) — **Phase 2 done (T04)** on branch `phase2` (uncommitted; the post-phase commit is the owner's call). auth-service + common-security + gateway edge security; 158 tests green; security matrix 205/205; live exit demo 36/36. Next: post-phase commit (owner), push/merge as the owner decides, then Phase 3 (T05): write `docs/plans/phase-3.md` first. Since 2026-10-15 (T21) P3–P5 each also include a thin `web-portal` slice (PROJECT.md §5). The shortcuts are intended, and P6 replaces them (`docs/DECISIONS.md` D9).
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
 * **Architecture (planned):** Web Portal (Spring MVC + Thymeleaf) → API Gateway (:8080) → auth / event / pass / checkin / notification services, Eureka discovery, PostgreSQL (database per service), RabbitMQ (domain events via transactional outbox), Redis.
 * **Stack (pinned, see `docs/DECISIONS.md`):** Java 21 (project-local Temurin in `.tools/jdk-21`), Spring Boot 4.1.1, Spring Cloud 2025.1.3, Maven 3.9.16 through the wrapper, Docker Desktop 4.94.0.
-* **Built so far:** `libs/common-web` (ProblemDetail errors, PageResponse, correlation ids), `libs/common-security` (JWT resource server via JWKS/Eureka, roles, `CurrentUser`, 401/403 bodies), `libs/security-test-support` (test tokens, `SecurityMatrix`), `platform/discovery-server` (:8761), `platform/api-gateway` (:8080; JWT pre-check, CORS, Swagger UI), `services/auth-service` (:8081; sign-up/verify/login/refresh/JWKS/users), `services/event-service` (:8082; catalogue, ownership, gates, volunteers). Conventions: `docs/DECISIONS.md` D6 (REST), D7 (security), D8 (demo accounts, password `Passw0rd!`).
+* **Built so far:** `libs/common-web` (ProblemDetail errors, PageResponse, correlation ids), `libs/common-security` (JWT resource server via JWKS/Eureka, roles, `CurrentUser`, 401/403 bodies), `libs/security-test-support` (test tokens, `SecurityMatrix`), `platform/discovery-server` (:8761), `platform/api-gateway` (:8080; JWT pre-check, CORS, Swagger UI), `services/auth-service` (:8081; sign-up/verify/login/refresh/JWKS/users), `services/event-service` (:8082; catalogue, ownership, gates, volunteers). Conventions: `docs/DECISIONS.md` D6 (REST), D7 (security), D8 (demo accounts, password `Passw0rd!`), D9 (portal slices).
 * **Commands** (full walkthrough: `README.md` "Quick start"):
   * First setup on a clean clone: `powershell -ExecutionPolicy Bypass -File scripts\setup-jdk.ps1`
   * Build + all tests: `./mvnw verify` (Git Bash) / `.\mvnw.cmd verify` (PowerShell); `./mvnw spotless:apply` fixes formatting. With `JAVA_HOME` unset, the wrapper uses `.tools/jdk-21`. The system `java` on PATH is **Java 8**, so don't call `java` directly; use `.tools/jdk-21/bin/java` or first run `. .\scripts\env.ps1` / `source scripts/env.sh`.
@@ -91,6 +91,9 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T18: Safely stop MITPass services, infrastructure, and Docker Desktop
 * [x] T19: Fix CI failure on PR #1 (phase2 → main): order-dependent venue count in event-service test
 * [x] T20: Archive the CI error log under `archive/` + AGENTS.md skip rule
+* [x] T21: PROJECT.md: thin web-portal slice in P3–P5 so each backend phase is visible in a browser; P6 becomes the full portal; schedule the admin health overview
+* [x] T22: AGENTS.md "Workflow for any change": owner's workflow adapted to MITPass
+* [x] T23: AGENTS.md "Parts to keep in mind" + "Working rules", adapted to MITPass
 
 *Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -108,6 +111,38 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-15 — Claude (Opus 5.5) — T23: parts table + working rules in AGENTS.md
+
+* **Task:** T23 — add the owner's "Parts to keep in mind" and "Working rules", adapted from another project
+* **Status:** DONE
+* **Files:** `AGENTS.md` (two sections after "Workflow for any change"), `log.md`
+* **Details:**
+  * The parts table now lists MITPass parts at their real paths (checked on disk): build/POM, libs, infra, gateway/discovery, Flyway migrations, REST APIs, auth, demo seeds, tests, docs. It also has rows for parts later phases build, marked (P3+)/(P4+): domain events, state machines, QR signing, web-portal.
+  * Adapted rules: "models stay loadable forever" → published contracts only grow (migrations, REST, events, JWT claims, QR payloads). `configs/*.yaml` → `mitpass.*` in `application.yml` with `@ConfigurationProperties`. Physics sanity → `SecurityMatrixTest` / concurrency test. "No pygame in sim" → database-per-service boundary.
+  * Dropped as not applicable: queue, backup, sandbox glossary, demo FPS, `assets/LICENSES.md`.
+* **Notes / Errors:** The `init.sql` note (runs only on an empty volume) comes from the file's own header comment.
+
+### 2026-10-15 — Claude (Opus 5.5) — T22: agent workflow in AGENTS.md
+
+* **Task:** T22 — add the owner's 9-step "Workflow for any change" to AGENTS.md, adapted from another project
+* **Status:** DONE
+* **Files:** `AGENTS.md` (new section before "Dependencies"), `log.md`
+* **Details:** Adapted for MITPass: PROJECT_CONTEXT → `PROJECT.md` plus `docs/DECISIONS.md` (in place of a §16 decisions log) and `docs/plans/phase-N.md`. Python/pytest checks → `./mvnw -pl <module> -am verify`, then `./mvnw verify`, plus a `SecurityMatrixTest` row for new endpoints. "Logic in `racer/`" → business rules in the service domain/service layer and shared code in `libs/`. Doc list → README, PROJECT.md, phase plan as-built, `.http` files, security matrix, DECISIONS. Removed: the training-run steps and the clean-tree rule (D12), which don't apply here.
+* **Notes / Errors:** The original says "commit with a Conventional Commits message". Step 8 points to the existing *Git & Commits* rules instead (owner permission per commit; `Phase N:` / `chore:` subjects), so the two sections can't disagree.
+
+### 2026-10-15 — Claude (Opus 5.5) — T21: portal slices in P3–P5
+
+* **Task:** T21 — owner asked for a thin UI slice in each phase up to P6, just enough to see each backend phase's effects in a browser
+* **Status:** DONE
+* **Files:** `PROJECT.md` (§2 UI reference table, §5 intro, P3/P4/P5 "Portal slice" items and exit criteria, P6 goal and admin item), `log.md`
+* **Details:**
+  * §5 defines a "portal slice": plain Thymeleaf, minimal styling, no HTMX/camera/dark mode, tokens still kept server-side (BFF rule).
+  * P3 creates `web-portal` (:8090): sign-up/login (re-login on expiry; refresh stays in P6), catalogue + detail, register/cancel with waitlist position, organizer lifecycle buttons. P4: "My Passes", live QR reloading every 30 s, PDF link, organizer revoke. P5: volunteer manual-entry scan + result page, organizer attendance counts + CSV link.
+  * UI reference table now has "Thin page in" and "Finished in" columns. P6 goal reworded to polish the slices.
+  * P6 Admin item now includes the system health overview that §2 listed but no phase scheduled.
+* **Follow-up (same day):** the owner wants later sessions to understand why the slices are rough and to finish them properly in P6. Added `docs/DECISIONS.md` **D9**: the reason, the four rules every slice keeps (BFF tokens, CSRF, PRG, calls via gateway), and a table of each intended shortcut with its P6 replacement. PROJECT.md §5 and each slice item point to D9. P6 gained "replace every D9 shortcut" as a done condition.
+* **Notes / Errors:** Docs only, no code. Left unchanged on purpose: `docs/plans/phase-2.md` (a finished plan) and code comments in `platform/api-gateway` and `services/auth-service` that say "P6 portal". They are still true because P6 finishes the portal. The P3 plan (`docs/plans/phase-3.md`) must include the P3 slice.
 
 ### 2026-10-11 — Claude (Opus 5.5) — T19/T20: CI fix + error-log archive rule
 
