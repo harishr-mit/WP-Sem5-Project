@@ -181,3 +181,36 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 - **Startup.** The relay opens one connection when it starts, so the exchange (and the dev tap queue) exist before the first event (as built; Spring AMQP otherwise declares on first use).
 
 **Consequences.** Consumers (P4+) must be idempotent on `messageId` and tolerate reordering across aggregates. Tests switch the relay off unless they test messaging.
+
+---
+
+## D12: Passes, pass tokens and their keys
+
+*2026-10-16 · accepted (owner answers to `docs/plans/phase-4.md` §19; details in the plan §4–§7). Built in Phase 4*
+
+**Decision.**
+- **State machine (owner).** ISSUED → ACTIVE → EXPIRED; ISSUED → EXPIRED; ISSUED/ACTIVE → REVOKED (enum table + `pass_history`, as D10). **ACTIVE = the live code is unlocked**, `mitpass.passes.code-unlock-before-start` (2 h 30 min = 2 h before doors open) before `startsAt`, as in the UI mockup's wallet. A pass issued after that time goes straight to ACTIVE in the issuing transaction. An ACTIVE pass stays ACTIVE if the event is rescheduled later or its LIVE is undone.
+- **Pass number.** `<EVENTCODE>-<NNNNNN>-<C>`: per-event 6-digit sequence plus a Luhn mod 10 check digit over the whole number, with letters expanded to two digits as in ISIN (A = 10 … Z = 35).
+- **Token.** Compact JWS, **ES256** (P-256), header `{alg, kid, typ: "mitpass-pass+jws"}`, claims `iss = mitpass-pass`, `pid`, `eid`, `sub`, `iat`, `exp`, `jti`, `knd` (`L` live / `S` static); `sid` reserved. A contract with scanners (P5) and the offline PWA (P7): claims are only ever added.
+- **Lifetimes.** Live token 45 s, refreshed every 30 s, only for ACTIVE passes. Static token (PDF, email) valid until `endsAt + 2 h`, only if the event's `staticQrAllowed` (event-service, default true).
+- **Keys.** Separate from auth's: pass-service generates ES256 keys, stores the private half encrypted with the shared `KeyEncryptor` (now in `libs/common-security`), publishes `/.well-known/pass-jwks.json`, rotates on `POST /api/passes/keys/rotate` (ADMIN). A retired key stays published until the longest token it signed (`max_token_exp`) has expired, plus 5 min.
+- **Access.** QR images, tokens and the PDF go to the holder only; the event's organizer and ADMIN see and revoke passes; the revocation feed (`GET /api/revocations?since=<cursor>`) is for VOLUNTEER, ORGANIZER and ADMIN.
+- **Event data.** pass-service keeps event times and status (`event_ref`) from the messages; venue, colours, `staticQrAllowed` and `organizerId` come from `GET /api/events/{id}` with a 60 s cache.
+
+**Consequences.** P5 verifies with the pass JWK set, checks `knd` and the revocation list, and needs the event LIVE. Live codes for demo events with far-off dates stay locked: demos create an event starting soon (or override the config).
+
+---
+
+## D13: Consumers: inbox queue, idempotency, reordering, minimal DLQ
+
+*2026-10-16 · accepted (owner answers to `docs/plans/phase-4.md` §19). Built in Phase 4; **dead-letter handling completed in P7***
+
+**Decision.**
+- **Queue per consuming service.** Durable `<service>.inbox` bound to the routing keys it needs on `mitpass.events`; one listener thread (in publish order). The body is read as the D11 envelope by `common-messaging`'s `IdempotentConsumer`, not through a message converter.
+- **Idempotency.** `processed_message (consumer, message_id)`, inserted with `ON CONFLICT DO NOTHING` in the handler's transaction; a duplicate is skipped and acknowledged. Business uniqueness backs it up (one pass per registration). Rows are kept 30 days.
+- **Reordering.** Tombstones for things cancelled before they existed; state messages apply only if newer (`changedAt`).
+- **Correlation.** The listener copies the message's `correlationId` into the MDC, so the consumer's own outbox events carry it on.
+- **Minimal DLQ (owner: pulled forward from P7, to be completed there).** 3 attempts with backoff, then reject without requeue → `mitpass.events.dlx` → `<service>.inbox.dlq`. Helper in `common-messaging`. **P7 completes it:** DLQs for every consumer, inspect/replay tooling and an alert or health signal when a DLQ isn't empty.
+- **`EventRescheduled` (owner).** event-service publishes it when `startsAt` / `endsAt` change on a non-DRAFT event; pass-service moves its unlock and expiry times.
+
+**Consequences.** checkin-service (P5) and notification-service (P7) declare their inboxes with the same helper. Until P7, a dead-lettered message just sits in the DLQ (visible in the RabbitMQ UI) and is replayed by hand.

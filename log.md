@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-16 (Claude Opus 5.5) — **Phase 3 done (T05)** on branch `phase3` (uncommitted; the post-phase commit is the owner's call). Event lifecycle + scheduler, registrations with overbooking-proof seat claims, waitlist promotion, eligibility, Idempotency-Key, `libs/common-messaging` outbox → RabbitMQ, `UserRegistered`, `web-portal` slice (:8090). 285 tests green; security matrix 253/253; live exit demo 56 checks. Next: post-phase commit (owner), then Phase 4 (T06): write `docs/plans/phase-4.md` first. Parked questions for after P8: `docs/REVIEW-LATER.md`. Since 2026-10-15 (T21) P3–P5 each also include a thin `web-portal` slice (PROJECT.md §5). The shortcuts are intended, and P6 replaces them (`docs/DECISIONS.md` D9).
+* **Last updated:** 2026-10-16 (Claude Opus 5.5) — **Phase 4 planned (T27)** on branch `phase4` (from `main` after PR #2; Phase 3 checked and merged by the owner). Plan: `docs/plans/phase-4.md`; owner answered its §19 (Q1 ACTIVE = live code unlocks 2 h before doors open; Q2 minimal DLQ now, **completed in P7**; Q3 new `EventRescheduled`), recorded in PROJECT.md §3/§P4/§P7 and DECISIONS D12/D13 (T06.1 done). Next: the owner commits the planning docs and says go → T06.2. Phase 3 (T05) summary: event lifecycle + scheduler, overbooking-proof seat claims, waitlist promotion, eligibility, Idempotency-Key, outbox → RabbitMQ, `web-portal` slice (:8090); 285 tests green; security matrix 253/253. Parked questions for after P8: `docs/REVIEW-LATER.md`. Since 2026-10-15 (T21) P3–P5 each also include a thin `web-portal` slice (PROJECT.md §5). The shortcuts are intended, and P6 replaces them (`docs/DECISIONS.md` D9).
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
@@ -82,7 +82,20 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T05.10: web-portal skeleton + auth (form login via auth-service, session tokens, expiry, sign-up page)
   * [x] T05.11: web-portal pages: catalogue, detail, register/cancel, my registrations, organizer transitions
   * [x] T05.12: Exit demo + docs (phase-3.http, README, PROJECT ticks, DECISIONS D10/D11, as-built)
-* [ ] T06: **Phase 4** — Pass issuance & QR generation (PROJECT.md §P4)
+* [ ] T06: **Phase 4** — Pass issuance & QR generation (PROJECT.md §P4; plan and "done when" checks: `docs/plans/phase-4.md` §17). Plan written and answered 2026-10-16 (plan §19, D12/D13); waiting for the owner's pre-phase commit before T06.2
+  * [x] T06.1: Owner decisions recorded (PROJECT.md §3/§P4, DECISIONS D12/D13 drafts) before code
+  * [ ] T06.2: common-security: `KeyEncryptor` moved from auth-service (format unchanged)
+  * [ ] T06.3: common-messaging consumer side: envelope reader, IdempotentConsumer, processed_message DDL, dead-letter topology, PassIssued/PassRevoked/EventRescheduled
+  * [ ] T06.4: event-service: V7 (static_qr_allowed, pass_color), contrast check, EventRescheduled, seed
+  * [ ] T06.5: pass-service skeleton (:8083), V1, gateway routes + Swagger + public JWKS path
+  * [ ] T06.6: Domain: PassStatus state machine, PassNumber (Luhn, ISIN-style letters), history, EventRef
+  * [ ] T06.7: ES256 keys (encrypted, rotation, max_token_exp), pass JWKS, PassTokenService, `scripts/VerifyPassToken.java`
+  * [ ] T06.8: Consumers: inbox queue + DLQ, issue/revoke/saga/expire/reschedule, tombstones, outbox
+  * [ ] T06.9: Pass lifecycle scheduler (unlock, expiry)
+  * [ ] T06.10: ZXing QR (PNG/SVG, level H, logo, colours), EventCatalogClient, live/static endpoints
+  * [ ] T06.11: PDF ticket (OpenPDF)
+  * [ ] T06.12: Read + revoke API, revocation feed, key rotation, security matrix + docs
+  * [ ] T06.13: Portal slice + exit demo + docs
 * [ ] T07: **Phase 5** — Scan, verify & attendance (PROJECT.md §P5)
 * [ ] T08: **Phase 6** — Web portal, Spring MVC (PROJECT.md §P6)
 * [ ] T09: **Phase 7** — Real-time dashboard, notifications & offline scanning (PROJECT.md §P7)
@@ -109,6 +122,8 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T24: Plan Phase 3 → `docs/plans/phase-3.md` + T05 sub-tasks (no code)
 * [x] T25: `docs/REVIEW-LATER.md` (parked questions: RL1 waitlist after closing, RL2 manual COMPLETED, RL3 undo LIVE after check-ins) + PROJECT.md "After P8" line
 * [ ] T26: **After P8:** go through `docs/REVIEW-LATER.md` with the owner, item by item
+* [x] T27: Plan Phase 4 → `docs/plans/phase-4.md` + T06 sub-tasks (no code)
+* [x] T28: `docs/REVIEW-LATER.md` RL4: check the dead-letter handling end to end after P8 (owner request)
 
 *Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -126,6 +141,33 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-16 — Claude (Opus 5.5) — T28: RL4 (check the DLQ after P8)
+
+* **Task:** T28 — owner asked to add a post-P8 check of the DLQ to the review-for-later doc
+* **Status:** DONE
+* **Files:** `docs/REVIEW-LATER.md` (new RL4), `log.md`
+* **Details:** RL4 lists what to verify after P8: DLQ per consumer, poison message lands in it, inspect/replay (idempotent), non-empty DLQ visible in health/Grafana, gaps fixed or accepted. Links PROJECT.md §P4/§P7 and D13.
+
+### 2026-10-16 — Claude (Opus 5.5) — T06.1: Phase 4 owner decisions recorded
+
+* **Task:** T06.1 — record the owner's answers to `docs/plans/phase-4.md` §19 before any code
+* **Status:** DONE
+* **Files:** `PROJECT.md` (§3 services table + `EventRescheduled`; §3 Pass row: ACTIVE = code unlock, ISSUED → EXPIRED; §P4 two new bullets: minimal DLQ marked "completed in P7", `EventRescheduled` + per-event pass settings; §P7 new bullet "complete the dead-letter handling started in P4"); `docs/DECISIONS.md` (new D12 passes/tokens/keys, D13 consumers + minimal DLQ); `docs/plans/phase-4.md` (status line, §2 heading and DLQ row, §19 resolved); `log.md`
+* **Details:** Answers: Q1 unlock before start (recommended), Q2 minimal DLQ now, "clearly mark that it is to be fully completed at P7" (done in PROJECT.md §P4/§P7, D13 title and body, plan §2/§19), Q3 `EventRescheduled` (recommended). Pre-phase commit: the owner will commit the docs and then tell the agent to start; no commit made by the agent.
+* **Notes / Errors:** D1's "Pinned in the root POM" line gets ZXing 3.5.4 / OpenPDF 3.0.5 when T06.5 actually pins them. Nothing running.
+
+### 2026-10-16 — Claude (Opus 5.5) — T27: Phase 4 planned
+
+* **Task:** T27 — owner asked to plan and prepare Phase 4 (no code)
+* **Status:** DONE (plan awaits the owner's answers to §19)
+* **Files:** created `docs/plans/phase-4.md`; edited `log.md` (status, T06.1–T06.13, T27, this entry), `PROJECT.md` (§P4 goal line links the plan)
+* **Details:**
+  * Read: PROJECT.md, DECISIONS D1–D11, phase-3 plan + as-built, REVIEW-LATER, common-messaging (publisher, relay, contracts), auth-service key code (`SigningKeyService`, `KeyEncryptor`), gateway config, infra (`pass_db` already exists, so no `down -v`), event-service DTOs (venue has `mapUrl`; event codes `^[A-Z0-9]{3,16}$`).
+  * Maven Central checked 2026-10-16: ZXing 3.5.4 and OpenPDF 3.0.5 are the latest; neither is in the Boot BOM, so both get pinned in the root POM (D1). Plan uses ZXing `core` only (javase at test scope).
+  * UI mockup decoded into the session scratchpad (not the repo). Screen 3 "Pass issued" (pass number `TF26-000042-2`, timeline) and screen 4 "My passes": **"Code unlocks … The scannable code appears 2 hours before doors open"**. That detail isn't in PROJECT.md; the plan uses it as the meaning of ISSUED → ACTIVE (owner question Q1).
+  * Plan: pass-service :8083 with ES256 keys (encrypted like auth's; retired keys published until their longest token expires), JWS claims `iss, pid, eid, sub, iat, exp, jti, knd`, live token 45 s / static until end + 2 h, per-event `staticQrAllowed` + `passColor` in event-service (V7), idempotent consumer (`processed_message` + `UNIQUE registration_id`), reordering tombstones, saga revoke on CANCELLED, cursor revocation feed, scheduler for unlock/expiry, ZXing PNG/SVG with a drawn logo, OpenPDF A6 ticket, JDK-only `scripts/VerifyPassToken.java`, portal pages for passes and organizer revoke. 12 exit criteria, 13 steps.
+* **Notes / Errors:** Defaults the owner may change (plan §2/§19): Q1 ACTIVE = code unlock + new ISSUED → EXPIRED edge; Q2 minimal DLQ pulled forward from P7; Q3 new `EventRescheduled` contract. PROJECT.md §3/§P4 are left as they are until the owner answers (T06.1). Nothing started or left running.
 
 ### 2026-10-16 — Claude (Opus 5.5) — T05.10–T05.12: web portal, exit demo, docs; Phase 3 done
 

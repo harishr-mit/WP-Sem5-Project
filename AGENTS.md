@@ -16,8 +16,9 @@ The project is **MITPass** (College Event Pass System). The plan is in `PROJECT.
 5. **Check.** For each module you touched, run `./mvnw -pl <module> -am verify`. Then run the full suite with `./mvnw verify`. Run `./mvnw spotless:apply` first if formatting fails. A new or changed endpoint also needs its row in that service's `SecurityMatrixTest` (D7).
 6. **Review** the diff before committing, and fix what the review finds.
 7. **Document** as in *End of Run Behavior*: `README.md` quick start, `PROJECT.md` ticks and status, the phase plan's as-built section, `docs/http/phase-N.http` demo requests, `docs/security-matrix.md`, and `docs/DECISIONS.md`. Finally, the parts to keep in mind section of @AGENTS.md
-8. **Commit** only as *Git & Commits* allows (owner permission for each commit).
-9. **Finish** as in *End of Run Behavior*.
+8. **Review Later** as in `dock/REVIEW-LATER.md` is to be updated with any decisions to be reviewed by owner later.
+9. **Commit** only as *Git & Commits* allows (owner permission for each commit).
+10. **Finish** as in *End of Run Behavior*.
 
 ## Parts to keep in mind
 Rows marked (P3+) and so on describe parts that don't exist yet. They apply once that phase builds them.

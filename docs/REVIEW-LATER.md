@@ -40,3 +40,13 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 **Built for now.** P3 allows the undo at any time while LIVE (there is no attendance yet). To stop the scheduler from making the event LIVE again at its next run, the organizer must move `startsAt` later; otherwise it goes LIVE again within one scheduler interval.
 
 **Options.** (a) Refuse the undo once any check-in exists (409). (b) Allow it and keep the attendance rows. (c) Allow it only within N minutes of going LIVE.
+
+## RL4: Check the dead-letter handling end to end
+
+*2026-10-16 · OPEN · from: owner, after the Phase 4 plan (Q2: minimal DLQ in P4, completed in P7)*
+
+**Question.** P4 pulls a minimal dead-letter queue forward for pass-service (3 retries, then `pass-service.inbox.dlq`), and P7 is meant to complete it: DLQs for every consumer, inspect/replay tooling, and an alert or health signal when a DLQ isn't empty (PROJECT.md §P4, §P7; `docs/DECISIONS.md` D13). After P8, check with the owner that this really happened.
+
+**Built for now.** P4: pass-service's inbox has a DLQ; dead-lettered messages sit there (visible in the RabbitMQ UI) and are replayed by hand.
+
+**To check.** (a) Every consumer (pass-, checkin-, notification-service) has a DLQ declared with the `common-messaging` helper. (b) A poison message ends up in its DLQ after the retries, not lost and not looping. (c) Dead-lettered messages can be inspected and replayed, and a replay is still idempotent. (d) A non-empty DLQ shows up in health or Grafana. (e) Anything still missing is fixed or consciously accepted.
