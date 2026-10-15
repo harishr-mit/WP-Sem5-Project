@@ -19,4 +19,6 @@ public record EventSummaryResponse(
         Instant endsAt,
         EventStatus status,
         UUID organizerId,
-        String organizerName) {}
+        String organizerName,
+        int seatsTaken,
+        int seatsLeft) {}

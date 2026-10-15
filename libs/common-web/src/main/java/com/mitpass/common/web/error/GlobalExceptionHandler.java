@@ -183,6 +183,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         HttpHeaders headers = new HttpHeaders();
         ex.getHeaders().forEach(headers::set);
         ProblemDetail body = problem(ex.getStatus(), ex.getType(), ex.getTitle(), ex.getMessage());
+        ex.getProperties().forEach(body::setProperty);
         return handleExceptionInternal(ex, body, headers, ex.getStatus(), request);
     }
 

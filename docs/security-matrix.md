@@ -14,7 +14,7 @@ endpoint get 401, logged-in callers without the right role get 403.
 The gateway in front of both adds its own pre-check (no token or a bad token → 401 at the edge, public paths pass):
 see `platform/api-gateway/.../EdgeSecurityTest`.
 
-Last generated: 2026-10-11 (Phase 2), 205 / 205 cells as expected.
+Last generated: 2026-10-16 (Phase 3), 253 / 253 cells as expected (auth-service 85, event-service 168).
 
 ### auth-service
 
@@ -48,7 +48,7 @@ Last generated: 2026-10-11 (Phase 2), 205 / 205 cells as expected.
 | `GET /api/events/{id}` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
 | `POST /api/events` | organizer (owner), organizer (other), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 201 | ✅ 201 |
 | `PUT /api/events/{id}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
-| `DELETE /api/events/{id}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 204 | ✅ 403 | ✅ 204 |
+| `DELETE /api/events/{id}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 409 | ✅ 403 | ✅ 409 |
 | `GET /api/events/{id}/sessions` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
 | `POST /api/events/{id}/sessions` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 403 | ✅ 201 |
 | `PUT /api/events/{id}/sessions/{sid}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
@@ -64,5 +64,13 @@ Last generated: 2026-10-11 (Phase 2), 205 / 205 cells as expected.
 | `POST /api/events/{id}/volunteers` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 403 | ✅ 201 |
 | `DELETE /api/events/{id}/volunteers/{vid}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 204 | ✅ 403 | ✅ 204 |
 | `GET /api/volunteers/me/assignments` | volunteer | ✅ 401 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 |
+| `POST /api/events/{id}/transitions` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
+| `GET /api/events/{id}/history` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
+| `GET /api/events/{id}/registrations` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
+| `GET /api/events/{id}/eligibility` | any logged-in user | ✅ 401 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `POST /api/registrations` | student, volunteer | ✅ 401 | ✅ 409 | ✅ 409 | ✅ 403 | ✅ 403 | ✅ 403 |
+| `GET /api/registrations/me` | any logged-in user | ✅ 401 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `GET /api/registrations/{id}` | student, organizer (owner), admin | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
+| `POST /api/registrations/{id}/cancel` | student, organizer (owner), admin | ✅ 401 | ✅ 409 | ✅ 403 | ✅ 409 | ✅ 403 | ✅ 409 |
 
-120 / 120 cells as expected.
+168 / 168 cells as expected.

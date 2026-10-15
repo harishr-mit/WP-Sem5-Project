@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Create account')}"></head>
+<body>
+<header th:replace="~{fragments :: header}"></header>
+<main class="narrow">
+    <h1>Create account</h1>
+    <div th:replace="~{fragments :: flash}"></div>
+    <p class="hint">Use your <code>register-number@student.annauniv.edu</code> address or a Gmail address.</p>
+
+    <form th:action="@{/signup}" th:object="${form}" method="post" class="stack" novalidate>
+        <div class="flash err" th:if="${#fields.hasGlobalErrors()}">
+            <p th:each="e : ${#fields.globalErrors()}" th:text="${e}">Error</p>
+        </div>
+
+        <label>Full name
+            <input type="text" th:field="*{fullName}" required>
+            <span class="field-error" th:if="${#fields.hasErrors('fullName')}" th:errors="*{fullName}">error</span>
+        </label>
+        <label>College email
+            <input type="email" th:field="*{email}" required>
+            <span class="field-error" th:if="${#fields.hasErrors('email')}" th:errors="*{email}">error</span>
+        </label>
+        <label>Department
+            <select th:field="*{department}" required>
+                <option value="">Choose…</option>
+                <option th:each="d : ${departments}" th:value="${d.code()}" th:text="${d.name()}">CSE</option>
+            </select>
+            <span class="field-error" th:if="${#fields.hasErrors('department')}" th:errors="*{department}">error</span>
+        </label>
+        <label>Year of study
+            <select th:field="*{year}">
+                <option value="">—</option>
+                <option th:each="y : ${#numbers.sequence(1, 5)}" th:value="${y}" th:text="${y}">1</option>
+            </select>
+            <span class="field-error" th:if="${#fields.hasErrors('year')}" th:errors="*{year}">error</span>
+        </label>
+        <label>Register number <small>(optional for Gmail)</small>
+            <input type="text" th:field="*{registerNumber}" inputmode="numeric">
+            <span class="field-error" th:if="${#fields.hasErrors('registerNumber')}" th:errors="*{registerNumber}">error</span>
+        </label>
+        <label>Password
+            <input type="password" th:field="*{password}" required>
+            <span class="field-error" th:if="${#fields.hasErrors('password')}" th:errors="*{password}">error</span>
+        </label>
+        <button type="submit">Create account</button>
+    </form>
+    <p>Already have an account? <a th:href="@{/login}">Log in</a>.</p>
+</main>
+</body>
+</html>

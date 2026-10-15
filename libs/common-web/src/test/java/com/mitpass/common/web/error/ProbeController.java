@@ -51,6 +51,15 @@ class ProbeController {
                         "Account locked",
                         "Too many failed logins",
                         Map.of(HttpHeaders.RETRY_AFTER, "900"));
+            case "transition" -> new IllegalTransitionException("DRAFT", "LIVE", java.util.List.of("PUBLISHED"));
+            case "extended" ->
+                new ProblemException(
+                        HttpStatus.UNPROCESSABLE_CONTENT,
+                        ProblemTypes.of("not-eligible"),
+                        "Not eligible",
+                        "You can't register for this event",
+                        Map.of(),
+                        Map.of("reasons", java.util.List.of("Open to CSE only")));
             default -> new IllegalStateException("secret internal detail");
         };
     }

@@ -40,6 +40,7 @@ public class SessionService {
     @Transactional
     public SessionResponse add(long eventId, SessionRequest request) {
         Event event = events.findDetailedById(eventId).orElseThrow(() -> NotFoundException.of("Event", eventId));
+        CatalogRules.requireEditable(event);
         CatalogRules.requireInsideEvent(event, request.title(), request.startsAt(), request.endsAt());
         boolean clash =
                 event.getSessions().stream().anyMatch(s -> s.getStartsAt().equals(request.startsAt()));
@@ -56,6 +57,7 @@ public class SessionService {
     @Transactional
     public SessionResponse update(long eventId, long sessionId, SessionRequest request) {
         EventSession session = load(eventId, sessionId);
+        CatalogRules.requireEditable(session.getEvent());
         CatalogRules.requireInsideEvent(session.getEvent(), request.title(), request.startsAt(), request.endsAt());
         session.setTitle(request.title());
         session.setStartsAt(request.startsAt());
@@ -65,7 +67,9 @@ public class SessionService {
 
     @Transactional
     public void delete(long eventId, long sessionId) {
-        sessions.delete(load(eventId, sessionId));
+        EventSession session = load(eventId, sessionId);
+        CatalogRules.requireEditable(session.getEvent());
+        sessions.delete(session);
     }
 
     private EventSession load(long eventId, long sessionId) {

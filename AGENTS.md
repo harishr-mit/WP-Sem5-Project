@@ -37,7 +37,7 @@ Rows marked (P3+) and so on describe parts that don't exist yet. They apply once
 | Web portal (P3+) | `web-portal` | tokens never reach the browser (BFF); D9 slice rules until P6; the UI reference (`PROJECT.md` §2) |
 | Demo accounts | `db/seed` in auth- and event-service | fixed ids shared by both seeds (D8); change them together |
 | Tests | `src/test` in each module | tests for new behaviour; the full suite passes before a commit |
-| Docs | `PROJECT.md`, `docs/DECISIONS.md`, README, `log.md`, `docs/plans/`, `docs/http/`, `docs/security-matrix.md` | `PROJECT.md` first, then everything else that states the old behaviour |
+| Docs | `PROJECT.md`, `docs/DECISIONS.md`, README, `log.md`, `docs/plans/`, `docs/http/`, `docs/security-matrix.md`, `docs/REVIEW-LATER.md` (questions parked for the owner, reviewed after P8) | `PROJECT.md` first, then everything else that states the old behaviour |
 
 ## Working rules
 - Follow `PROJECT.md`. If a task conflicts with it, say so before coding, and update the file once the owner agrees.

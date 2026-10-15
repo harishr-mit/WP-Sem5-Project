@@ -1,7 +1,10 @@
 package com.mitpass.event.domain;
 
+import com.mitpass.common.web.state.LifecycleState;
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -18,7 +21,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * Fetch strategy is explicit: both {@code @ManyToOne}s are LAZY (JPA's default would be EAGER) and {@code sessions} is
@@ -54,6 +61,13 @@ public class Event extends AuditableEntity {
     @Column(nullable = false)
     private int capacity;
 
+    /**
+     * Seats held by CONFIRMED registrations. Read-only here: only the conditional UPDATEs in {@code EventRepository}
+     * change it, so an organizer's edit (a normal entity save) can never overwrite it with a stale value (D10).
+     */
+    @Column(insertable = false, updatable = false)
+    private int seatsTaken;
+
     @Column(nullable = false)
     private Instant startsAt;
 
@@ -67,6 +81,20 @@ public class Event extends AuditableEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 24)
     private EventStatus status = EventStatus.DRAFT;
+
+    /** Lowest year of study allowed to register; {@code null} = no lower limit. */
+    @JdbcTypeCode(SqlTypes.SMALLINT)
+    private Integer minYear;
+
+    /** Highest year of study allowed to register; {@code null} = no upper limit. */
+    @JdbcTypeCode(SqlTypes.SMALLINT)
+    private Integer maxYear;
+
+    /** Department codes allowed to register; empty = every department. */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "event_eligible_department", joinColumns = @JoinColumn(name = "event_id"))
+    @Column(name = "department_code", length = 16)
+    private Set<String> eligibleDepartments = new TreeSet<>();
 
     /** The organizer who created the event (auth-service user id); only they and admins may change it. */
     @Column(nullable = false, updatable = false)
@@ -93,6 +121,15 @@ public class Event extends AuditableEntity {
     /** True when {@code [from, to]} lies inside this event's own time window. */
     public boolean covers(Instant from, Instant to) {
         return !from.isBefore(startsAt) && !to.isAfter(endsAt);
+    }
+
+    /**
+     * The only way to change the status (docs/DECISIONS.md D10): throws {@code IllegalTransitionException} (409) unless
+     * the table allows the move and {@code allowedForCaller} contains it.
+     */
+    public void moveTo(EventStatus target, Set<EventStatus> allowedForCaller) {
+        LifecycleState.require(status, target, allowedForCaller);
+        this.status = target;
     }
 
     public void assignOrganizer(UUID organizerId, String organizerName) {
@@ -168,6 +205,19 @@ public class Event extends AuditableEntity {
         this.capacity = capacity;
     }
 
+    public int getSeatsTaken() {
+        return seatsTaken;
+    }
+
+    public int getSeatsLeft() {
+        return Math.max(0, capacity - seatsTaken);
+    }
+
+    /** Registration ends at the closing time, or at the start when there is none. */
+    public Instant registrationEndsAt() {
+        return registrationClosesAt != null ? registrationClosesAt : startsAt;
+    }
+
     public Instant getStartsAt() {
         return startsAt;
     }
@@ -202,6 +252,35 @@ public class Event extends AuditableEntity {
 
     public EventStatus getStatus() {
         return status;
+    }
+
+    public Integer getMinYear() {
+        return minYear;
+    }
+
+    public void setMinYear(Integer minYear) {
+        this.minYear = minYear;
+    }
+
+    public Integer getMaxYear() {
+        return maxYear;
+    }
+
+    public void setMaxYear(Integer maxYear) {
+        this.maxYear = maxYear;
+    }
+
+    /** Sorted, read-only. */
+    public List<String> getEligibleDepartments() {
+        return List.copyOf(new TreeSet<>(eligibleDepartments));
+    }
+
+    /** Replaces the set; {@code null} or empty opens the event to every department. */
+    public void setEligibleDepartments(List<String> codes) {
+        eligibleDepartments.clear();
+        if (codes != null) {
+            eligibleDepartments.addAll(codes);
+        }
     }
 
     public Long getVersion() {

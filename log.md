@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-11 (Claude Opus 5.5) — **Phase 2 done (T04)** on branch `phase2` (uncommitted; the post-phase commit is the owner's call). auth-service + common-security + gateway edge security; 158 tests green; security matrix 205/205; live exit demo 36/36. Next: post-phase commit (owner), push/merge as the owner decides, then Phase 3 (T05): write `docs/plans/phase-3.md` first. Since 2026-10-15 (T21) P3–P5 each also include a thin `web-portal` slice (PROJECT.md §5). The shortcuts are intended, and P6 replaces them (`docs/DECISIONS.md` D9).
+* **Last updated:** 2026-10-16 (Claude Opus 5.5) — **Phase 3 done (T05)** on branch `phase3` (uncommitted; the post-phase commit is the owner's call). Event lifecycle + scheduler, registrations with overbooking-proof seat claims, waitlist promotion, eligibility, Idempotency-Key, `libs/common-messaging` outbox → RabbitMQ, `UserRegistered`, `web-portal` slice (:8090). 285 tests green; security matrix 253/253; live exit demo 56 checks. Next: post-phase commit (owner), then Phase 4 (T06): write `docs/plans/phase-4.md` first. Parked questions for after P8: `docs/REVIEW-LATER.md`. Since 2026-10-15 (T21) P3–P5 each also include a thin `web-portal` slice (PROJECT.md §5). The shortcuts are intended, and P6 replaces them (`docs/DECISIONS.md` D9).
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
@@ -69,7 +69,19 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T04.10: Gateway edge security (reactive resource server, CORS, X-User-Id, auth routes, Swagger)
   * [x] T04.11: Security matrix tests → `docs/security-matrix.md`; `scripts/forge-token.sh`
   * [x] T04.12: Exit demo + docs (phase-2.http, README, PROJECT ticks, DECISIONS D7/D8, as-built)
-* [ ] T05: **Phase 3** — Registration & transactional core (PROJECT.md §P3)
+* [x] T05: **Phase 3** — Registration & transactional core (PROJECT.md §P3; plan and "done when" checks: `docs/plans/phase-3.md` §15). Plan approved 2026-10-15 (answers in plan §17, D10/D11); pre-phase commit by the owner. Done 2026-10-16 (uncommitted)
+  * [x] T05.1: common-web: LifecycleState, IllegalTransitionException (409 + allowedStates), new problem types
+  * [x] T05.2: Event state machine: transition table, V4 (history, eligibility), lifecycle service + endpoints, edits-by-state rules
+  * [x] T05.3: Lifecycle scheduler (time-based transitions, Clock, off in tests)
+  * [x] T05.4: libs/common-messaging: outbox publisher (JdbcClient), relay (confirms, SKIP LOCKED), topology + tap queue, contracts
+  * [x] T05.5: Registrations: V5, state machine, eligibility, seat claim (conditional update + row lock), cancel + promote, endpoints
+  * [x] T05.6: Idempotency-Key on POST /api/registrations (V6, replay, mismatch 422, cleanup)
+  * [x] T05.7: Outbox wiring: event-service events + auth-service UserRegistered; messages visible in RabbitMQ
+  * [x] T05.8: Concurrency tests: 500/100 seats, naive contrast, cancel/promote race
+  * [x] T05.9: Gateway route /api/registrations/** + security matrix rows + docs/security-matrix.md
+  * [x] T05.10: web-portal skeleton + auth (form login via auth-service, session tokens, expiry, sign-up page)
+  * [x] T05.11: web-portal pages: catalogue, detail, register/cancel, my registrations, organizer transitions
+  * [x] T05.12: Exit demo + docs (phase-3.http, README, PROJECT ticks, DECISIONS D10/D11, as-built)
 * [ ] T06: **Phase 4** — Pass issuance & QR generation (PROJECT.md §P4)
 * [ ] T07: **Phase 5** — Scan, verify & attendance (PROJECT.md §P5)
 * [ ] T08: **Phase 6** — Web portal, Spring MVC (PROJECT.md §P6)
@@ -94,6 +106,9 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T21: PROJECT.md: thin web-portal slice in P3–P5 so each backend phase is visible in a browser; P6 becomes the full portal; schedule the admin health overview
 * [x] T22: AGENTS.md "Workflow for any change": owner's workflow adapted to MITPass
 * [x] T23: AGENTS.md "Parts to keep in mind" + "Working rules", adapted to MITPass
+* [x] T24: Plan Phase 3 → `docs/plans/phase-3.md` + T05 sub-tasks (no code)
+* [x] T25: `docs/REVIEW-LATER.md` (parked questions: RL1 waitlist after closing, RL2 manual COMPLETED, RL3 undo LIVE after check-ins) + PROJECT.md "After P8" line
+* [ ] T26: **After P8:** go through `docs/REVIEW-LATER.md` with the owner, item by item
 
 *Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -111,6 +126,72 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-16 — Claude (Opus 5.5) — T05.10–T05.12: web portal, exit demo, docs; Phase 3 done
+
+* **Task:** T05.10 (portal skeleton + auth), T05.11 (portal pages), T05.12 (exit demo + docs)
+* **Status:** DONE (Phase 3 complete; not committed: the post-phase commit is the owner's call)
+* **Files:**
+  * root `pom.xml` (module `web-portal`; `maven-jar-plugin` `forceCreation=true`)
+  * new `web-portal/**`: `pom.xml`, `application.yml`, `PortalApplication`, `config/PortalProperties`, `config/SecurityConfig` (form login, CSRF, role rules, logout revokes the refresh token), `auth/PortalUser`, `auth/GatewayAuthenticationProvider`, `auth/SessionExpiryFilter`, `client/GatewayClient`, `client/ApiModels`, `client/ApiProblemException`, `client/SessionExpiredException`, `client/CorrelationIdFilter`, `web/AccountController`, `web/SignupForm`, `web/EventPagesController`, `web/MyRegistrationsController`, `web/OrganizerController`, `web/PortalAdvice`, `web/DisplayFormat`, templates (`fragments`, `login`, `signup`, `events/list`, `events/detail`, `my/registrations`, `organizer/events`), `static/css/portal.css`; tests `GatewayClientTest` (7), `PortalPagesTest` (25), `TestTokens`, `application-test.yml`
+  * `libs/common-messaging`: `OutboxRelay` (connects at startup so the topology is declared), new `TopologyOnStartupTest`
+  * docs: new `docs/http/phase-3.http`; `README.md` (status, five services, portal, tap queue, concurrency demo, troubleshooting); `PROJECT.md` (§P3 ticked + status); `docs/plans/phase-3.md` (new §18 As built); `docs/DECISIONS.md` (D9: two new slice rows; D11: relay startup); `log.md`
+* **Details:**
+  * Final `./mvnw verify` green: **285 tests** (common-web 27, common-security 9, security-test-support 15, common-messaging 11, discovery 1, gateway 18, auth-service 51, event-service 121, web-portal 32). Security matrix 253/253 (auth 85, event 168).
+  * Live exit demo (compose infra, jars on the project JDK, Phase 2 volume kept, so V4–V6 and the new seed ran on existing data): 56 scripted checks (script in the session scratchpad; same steps in `docs/http/phase-3.http`). **54 passed on the first run.** The 2 failures (exchange and tap queue not in RabbitMQ before the first event) were real; see the two bugs below. After the fixes, both exist right after a restart (checked by deleting them on the broker, rebuilding, restarting). Everything else passed: Eureka lists the 4 apps; lifecycle + illegal 409 + history; promotion with the 3 messages in order on the tap queue with the request's correlation id; idempotency replay/mismatch/409; eligibility 422 with reasons; optimistic 409 + capacity rules + capacity-raise promotion; portal sign-up → Mailpit → verify → login, event page, promotion note, no token in pages, CSRF 403, HttpOnly cookie, organizer buttons without LIVE, close from the portal; scheduler closed an event by itself (history SCHEDULER/system), registering afterwards 409.
+  * **Bug 1 (fixed, with a test):** Spring AMQP declares exchanges and queues only when the first connection opens, which came with the first event. The relay now opens a connection at startup (`TopologyOnStartupTest`, checked through the management API).
+  * **Bug 2 (fixed, build):** after a change in `libs/*` only, `install` kept the services' old fat jars (maven-jar-plugin thought the jar up to date and `spring-boot:repackage` skipped), so the running service still had the old library. `forceCreation=true` in the root POM; verified the rebuilt jar contains the fix.
+  * Portal: Jackson 3 enables `FAIL_ON_NULL_FOR_PRIMITIVES` by default, so the portal's response models use boxed numbers/flags (a missing field must not break a page).
+  * `.gitignore` reviewed: only sources are untracked, every `target/` ignored; no change needed.
+* **Notes / Errors:** At the end: all 5 JVMs stopped (no java.exe with `target` in its command line, ports 8080/8081/8082/8090/8761 free), `docker compose down` (volumes kept), Docker Desktop stopped. Demo data in the kept volume now includes the demo's registrations (MINIQUIZ26: Arun CONFIRMED, Priya cancelled) and a few `D…`/`S…` events; run `docker compose down -v` for a fresh seed before a presentation.
+
+### 2026-10-16 — Claude (Opus 5.5) — T05.6–T05.9: idempotency, outbox wiring, concurrency, gateway + matrix
+
+* **Task:** T05.6 (Idempotency-Key), T05.7 (outbox wiring + `UserRegistered`), T05.8 (concurrency tests), T05.9 (gateway route, security matrix)
+* **Status:** WORKING (T05.6–T05.9 DONE; next T05.10 web-portal)
+* **Files:**
+  * T05.6 event-service: `V6__idempotency_and_outbox.sql` (idempotency_record + outbox_message); new `idempotency/IdempotencyStore`, `IdempotencyProperties`; `RegistrationService.register(student, eventId, key)` + `RegisterOutcome`; `RegistrationController` (`Idempotency-Key` header with pattern check, `Idempotent-Replayed: true`); `SchedulingConfig` (binds the properties); `application.yml` (`mitpass.idempotency`); test `IdempotencyTests` (7, incl. 4 concurrent retries → one registration)
+  * T05.7: event-service `pom.xml` (+common-messaging, test testcontainers-rabbitmq), `RegistrationEvents` (outbox), `EventLifecycleService` (`EventStateChanged`), `application.yml` (`spring.rabbitmq`, `mitpass.messaging`, tap queue on), test yml (relay/tap off, rabbit health off); test `MessagingFlowTest` (own context + RabbitMQ container); auth-service `pom.xml` (+common-messaging), `V3__outbox.sql`, `SignupService` (`UserRegistered`, `saveAndFlush`), `application.yml` (`spring.rabbitmq`), test yml (relay off); test `SignupOutboxTest`
+  * T05.8: test `SeatClaimConcurrencyTest` (500/100, naive contrast in test code, cancel/register race); test yml Hikari pool 20
+  * T05.9: gateway `application.yml` (`/api/registrations/**` on the event-service route), `EdgeSecurityTest` (+1); event-service `SecurityMatrixTest` (+8 endpoints, fixture registration owned by the matrix student); `docs/security-matrix.md` regenerated
+* **Details:** Full `./mvnw verify` green: 252 tests (common-web 27, common-security 9, security-test-support 15, common-messaging 10, discovery 1, gateway 18, auth-service 51, event-service 121). Security matrix 253/253 (auth 85, event 168). Concurrency test green 3 runs in a row: real service always 100 CONFIRMED / 400 WAITLISTED / seats_taken 100 with waitlist positions 1..400; naive version confirmed 118, 117, 116; race 50/50/50. No deadlocks seen (the registration insert takes a KEY SHARE lock on the event row via the FK; Hibernate's PESSIMISTIC_WRITE on PostgreSQL doesn't conflict with it). Messages arrive in order Cancelled → WaitlistPromoted → Confirmed(viaPromotion) with the request's correlation id.
+* **Notes / Errors:**
+  * RabbitMQ 4 refuses transient non-exclusive queues (`transient_nonexcl_queues` deprecated, connection closed with 541): declare durable or exclusive queues.
+  * **Python on Windows writes cp1252 and CRLF by default.** It mangled a `§` and turned three files to CRLF (fixed). Always pass `encoding="utf-8", newline=""` when editing files with Python here.
+  * The POST /api/registrations matrix row shows ✅ 409 for students: the fixture event is a DRAFT, so the call passes security and is refused by the business rule, which is what the matrix checks.
+
+### 2026-10-16 — Claude (Opus 5.5) — T05.4–T05.5: common-messaging, registrations
+
+* **Task:** T05.4 (outbox library), T05.5 (registrations, seats, waitlist, eligibility)
+* **Status:** WORKING (T05.4 and T05.5 DONE)
+* **Files:**
+  * T05.4: root `pom.xml` (module `libs/common-messaging`); new `libs/common-messaging/**`: `MessagingProperties`, `OutboxPublisher` (JdbcClient, MANDATORY), `OutboxRelay` (SmartLifecycle, SKIP LOCKED, simple confirms, retry, cleanup), `MessagingAutoConfiguration` + imports, contracts (`EventType`, `RegistrationConfirmed`, `RegistrationCancelled`, `WaitlistPromoted`, `EventStateChanged`, `UserRegistered`), reference DDL `mitpass/messaging/outbox-postgresql.sql`; tests `OutboxPublisherTest` (6), `OutboxRelayTest` (4, PostgreSQL + RabbitMQ containers)
+  * T05.5 event-service: `V5__registrations.sql`; domain `RegistrationStatus`, `Registration`, `RegistrationChange`; `Event` (read-only `seatsTaken`, `getSeatsLeft`, `registrationEndsAt`); `EventRepository` (`claimSeat`, `claimSeatForPromotion`, `releaseSeat`, `findSeatsTakenById`); `RegistrationRepository`, `RegistrationChangeRepository`; services `Eligibility`, `EligibilityPolicy`, `RegistrationProblems`, `RegistrationEvents` (outbox hooks, filled in T05.7), `WaitlistService`, `RegistrationService`; `EventService` (capacity >= seats taken; a capacity increase promotes); `security/RegistrationSecurity`; web `RegistrationController`, `EventRegistrationsController`, DTOs `RegistrationResponse`, `RegistrationRequests`; detail/summary DTOs gain `seatsTaken`, `seatsLeft`; tests `RegistrationStatusTest`, `EligibilityPolicyTest`, `RegistrationServiceTest` (14), `RegistrationApiTests` (8), `TestData` helpers, `EventServiceTest`/`EventControllerTest` updated
+* **Details:** common-messaging 10/10 and event-service 109/109 green. **Bug found by `EligibilityPolicyTest` and fixed:** `List.copyOf(..).contains(null)` throws, so a token without a `dept` claim would have caused a 500 on an event with department limits. Outbox order: rows of one transaction can share `occurred_at`, so the DDL has an identity `seq` and the relay orders by it. A class named `*IT` would never run (no failsafe plugin), so the relay test is `OutboxRelayTest`.
+* **Notes / Errors:** Plan deviation: `waitlistCount` is on `GET /api/events/{id}/eligibility` (and countable via `GET /api/events/{id}/registrations?status=WAITLISTED`) instead of the event detail, which a MapStruct mapping can't fill without a query. The gateway route for `/api/registrations/**` comes in T05.9.
+
+### 2026-10-16 — Claude (Opus 5.5) — T05.1–T05.3 + T25: lifecycle core, review-for-later doc
+
+* **Task:** owner approved the Phase 3 plan (answers in plan §17) and asked for a review-for-later doc; T05.1–T05.3 built
+* **Status:** WORKING (T05 in progress; T05.1–T05.3 DONE)
+* **Files:**
+  * docs: created `docs/REVIEW-LATER.md` (RL1 waitlist after closing, RL2 manual COMPLETED, RL3 undo LIVE after check-ins); `PROJECT.md` (§3 diagram + table: LIVE scheduler-only, LIVE → REGISTRATION_CLOSED undo, one active registration; §P3 bullets; new "After P8 — Review for later" section); `docs/DECISIONS.md` (D10 state machines/seat claims, D11 outbox); `docs/plans/phase-3.md` (§2 owner decisions, §5 table, §10 RL1 pointer, §17 resolved); `AGENTS.md` (Docs row lists REVIEW-LATER); `log.md` (T25, T26)
+  * T05.1 `libs/common-web`: `ProblemException` gains extension `properties`; new `IllegalTransitionException`, `state/LifecycleState`, `ProblemTypes.ILLEGAL_TRANSITION`; tests `LifecycleStateTest`, 2 new handler cases (27 tests green)
+  * T05.2 `services/event-service`: `V4__lifecycle_and_eligibility.sql`; `EventStatus` (table, manualNext, scheduledNext, isEditable, isCodeFrozen), `TransitionTrigger`, `EventStateChange` + repository; `Event` (minYear/maxYear as SMALLINT, eligibleDepartments, `moveTo`); DTOs (create/update + eligibility, detail + eligibility/allowedTransitions, `TransitionRequest`, `StateChangeResponse`), `EventCodes` department pattern; `EventMapper`; `CatalogRules` (year range, editable, code frozen); `EventLifecycleService`; `EventService` (history row on create, edit rules); `SessionService` (read-only when LIVE+); `LifecycleController`; `EventRepository` (graph + due-move queries); seed (MINIQUIZ26, AIWS26 departments, SPACETALK26 years); tests `EventStatusTest`, `LifecycleTests`, `EventServiceTest`/`EventControllerTest` updated
+  * T05.3: `EventLifecycleScheduler`, `config/LifecycleSchedulerProperties`, `config/SchedulingConfig`; `application.yml` (`mitpass.events.scheduler`), test yml (scheduler off); `EventLifecycleSchedulerTest`
+* **Details:** event-service 76 tests green (`./mvnw -pl services/event-service verify`). Found while building: Hibernate validate rejects `Integer` on a SMALLINT column (fixed with `@JdbcTypeCode(SqlTypes.SMALLINT)`); MapStruct update methods clear target collections through the getter, so eligibleDepartments is set by the service; one scheduler run can chain moves (OPEN → CLOSED → LIVE at the start time when no closing time is set) — intended catch-up behaviour, test adjusted.
+* **Notes / Errors:** Heredocs containing apostrophes break the Bash tool wrapper here; files are written with the Write tool. A test run once failed with Eclipse "Unresolved compilation problems" classes in `target/` (the VS Code Java server compiles into the same folder); rerunning fixed it. If it recurs, run with `clean`. Docker Desktop is running (started for Testcontainers).
+
+### 2026-10-15 — Claude (Opus 5.5) — T24: Phase 3 planned
+
+* **Task:** T24 — owner asked to plan the implementation of Phase 3 (no code)
+* **Status:** DONE (plan awaits owner approval)
+* **Files:** created `docs/plans/phase-3.md`; edited `log.md` (status, T05.1–T05.12, T24, this entry), `PROJECT.md` (§P3 goal line links the plan)
+* **Details:**
+  * Read: PROJECT.md, DECISIONS D1–D9, phase-2 plan + as-built, event-service domain/service/migrations/seed, gateway config, auth seed and sign-up DTO. Checked in `~/.m2`: the Boot 4.1.1 BOM has `spring-boot-starter-amqp`, `-thymeleaf`, `-restclient`, `-security` (+ `-test` variants) and `thymeleaf-extras-springsecurity6`; the Testcontainers 2.0.5 BOM has `testcontainers-rabbitmq`. common-web already maps optimistic-lock failures to 409.
+  * UI mockup decoded into the session scratchpad (not the repo). Screen 2 (event detail) shows the eligibility line, seats left, close time, "You're eligible", Register. One deviation recorded in plan §10: the mockup's "after closing you can join the waitlist" note doesn't match this plan's waitlist rule.
+  * Plan: enum transition tables via a shared `LifecycleState` (409 with `allowedStates`), history tables, a scheduler with per-event transactions; seat claim = conditional UPDATE (fast path) + `PESSIMISTIC_WRITE` re-check (slow path); cancel locks the event row and promotes in the same transaction; read-only `seats_taken` mapping; `Idempotency-Key` stored atomically with the registration (`ON CONFLICT DO NOTHING`); new `libs/common-messaging` (JdbcClient outbox, SmartLifecycle relay with confirms + SKIP LOCKED, `mitpass.events` topic exchange, dev tap queue); `web-portal` D9 slice with form login against auth-service and tokens in the session. 10 exit criteria, 12 steps.
+* **Notes / Errors:** Defaults the owner may change (plan §2/§17): one *active* registration per student per event (partial unique index, deviates from PROJECT.md's literal `unique (event_id, user_id)`), the scheduler also moves LIVE/COMPLETED, `UserRegistered` included in P3. PROJECT.md §P3 bullets left as they are until the owner answers. Nothing started or left running.
 
 ### 2026-10-15 — Claude (Opus 5.5) — T23: parts table + working rules in AGENTS.md
 

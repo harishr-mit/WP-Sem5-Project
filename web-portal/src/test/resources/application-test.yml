@@ -1,0 +1,9 @@
+# Active in every portal test (@ActiveProfiles("test")). No Eureka; the gateway client is mocked or bound to a mock server.
+eureka:
+  client:
+    enabled: false
+
+mitpass:
+  portal:
+    gateway-url: http://gateway.test
+    mailpit-url: http://mailpit.test

@@ -101,6 +101,26 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void illegalTransitionIsA409WithTheAllowedStates() throws Exception {
+        mvc.perform(get("/probe/fail/transition"))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value("urn:mitpass:problem:illegal-transition"))
+                .andExpect(jsonPath("$.currentState").value("DRAFT"))
+                .andExpect(jsonPath("$.requestedState").value("LIVE"))
+                .andExpect(jsonPath("$.allowedStates[0]").value("PUBLISHED"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    void problemExceptionPropertiesBecomeExtensionMembers() throws Exception {
+        mvc.perform(get("/probe/fail/extended"))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.type").value("urn:mitpass:problem:not-eligible"))
+                .andExpect(jsonPath("$.reasons[0]").value("Open to CSE only"));
+    }
+
+    @Test
     void internalErrorsDoNotLeakDetails() throws Exception {
         mvc.perform(get("/probe/fail/boom"))
                 .andExpect(status().isInternalServerError())

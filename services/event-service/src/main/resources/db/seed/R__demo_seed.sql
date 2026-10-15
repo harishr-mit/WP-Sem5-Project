@@ -42,12 +42,28 @@ FROM (VALUES
      'Guest lecture followed by Q&A.',
      'SEMINAR', 'Library Seminar Hall', 'AERO', 180,
      TIMESTAMPTZ '2027-01-09 11:00+05:30', TIMESTAMPTZ '2027-01-09 13:00+05:30',
-     TIMESTAMPTZ '2026-12-01 09:00+05:30', TIMESTAMPTZ '2027-01-08 18:00+05:30', 'PUBLISHED')
+     TIMESTAMPTZ '2026-12-01 09:00+05:30', TIMESTAMPTZ '2027-01-08 18:00+05:30', 'PUBLISHED'),
+    -- Phase 3 demo: one seat, so the two seeded students show CONFIRMED, WAITLISTED #1 and a promotion.
+    ('MINIQUIZ26', 'Tech Quiz (demo: 1 seat)',
+     'A one-seat quiz to demonstrate the waitlist: register two students, then cancel the first.',
+     'TECHNICAL', 'Library Seminar Hall', NULL, 1,
+     TIMESTAMPTZ '2026-11-28 15:00+05:30', TIMESTAMPTZ '2026-11-28 17:00+05:30',
+     TIMESTAMPTZ '2026-10-01 09:00+05:30', TIMESTAMPTZ '2026-11-27 18:00+05:30', 'REGISTRATION_OPEN')
 ) AS e(code, title, description, category_code, venue_name, department, capacity,
        starts_at, ends_at, reg_opens, reg_closes, status)
 JOIN category c ON c.code = e.category_code
 JOIN venue v ON v.name = e.venue_name
 ON CONFLICT (code) DO NOTHING;
+
+-- Phase 3 eligibility (V4). The seeded students are Priya (CSE, 1st year) and Arun (AERO, 1st year):
+-- Priya may join the AI workshop, Arun may not; neither may join the space-tech seminar (years 2-4).
+INSERT INTO event_eligible_department (event_id, department_code)
+SELECT ev.id, d.code
+FROM (VALUES ('AIWS26', 'CSE'), ('AIWS26', 'IT'), ('AIWS26', 'AIDS')) AS d(event_code, code)
+JOIN event ev ON ev.code = d.event_code
+ON CONFLICT DO NOTHING;
+
+UPDATE event SET min_year = 2, max_year = 4 WHERE code = 'SPACETALK26' AND min_year IS NULL;
 
 INSERT INTO event_session (event_id, title, starts_at, ends_at)
 SELECT ev.id, s.title, s.starts_at, s.ends_at

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Events')}"></head>
+<body>
+<header th:replace="~{fragments :: header}"></header>
+<main>
+    <h1>Events</h1>
+    <div th:replace="~{fragments :: flash}"></div>
+
+    <form th:action="@{/events}" method="get" class="row">
+        <input type="search" name="q" th:value="${q}" placeholder="Search title or description">
+        <select name="category">
+            <option value="">All categories</option>
+            <option th:each="c : ${categories}" th:value="${c.code()}" th:text="${c.name()}"
+                    th:selected="${c.code() == category}">Technical</option>
+        </select>
+        <button type="submit">Search</button>
+    </form>
+
+    <table th:if="${!events.content().isEmpty()}">
+        <thead>
+        <tr><th>Event</th><th>Category</th><th>Venue</th><th>Starts</th><th>Status</th><th>Seats left</th></tr>
+        </thead>
+        <tbody>
+        <tr th:each="e : ${events.content()}">
+            <td><a th:href="@{/events/{id}(id=${e.id()})}" th:text="${e.title()}">TechFest Hackathon</a>
+                <br><code th:text="${e.code()}">TECHFEST26</code></td>
+            <td th:text="${e.categoryName()}">Technical</td>
+            <td th:text="${e.venueName()}">Innovation Centre Lab</td>
+            <td th:text="${@fmt.when(e.startsAt())}">Sat 14 Nov 2026, 09:00</td>
+            <td><span class="status" th:text="${e.status()}">REGISTRATION_OPEN</span></td>
+            <td th:text="${e.seatsLeft() + ' / ' + e.capacity()}">12 / 100</td>
+        </tr>
+        </tbody>
+    </table>
+    <p th:if="${events.content().isEmpty()}">No events match.</p>
+
+    <p class="row">
+        <a th:if="${events.hasPrevious()}" th:href="@{/events(q=${q}, category=${category}, page=${events.page() - 1})}">← Previous</a>
+        <span th:text="${'Page ' + (events.page() + 1) + ' of ' + (events.totalPages() == 0 ? 1 : events.totalPages())}">Page 1 of 1</span>
+        <a th:if="${events.hasNext()}" th:href="@{/events(q=${q}, category=${category}, page=${events.page() + 1})}">Next →</a>
+    </p>
+</main>
+</body>
+</html>

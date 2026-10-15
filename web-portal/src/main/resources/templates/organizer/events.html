@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('My events')}"></head>
+<body>
+<header th:replace="~{fragments :: header}"></header>
+<main>
+    <h1>My events</h1>
+    <div th:replace="~{fragments :: flash}"></div>
+    <p class="hint">Only the moves the event allows right now are shown. Events go LIVE by themselves shortly before
+        they start; if one went live too early, move it back to REGISTRATION_CLOSED.</p>
+
+    <table th:if="${!events.isEmpty()}">
+        <thead><tr><th>Event</th><th>Starts</th><th>Status</th><th>Seats taken</th><th>Move to</th></tr></thead>
+        <tbody>
+        <tr th:each="e : ${events}">
+            <td><a th:href="@{/events/{id}(id=${e.id()})}" th:text="${e.title()}">TechFest Hackathon</a>
+                <br><code th:text="${e.code()}">TECHFEST26</code></td>
+            <td th:text="${@fmt.when(e.startsAt())}">Sat 14 Nov 2026, 09:00</td>
+            <td><span class="status" th:text="${e.status()}">PUBLISHED</span></td>
+            <td th:text="${e.seatsTaken() + ' / ' + e.capacity()}">0 / 100</td>
+            <td class="row">
+                <form th:each="to : ${e.allowedTransitions()}"
+                      th:action="@{/organizer/events/{id}/transitions(id=${e.id()})}" method="post" class="inline">
+                    <input type="hidden" name="to" th:value="${to}">
+                    <button type="submit" th:classappend="${to == 'CANCELLED'} ? 'danger'" th:text="${to}">REGISTRATION_OPEN</button>
+                </form>
+                <span th:if="${e.allowedTransitions().isEmpty()}">—</span>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <p th:if="${events.isEmpty()}">You don't organise any events yet.</p>
+</main>
+</body>
+</html>
