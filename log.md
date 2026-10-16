@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-16 (Claude Opus 5.5) — **Phase 4 done (T06)** on branch `phase4` (uncommitted; the post-phase commit is the owner's call). New `pass-service` (:8083): passes issued from `RegistrationConfirmed` exactly once (idempotent consumer + unique registration), ES256 JWS QR tokens (live 45 s, unlocks 2 h before doors open; static until end + 2 h), own JWK set + rotation, ZXing PNG/SVG, OpenPDF ticket, revocation + cursor feed, cancellation saga, scheduler, minimal DLQ (**P7 completes it**). event-service: V7 pass settings + `EventRescheduled`. Portal: My passes, pass page, organizer revoke. 378 tests green; security matrix 330/330; live exit demo 47/47. Next: post-phase commit (owner), then Phase 5 (T07): write `docs/plans/phase-5.md` first. Parked questions for after P8: `docs/REVIEW-LATER.md` (RL1–RL6). Since 2026-10-15 (T21) P3–P5 each also include a thin `web-portal` slice (PROJECT.md §5). The shortcuts are intended, and P6 replaces them (`docs/DECISIONS.md` D9).
+* **Last updated:** 2026-10-16 (Claude Opus 5.5) — Phase 4 merged to `main` (PR #4). On branch `phase5`: **RL6 fixed** (T31: the live QR reloaded every 30 ms, a Thymeleaf inlining bug; regression test added) and **Phase 5 planned** (T32: `docs/plans/phase-5.md`). The owner accepted Q1–Q4 (recorded: T07.1, D14). Still waiting for **Q6** (scheduled reconciliation of checkin-service's pass copy, plan §4a/§19) and the **owner's pre-phase commit** before T07.2. Nothing committed, nothing running. Earlier: **Phase 4 done (T06)**. New `pass-service` (:8083): passes issued from `RegistrationConfirmed` exactly once (idempotent consumer + unique registration), ES256 JWS QR tokens (live 45 s, unlocks 2 h before doors open; static until end + 2 h), own JWK set + rotation, ZXing PNG/SVG, OpenPDF ticket, revocation + cursor feed, cancellation saga, scheduler, minimal DLQ (**P7 completes it**). event-service: V7 pass settings + `EventRescheduled`. Portal: My passes, pass page, organizer revoke. 378 tests green; security matrix 330/330; live exit demo 47/47. Next: post-phase commit (owner), then Phase 5 (T07): write `docs/plans/phase-5.md` first. Parked questions for after P8: `docs/REVIEW-LATER.md` (RL1–RL6). Since 2026-10-15 (T21) P3–P5 each also include a thin `web-portal` slice (PROJECT.md §5). The shortcuts are intended, and P6 replaces them (`docs/DECISIONS.md` D9).
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
@@ -96,7 +96,21 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T06.11: PDF ticket (OpenPDF)
   * [x] T06.12: Read + revoke API, revocation feed, key rotation, security matrix + docs
   * [x] T06.13: Portal slice + exit demo + docs
-* [ ] T07: **Phase 5** — Scan, verify & attendance (PROJECT.md §P5)
+* [ ] T07: **Phase 5** — Scan, verify & attendance (PROJECT.md §P5; plan and "done when" checks: `docs/plans/phase-5.md` §17). Plan written 2026-10-16; owner accepted Q1–Q4, Q6 (reconciliation) open; owner commits before T07.2
+  * [x] T07.0: RL6 fix (owner: part of Phase 5; done as T31)
+  * [x] T07.1: Owner decisions recorded (PROJECT.md §3/§P5, DECISIONS D14 draft) before code; Q6 still open
+  * [ ] T07.2: `libs/common-pass`: PassNumber moved, PassTokens, PassTokenVerifier; pass-service switched over
+  * [ ] T07.3: AttendanceMarked contract; event-service V8 (reentry, certificate N); pass-service V2 + attendance.marked handler
+  * [ ] T07.4: checkin-service skeleton (:8084), V1, gateway routes + Swagger
+  * [ ] T07.5: Copies: inbox + DLQ, pass_ref/event_ref handlers, EventCatalogClient, pass JWKS cache
+  * [ ] T07.6: Domain: PresenceState, ScanResult, SessionResolver, entities
+  * [ ] T07.7: Verification pipeline (step beans), scan log for rejections
+  * [ ] T07.8: Check-in transaction (presence lock + unique attendance), check-out/re-entry, outbox; race test
+  * [ ] T07.9: Manual path (lookup + pass-number scans)
+  * [ ] T07.10: Reports (summary, attendees, CSV, certificates, /me) + pass sync
+  * [ ] T07.11: Security matrix + docs/security-matrix.md
+  * [ ] T07.12: Portal slice (scan, confirm, result, attendance page, CSV proxy, wallet line)
+  * [ ] T07.13: Exit demo + docs
 * [ ] T08: **Phase 6** — Web portal, Spring MVC (PROJECT.md §P6)
 * [ ] T09: **Phase 7** — Real-time dashboard, notifications & offline scanning (PROJECT.md §P7)
 * [ ] T10: **Phase 8** — Hardening, observability & showcase (PROJECT.md §P8)
@@ -127,6 +141,8 @@ Shared context for every agent working in this directory. Read this file **befor
 
 * [x] T29: Start MITPass for the owner and set up a live-code demo event (left running on request; stopped in T30)
 * [x] T30: `docs/REVIEW-LATER.md` RL5 (PDF name = event name + student id), RL6 (live QR glitch after ~30 s); shut everything down
+* [x] T31: Fix RL6 (live QR reloaded every 30 ms: Thymeleaf inlining dropped `* 1000`) with a regression test (owner: counts as Phase 5 work, T07.0)
+* [x] T32: Check Phase 4 is complete; plan Phase 5 → `docs/plans/phase-5.md` + T07 sub-tasks (no Phase 5 code)
 
 *Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -144,6 +160,30 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-16 — Claude (Opus 5.5) — T07.1: Phase 5 owner answers recorded
+
+* **Task:** T07.1 — record the owner's answers to `docs/plans/phase-5.md` §19 before any code
+* **Status:** DONE (Q6 open)
+* **Files:** `PROJECT.md` (§3 services table: checkin-service consumes `PassIssued` and keeps a read-only pass copy, pass-service consumes `AttendanceMarked`; new "Source of truth" paragraph; §P5 pipeline order, 15 result codes, pass copy + per-event settings bullet, `checkedInAt`/`usedAt`), `docs/DECISIONS.md` (new D14: data owners, how copies stay in step, fail-safe direction, pipeline, single entry, settings), `docs/plans/phase-5.md` (status, §2 heading, new §4a source of truth + drift table, §5 "why not an existing code" column, §19 resolved + Q6, §20 renamed T07.0), `log.md`
+* **Details:** Answers: Q1 accepted, plus the question "what keeps pass data consistent, and what is the source of truth?" Answer: pass-service owns passes, and copies are read-only caches. No scheduled reconciliation exists (P4 included), so Q6 offers options (a) reconciler + service identity (recommended), (b) none, (c) on-demand only. Q2 and Q3 accepted. Q4 accepted on condition that extra codes cover unique cases: all six were checked and none is redundant; `EVENT_CLOSED` narrowed (cancelled events already give `REVOKED`). Q5: RL6 becomes T07.0 of Phase 5; the owner commits before T07.2.
+* **Notes / Errors:** Nothing committed by the agent. Nothing running.
+
+### 2026-10-16 — Claude (Opus 5.5) — T32: Phase 4 checked, Phase 5 planned
+
+* **Task:** T32 — owner asked for a quick check that Phase 4 is complete and a Phase 5 plan, on branch `phase5`
+* **Status:** DONE (plan waits for the owner's answers to §19)
+* **Files:** created `docs/plans/phase-5.md`; edited `PROJECT.md` (§P5 goal line links the plan), `log.md` (status, T07.1–T07.13, T31, T32, entries)
+* **Details:** Phase 4: all §P4 items ticked, as-built written, merged to `main` as PR #4 (`20c9f2e`); `phase5` branches from it, tree was clean. CI status not checked (`gh` isn't installed here). Plan: new checkin-service :8084 (`checkin_db` already exists, no `down -v`), new `libs/common-pass` (PassNumber + ES256 verifier), pipeline of step beans with the scanner check first, 15 result codes, presence row lock + `UNIQUE (pass_id, session_id)`, 20-thread race test, `AttendanceMarked` → pass-service `checkedInAt`/`usedAt`, event-service V8 (`reentry_allowed`, `certificate_min_sessions`), reports + CSV + certificates, portal scan/confirm/attendance pages. 12 exit criteria, 13 steps.
+* **Notes / Errors:** Defaults the owner may change (plan §19): Q1 local pass copy from `PassIssued` (+ sync button), Q2 attributes instead of a USED state, Q3 per-event settings in event-service, Q4 six extra result codes and the scanner check first. PROJECT.md §3/§P5 left as they are until the owner answers (T07.1). Nothing started or left running.
+
+### 2026-10-16 — Claude (Opus 5.5) — T31: RL6 fixed (live QR reloaded every 30 ms)
+
+* **Task:** T31 — owner asked to look after RL6
+* **Status:** DONE
+* **Files:** `web-portal/src/main/java/com/mitpass/portal/web/MyPassesController.java` (+`refreshMillis`), `web-portal/src/main/resources/templates/my/pass.html` (inlined `const refreshMillis`, preload-then-swap, timer stops on error), `web-portal/src/test/java/com/mitpass/portal/web/PassPagesTest.java` (+1 regression test), `docs/REVIEW-LATER.md` (RL6 RESOLVED with the outcome), `docs/plans/phase-5.md` §20 and gotcha 1
+* **Details:** Reproduced by rendering the script with Thymeleaf 3.1.5 (scratch program in the session scratchpad): `/*[[${refreshSeconds}]]*/ 30 * 1000` → `30`, because JavaScript inlining drops the default text after the expression. So the page swapped the image every 30 ms (about 33 token mints and PNG renders per second per open pass page). The new test failed on the old template and passes now; `./mvnw -pl web-portal -am verify` green. No other template inlines JavaScript.
+* **Notes / Errors:** RL6's cause (b) (400 → 280 px downscale with `pixelated`) is cosmetic and left to P6.
 
 ### 2026-10-16 — Claude (Opus 5.5) — T30: RL5/RL6 parked, everything shut down
 

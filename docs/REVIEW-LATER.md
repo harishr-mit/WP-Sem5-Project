@@ -63,7 +63,9 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 
 ## RL6: The live QR on the pass page "glitches", apparently after the first 30 seconds
 
-*2026-10-16 · OPEN · from: owner, after trying the Phase 4 portal (not investigated yet)*
+*2026-10-16 · **RESOLVED 2026-10-16** (owner asked to look after it with the Phase 5 plan) · from: owner, after trying the Phase 4 portal*
+
+**Outcome.** Reproduced by rendering the page's script with Thymeleaf. **None of the suspected causes below was the real one.** Thymeleaf's JavaScript inlining drops the default text after an inlined expression, so `/*[[${refreshSeconds}]]*/ 30 * 1000` rendered as `30`. The page swapped the image every **30 ms** instead of 30 s, minting about 33 tokens and PNGs a second. Fixed in `web-portal` (`MyPassesController` passes `refreshMillis`; `my/pass.html` inlines it into its own `const` and preloads the next image, swapping it only once loaded, which is option (a)). Regression test: `PassPagesTest.liveQrRefreshesEveryThirtySecondsNotEveryThirtyMilliseconds`. Cause (b) (the 400 → 280 px downscale with `pixelated`) is cosmetic and goes to P6 with the pass card. Details: `docs/plans/phase-5.md` §20.
 
 **Observed.** On the portal's pass page (`/my/passes/{id}`), the live QR seems to glitch, apparently from the first 30 s refresh on.
 

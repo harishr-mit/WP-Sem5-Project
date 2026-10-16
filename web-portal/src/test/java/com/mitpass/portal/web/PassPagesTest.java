@@ -89,6 +89,20 @@ class PassPagesTest {
                 .andExpect(content().string(not(containsString(TestTokens.ACCESS))));
     }
 
+    /**
+     * RL6 regression: Thymeleaf's JavaScript inlining drops the text after an inlined expression, so
+     * {@code /*[[${refreshSeconds}]]*&#47; 30 * 1000} rendered as {@code 30}: the image reloaded every 30 ms.
+     */
+    @Test
+    void liveQrRefreshesEveryThirtySecondsNotEveryThirtyMilliseconds() throws Exception {
+        given(gateway.pass(PASS_ID)).willReturn(pass("ACTIVE"));
+
+        mvc.perform(get("/my/passes/" + PASS_ID).with(authentication(TestTokens.login(student))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("const refreshMillis = 30000;")))
+                .andExpect(content().string(not(matchesPattern("(?s).*setInterval\\([^)]*\\b30\\);.*"))));
+    }
+
     @Test
     void issuedPassSaysWhenTheCodeUnlocks() throws Exception {
         given(gateway.pass(PASS_ID)).willReturn(pass("ISSUED"));

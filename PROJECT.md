@@ -140,12 +140,14 @@ flowchart LR
 |---|---|---|---|
 | `auth-service` | users, roles, refresh tokens, verification tokens | `UserRegistered` | — |
 | `event-service` | venues, events, sessions, registrations, waitlist, state history | `RegistrationConfirmed`, `RegistrationCancelled`, `WaitlistPromoted`, `EventStateChanged`, `EventRescheduled` | — |
-| `pass-service` | passes, signing keys, revocations | `PassIssued`, `PassRevoked` | `RegistrationConfirmed`, `RegistrationCancelled`, `EventStateChanged`, `EventRescheduled` |
-| `checkin-service` | scan log, attendance, presence, device sync batches | `AttendanceMarked` | `PassRevoked`, `EventStateChanged` |
+| `pass-service` | passes, signing keys, revocations | `PassIssued`, `PassRevoked` | `RegistrationConfirmed`, `RegistrationCancelled`, `EventStateChanged`, `EventRescheduled`, `AttendanceMarked` |
+| `checkin-service` | scan log, attendance, presence, device sync batches (plus a read-only copy of passes and event status for scanning) | `AttendanceMarked` | `PassIssued`, `PassRevoked`, `EventStateChanged` |
 | `notification-service` | notification log, reminder schedule | — | all of the above |
 | `web-portal` | HTTP sessions only (BFF; tokens never reach the browser) | — | — |
 
 There are no cross-service database joins. Services work together through **REST** (synchronous, for queries) and **RabbitMQ** (asynchronous, for facts that already happened).
+
+**Source of truth.** Each fact has exactly one owner: the service in whose "Owns" column it appears. A copy of another service's data (for example pass-service's event times, or checkin-service's pass copy) is a read-only cache. It is filled from the owner's events and can be rebuilt from the owner at any time. When a copy and its owner disagree, the owner is right. Details: `docs/DECISIONS.md` D14.
 
 ### The core flow
 
@@ -356,15 +358,16 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 
 ### P5 — Scan, Verify & Attendance
 
-**Goal:** an authoritative, race-safe check-in API that covers every realistic gate scenario.
+**Goal:** an authoritative, race-safe check-in API that covers every realistic gate scenario. Plan: `docs/plans/phase-5.md`.
 
 - [ ] `checkin-service` `POST /scans {token, gateId, deviceId, scannedAt}`, allowed for the VOLUNTEER role only.
-- [ ] **Verification pipeline** (chain of responsibility, each step a bean): decode → signature (cached JWKS by `kid`) → `exp` with clock-skew tolerance → event is LIVE → session/gate allowed → not revoked → volunteer is assigned to this event and gate → duplicate check.
-- [ ] Typed result codes: `ACCEPTED`, `ALREADY_CHECKED_IN`, `REVOKED`, `EXPIRED_TOKEN`, `WRONG_EVENT`, `WRONG_GATE`, `NOT_YET_OPEN`, `INVALID_SIGNATURE`, `UNAUTHORIZED_SCANNER`. Each code comes with a user-facing message and a color.
+- [ ] **Verification pipeline** (chain of responsibility, each step a bean): volunteer is assigned to this event and gate (checked first, so an unassigned account learns nothing about the pass; owner decision, 2026-10-16) → decode → signature (cached JWKS by `kid`) → `exp` with clock-skew tolerance → pass is for this event → event is LIVE → session open → pass known → not revoked → duplicate check.
+- [ ] Typed result codes: `ACCEPTED`, `ALREADY_CHECKED_IN`, `REVOKED`, `EXPIRED_TOKEN`, `WRONG_EVENT`, `WRONG_GATE`, `NOT_YET_OPEN`, `INVALID_SIGNATURE`, `UNAUTHORIZED_SCANNER`, plus `CHECKED_OUT`, `NOT_CHECKED_IN`, `REENTRY_NOT_ALLOWED`, `EVENT_CLOSED`, `UNKNOWN_PASS`, `INVALID_PASS_NUMBER` for cases the first nine can't express (owner decision, 2026-10-16; `docs/plans/phase-5.md` §5). Each code comes with a user-facing message and a color.
+- [ ] checkin-service keeps a read-only copy of passes (from `PassIssued` / `PassRevoked`) so a scan never calls pass-service; pass-service stays the source of truth (D14). Re-entry (`reentryAllowed`) and the certificate threshold (`certificateMinSessions`) are per-event settings in event-service (owner decisions, 2026-10-16).
 - [ ] Check-in transaction: `Attendance` + `ScanLog` + presence update; **unique `(pass_id, session_id)`** plus a row lock. Two volunteers scanning the same pass in the same millisecond → exactly one `ACCEPTED`.
 - [ ] Check-out / re-entry mode (presence IN ⇄ OUT); per-session attendance for multi-session workshops.
 - [ ] Manual fallback: look up by pass number (Luhn validated) and confirm visually with the name.
-- [ ] `AttendanceMarked` via the outbox; pass-service listens and marks single-entry passes as used.
+- [ ] `AttendanceMarked` via the outbox; pass-service listens and marks single-entry passes as used (new pass fields `checkedInAt` / `usedAt`, no new pass state; owner decision, 2026-10-16).
 - [ ] Reports: per-event attendance %, CSV export, certificate eligibility (attended ≥ N sessions).
 - [ ] Tests: one test per result code, plus a double-scan race test.
 - [ ] **Portal slice** (rules and intended shortcuts: `docs/DECISIONS.md` D9): a volunteer scan page with a gate selector and a text field for a pass number or pasted QR token (no camera yet), and a result page showing the result code, message and color; an organizer attendance page with counts and the attendee list (reload to update) and the CSV export link.

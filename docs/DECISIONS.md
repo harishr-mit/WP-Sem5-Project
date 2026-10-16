@@ -220,3 +220,19 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 **As built.** `IdempotentConsumer` and `EnvelopeReader` are auto-configured by `common-messaging` (`InboxQueues.inbox(...)` returns the `Declarables`); a poison message reached `pass-service.inbox.dlq` after three attempts in `PassFlowTest`, and a message republished live with the same `message_id` was skipped (exit demo).
 
 **Consequences.** checkin-service (P5) and notification-service (P7) declare their inboxes with the same helper. Until P7, a dead-lettered message just sits in the DLQ (visible in the RabbitMQ UI) and is replayed by hand.
+
+---
+
+## D14: Check-in, and who owns which data
+
+*2026-10-16 · accepted (owner answers to `docs/plans/phase-5.md` §19). To be built in Phase 5; the consistency safety net (below) is waiting for the owner's choice*
+
+**Decision.**
+- **Source of truth.** Each fact has one owner: auth-service owns users and roles; event-service owns events, their status and times, sessions, gates, volunteer assignments and registrations; pass-service owns passes, their validity and revocations, and signing keys; checkin-service owns scans, attendance and presence. A copy held by another service (pass-service's `event_ref`, checkin-service's `pass_ref` and `event_ref`) is a **read-only cache** that is filled from the owner's events, never edited by hand, and can be rebuilt from the owner. When a copy and its owner disagree, the owner wins.
+- **How copies stay in step.** The owner writes its event in the same transaction as the change (outbox, D11). The relay retries until RabbitMQ confirms. The consumer's durable inbox keeps messages while the consumer is down, and the consumer applies them idempotently (D13). A message is therefore never lost once the consumer's queue exists. The remaining gaps are: data from before the consumer's queue first existed, a message parked in a DLQ, and manual interference (purged queue, restored database). Phase 5 covers the first with a "Sync passes" action per event.
+- **Fail safe.** A missing pass in checkin-service's copy gives `UNKNOWN_PASS` (amber: the volunteer asks the organizer). A missing *revocation* would let a revoked pass in, so revocations are the direction that must be reconciled first.
+- **Pipeline (owner).** Scanner assignment first, then decode → signature → expiry → event match → LIVE → session → pass known → not revoked → duplicate. Fifteen result codes (`docs/plans/phase-5.md` §5).
+- **Single entry (owner).** pass-service records `checkedInAt` / `usedAt` from `AttendanceMarked`; no new pass state.
+- **Per-event settings (owner).** `reentryAllowed` and `certificateMinSessions` live in event-service.
+
+**Consequences.** A new service that copies another's data adds that copy to the owner table in PROJECT.md §3 and says how it is rebuilt.
