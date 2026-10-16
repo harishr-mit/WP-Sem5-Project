@@ -57,7 +57,7 @@ public class UserAdminService {
     }
 
     /**
-     * Replaces the user's roles and ends their sessions, so the next token they get carries the new roles. An admin
+     * Replaces the user's roles (plus implied ones: an ORGANIZER is also a VOLUNTEER, RL11) and ends their sessions, so the next token they get carries the new roles. An admin
      * can't remove their own ADMIN role (there would be nobody left to give it back).
      */
     @Transactional
@@ -66,7 +66,7 @@ public class UserAdminService {
             throw new BusinessRuleException("You can't remove your own ADMIN role");
         }
         User user = get(id);
-        Set<Role> resolved = new HashSet<>(roles.findByNameIn(newRoles));
+        Set<Role> resolved = new HashSet<>(roles.findByNameIn(RoleName.withImplied(newRoles)));
         user.replaceRoles(resolved);
         users.saveAndFlush(user);
         sessions.revokeAll(id, RevokeReason.ROLE_CHANGE);

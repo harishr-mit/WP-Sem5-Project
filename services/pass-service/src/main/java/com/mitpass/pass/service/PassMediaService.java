@@ -115,8 +115,11 @@ public class PassMediaService {
                 qrPng));
     }
 
-    public String passNumber(UUID passId) {
-        return lifecycle.activateIfDue(passId).getPassNumber();
+    /** RL5: {@code <event title>_<holder name>_<pass number>.pdf}, searchable by students and unique for us. */
+    public String ticketFileName(UUID passId) {
+        Pass pass = lifecycle.activateIfDue(passId);
+        return com.mitpass.pass.web.TicketFileName.of(
+                pass.getEvent().getTitle(), pass.getHolderName(), pass.getPassNumber());
     }
 
     private void requireValid(Pass pass) {

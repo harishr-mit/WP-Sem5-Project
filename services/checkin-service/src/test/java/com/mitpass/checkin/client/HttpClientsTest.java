@@ -108,6 +108,29 @@ class HttpClientsTest {
         server.verify();
     }
 
+    /** RL11: an organizer's events come from the public search, all pages, cached per organizer. */
+    @Test
+    void anOrganizersEventsAreReadPageByPageAndCached() {
+        UUID organizer = UUID.randomUUID();
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://event-service");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(
+                        ExpectedCount.once(),
+                        requestTo("http://event-service/api/events?organizerId=" + organizer + "&page=0&size=100"))
+                .andRespond(withSuccess(
+                        "{\"content\":[{\"id\":1},{\"id\":2}],\"totalPages\":2}", MediaType.APPLICATION_JSON));
+        server.expect(
+                        ExpectedCount.once(),
+                        requestTo("http://event-service/api/events?organizerId=" + organizer + "&page=1&size=100"))
+                .andRespond(withSuccess("{\"content\":[{\"id\":3}],\"totalPages\":2}", MediaType.APPLICATION_JSON));
+        HttpEventCatalog catalog = new HttpEventCatalog(
+                builder.build(), Duration.ofMinutes(1), Duration.ofSeconds(30), ZoneId.of("Asia/Kolkata"), clock);
+
+        assertThat(catalog.eventsOrganizedBy(organizer)).containsExactly(1L, 2L, 3L);
+        assertThat(catalog.eventsOrganizedBy(organizer)).containsExactly(1L, 2L, 3L); // cached
+        server.verify();
+    }
+
     @Test
     void eventServiceErrorsBecome404Or503() {
         RestClient.Builder builder = RestClient.builder().baseUrl("http://event-service");

@@ -6,11 +6,12 @@
 <main>
     <h1>My events</h1>
     <div th:replace="~{fragments :: flash}"></div>
-    <p class="hint">Only the moves the event allows right now are shown. Events go LIVE by themselves shortly before
-        they start; if one went live too early, move it back to REGISTRATION_CLOSED.</p>
+    <p class="hint">Only the actions the event allows right now are shown. Events go live by themselves shortly before
+        they start; if one went live too early, press <strong>Undo start</strong>. Cancelling, ending and undoing a
+        start ask for confirmation first.</p>
 
     <table th:if="${!events.isEmpty()}">
-        <thead><tr><th>Event</th><th>Starts</th><th>Status</th><th>Seats taken</th><th>Move to</th></tr></thead>
+        <thead><tr><th>Event</th><th>Starts</th><th>Status</th><th>Seats taken</th><th>Actions</th></tr></thead>
         <tbody>
         <tr th:each="e : ${events}">
             <td><a th:href="@{/events/{id}(id=${e.id()})}" th:text="${e.title()}">TechFest Hackathon</a>
@@ -24,7 +25,8 @@
                 <form th:each="to : ${e.allowedTransitions()}"
                       th:action="@{/organizer/events/{id}/transitions(id=${e.id()})}" method="post" class="inline">
                     <input type="hidden" name="to" th:value="${to}">
-                    <button type="submit" th:classappend="${to == 'CANCELLED'} ? 'danger'" th:text="${to}">REGISTRATION_OPEN</button>
+                    <button type="submit" th:classappend="${to == 'CANCELLED'} ? 'danger'"
+                            th:text="${@actions.label(e.status(), to)}">Open registrations</button>
                 </form>
                 <span th:if="${e.allowedTransitions().isEmpty()}">—</span>
             </td>

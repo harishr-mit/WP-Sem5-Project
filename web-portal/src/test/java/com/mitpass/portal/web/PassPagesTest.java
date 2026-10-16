@@ -203,9 +203,34 @@ class PassPagesTest {
                         .with(csrf())
                         .with(authentication(TestTokens.login(organizer)))
                         .param("eventId", "1")
-                        .param("note", "Fake ID"))
+                        .param("note", "Fake ID")
+                        .param("confirmed", "true"))
                 .andExpect(redirectedUrl("/organizer/events/1/registrations"))
                 .andExpect(flash().attribute("message", "Pass TECHFEST26-000042-7 is now REVOKED."));
+    }
+
+    /** RL9: revoking asks first, showing whose pass it is; nothing is revoked on the first click. */
+    @Test
+    void revokeAsksForConfirmationFirst() throws Exception {
+        given(gateway.pass(PASS_ID)).willReturn(pass("ACTIVE"));
+
+        mvc.perform(post("/organizer/passes/" + PASS_ID + "/revoke")
+                        .with(csrf())
+                        .with(authentication(TestTokens.login(organizer)))
+                        .param("eventId", "1")
+                        .param("note", "Fake ID"))
+                .andExpect(redirectedUrl("/organizer/passes/" + PASS_ID + "/revoke/confirm?eventId=1&note=Fake+ID"));
+        verify(gateway, never()).revokePass(any(), any());
+
+        mvc.perform(get("/organizer/passes/" + PASS_ID + "/revoke/confirm")
+                        .param("eventId", "1")
+                        .param("note", "Fake ID")
+                        .with(authentication(TestTokens.login(organizer))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Priya Raman")))
+                .andExpect(content().string(containsString("TECHFEST26-000042-7")))
+                .andExpect(content().string(containsString("name=\"confirmed\" value=\"true\"")))
+                .andExpect(content().string(containsString("value=\"Fake ID\"")));
     }
 
     static Pass pass(String status) {

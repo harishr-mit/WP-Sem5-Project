@@ -90,6 +90,26 @@ class ScanPagesTest {
                 .andExpect(content().string(containsString("TECHFEST26 · Main Gate")));
     }
 
+    /** RL11: an organizer gets the scan page with every gate of their own events, no assignment needed. */
+    @Test
+    void anOrganizerScansAtTheGatesOfTheirOwnEvents() throws Exception {
+        PortalUser organizerOnly = TestTokens.user("ORGANIZER");
+        given(gateway.myAssignments()).willReturn(List.of());
+        given(gateway.events(null, null, organizerOnly.id(), 0))
+                .willReturn(new Page<>(
+                        List.of(new com.mitpass.portal.client.ApiModels.EventSummary(
+                                7L, "RANG26", "Rangoli", null, null, null, null, null, null, null, null)),
+                        0,
+                        20,
+                        1,
+                        1));
+        given(gateway.gates(7L)).willReturn(List.of(new Gate(21L, "OAT", "Open Air Theatre")));
+
+        mvc.perform(get("/scan").with(authentication(TestTokens.login(organizerOnly))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("RANG26 · Open Air Theatre (your event)")));
+    }
+
     @Test
     void anAnyGateAssignmentListsEveryGateOfTheEvent() throws Exception {
         given(gateway.myAssignments())

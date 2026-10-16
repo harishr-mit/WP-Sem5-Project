@@ -55,7 +55,9 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 
 ## RL5: PDF ticket file name: event name + student id
 
-*2026-10-16 · OPEN · from: owner, after trying the Phase 4 portal*
+*2026-10-16 · **RESOLVED 2026-10-16** · from: owner, after trying the Phase 4 portal*
+
+**Outcome.** Owner: "easily searchable by the students: the event name plus whose ticket it is, plus something unique for us". Built: `<event title>_<holder name>_<pass number>.pdf`, for example `TechFest-Hackathon_Priya-Raman_TECHFEST26-000042-5.pdf`. Each part keeps letters (any script) and digits, everything else becomes a dash, at most 60 characters per part. The header carries an ASCII `filename` (accents removed) and the UTF-8 `filename*` (RFC 6266). The holder's name is used rather than the register number, because every pass has a name, and Gmail sign-ups have no register number. pass-service `TicketFileName` + `TicketFileNameTest` (4), `PassApiTests` updated; the portal passes the header through unchanged.
 
 **Request.** Name the downloaded ticket `<event name>-<student id>.pdf` instead of the pass number.
 
@@ -91,7 +93,9 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 
 ## RL8: Rename the lifecycle buttons ("Move to" column)
 
-*2026-10-16 · OPEN · from: owner, after trying the portal*
+*2026-10-16 · **RESOLVED 2026-10-16** (owner: "go ahead") · from: owner, after trying the portal*
+
+**Outcome.** Built in the portal (`LifecycleActions`, `organizer/events.html`): the column is now "Actions" and the buttons read **Publish**, **Open registrations**, **Close registrations**, **Undo start** (LIVE → REGISTRATION_CLOSED), **End event** and **Cancel event**. The API keeps its state names. P6 moves the wording into the i18n message bundles. Test: `PortalPagesTest.lifecycleButtonsAreNamedAsActions`.
 
 **Request.** The organizer's *My events* page has a "Move to" column whose buttons show raw state names (`PUBLISHED`, `REGISTRATION_OPEN`, `CANCELLED`, …). Use direct action words instead: **Publish**, **Open registrations**, **Cancel**, and likewise for the rest.
 
@@ -101,7 +105,9 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 
 ## RL9: Ask for confirmation before critical actions
 
-*2026-10-16 · OPEN · from: owner, after trying the portal ("accidental clicks should not cancel an event")*
+*2026-10-16 · **RESOLVED 2026-10-16** (owner: "go ahead") · from: owner, after trying the portal ("accidental clicks should not cancel an event")*
+
+**Outcome.** Built in the portal. **Cancel event**, **End event**, **Undo start** and **Revoke pass** now lead to a confirmation page (PRG) that says what will happen; nothing changes on the first click. Cancelling also needs the event code typed in. The portal server enforces this (a POST without `confirmed=true` only redirects to the confirmation page, and a wrong code is refused), so a double-click or a replayed form can't skip it. Publish, open and close registrations stay one click. The volunteer's check-out stays one click (it is reversible: scan in again). Not done: a `confirm` flag in the REST API itself (option c); API clients are trusted tools (Swagger, scripts). Tests: `PortalPagesTest` (3 new), `PassPagesTest.revokeAsksForConfirmationFirst`.
 
 **Request.** A critical button must ask "are you sure?" before it acts, so one accidental click can't cancel an event.
 
@@ -121,10 +127,24 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 
 ## RL11: An organizer can also be a volunteer
 
-*2026-10-16 · OPEN · from: owner, after trying the portal*
+*2026-10-16 · **RESOLVED 2026-10-16** · from: owner, after trying the portal*
+
+**Outcome (built).** Owner's confirmations: (1) outside their own events, a volunteer or organizer needs an assignment to that gate to scan, their own ticket included; (2) organizers get VOLUNTEER automatically. auth-service: `RoleName.withImplied` adds VOLUNTEER whenever ORGANIZER is set, V4 migration for existing organizers, demo seed updated (organizers log in again to get the new role in their token). checkin-service: `POST /api/scans` and lookup allow VOLUNTEER or ORGANIZER; the pipeline's first step admits an organizer at any gate of an event they organize (public catalogue search by organizer, cached 30 s), otherwise the assignment rules apply (WRONG_GATE / UNAUTHORIZED_SCANNER). Portal: organizers get the Scan page, with every gate of their own events ("(your event)") plus any assigned gates. Volunteers still can't revoke passes; correcting a wrong check-in is RL12. Tests: `RoleNameTest` (2), `AuthFlowTests` (+1), `OrganizersAreVolunteersMigrationTest` (1), `ScanVerificationTest` (+3), `HttpClientsTest` (+1), `ScanPagesTest` (+1), security matrix (organizers allowed on the scan endpoints).
+
+**Owner's answer (2026-10-16).** Yes: in a college the organizers are mostly the same people who check people in. Organizers can let people in and out at **any gate of an event they organize**. At events they don't organize, the volunteer rules apply to them. Volunteers can register for events like any student, and may scan their own tickets. Not built yet: two points are being confirmed with the owner first (do volunteers still need an assignment to scan at an event, including their own ticket; should organizers get the VOLUNTEER role automatically). The owner also asked whether a volunteer (or an organizer at someone else's event) can revoke a wrongly scanned ticket: no. Revoking a pass is for the event's organizer and admins only, and there is no "undo a check-in" for anyone yet (RL12).
 
 **Request.** An organizer should be able to work as a volunteer too, for example scanning at the gate of their own event.
 
 **Built for now.** Roles are a set per user (auth-service, many-to-many since P2), so one account *can* already hold ORGANIZER and VOLUNTEER together, but only if an admin grants VOLUNTEER (`PUT /api/users/{id}/roles`). The seeded organizers have ORGANIZER only. Scanning needs the VOLUNTEER role (`ScanController`, D7) **and** an assignment to the gate's event (`volunteer_assignment`, the pipeline's first step); assigning someone also requires them to hold VOLUNTEER (`StaffingService.assign`, 422 otherwise). So today an organizer cannot scan at their own event unless an admin adds the role and someone assigns them. With both roles, the portal header shows both *My events* and *Scan*.
 
 **To decide.** (a) Should every organizer get VOLUNTEER automatically (an implied role: ORGANIZER includes VOLUNTEER), or should it stay an explicit extra role an admin grants? (b) May an organizer scan at their **own** events without an assignment (ownership counts as assignment to every gate), or only where assigned like anyone else? (c) May an organizer assign themselves (today the volunteer must hold VOLUNTEER; an organizer adding themselves is allowed by the ownership rule once they have it)? (d) Admins: same question (RL10, "admin can do pretty much anything"). (e) Whatever is chosen: `SecurityMatrixTest` gets an "organizer (owner) scanning" column, and scan logs keep recording the scanner's own id so audits still show who scanned.
+
+## RL12: Correcting a wrong check-in
+
+*2026-10-16 · OPEN · from: owner's question on RL11 ("volunteers cannot revoke a scanned ticket themselves, right?")*
+
+**Question.** If a pass is checked in by mistake (wrong person, wrong session, a test scan), who can correct it, and how?
+
+**Built for now.** Nobody can undo a check-in. Revoking a pass (organizer of the event or admin only, pass-service) is something else: it makes the whole pass invalid from then on, and it does not remove the check-in. A check-out (any assigned scanner) only moves presence to OUT; the attendance row stays, so it still counts for reports and certificates. Every scan is in `scan_log`.
+
+**Options.** (a) An organizer/admin action "void check-in": marks the attendance row void (kept for audit, excluded from counts and certificates), moves presence back, and publishes a correcting event so pass-service clears `checkedInAt` / `usedAt`. Volunteers can't do it. (b) Leave it: check-out plus a manual note. (c) Only admins. Whatever is chosen, it is a confirmed action (RL9) with its own audit row.

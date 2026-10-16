@@ -328,10 +328,64 @@ class ScanVerificationTest {
         assertThat(count("attendance WHERE pass_id = '" + p.id() + "'")).isEqualTo(2);
     }
 
+    // ---- RL11 (owner, 2026-10-16): organizers scan at any gate of their own events; elsewhere volunteer rules -------
+
     @Test
-    void onlyVolunteersMayScanAndTheBodyIsValidated() throws Exception {
+    void anOrganizerScansAtAnyGateOfTheirOwnEventWithoutAnAssignment() throws Exception {
+        String owner = TestJwtIssuer.tokenFor(CheckinFixtures.ORGANIZER, Roles.ORGANIZER); // no VOLUNTEER claim needed
+
+        scanAs(owner, scenario.liveToken(pass), gate.north().id())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result").value("ACCEPTED"))
+                .andExpect(jsonPath("$.gateCode").value("NORTH"));
+    }
+
+    @Test
+    void atAnEventTheyDontOrganizeAnOrganizerFollowsTheVolunteerRules() throws Exception {
+        UUID organizer = UUID.randomUUID();
+        String token = TestJwtIssuer.tokenFor(organizer, Roles.ORGANIZER, Roles.VOLUNTEER);
+        // gate's event belongs to CheckinFixtures.ORGANIZER, not to this organizer
+
+        rejected(scanAs(token, scenario.liveToken(pass), gate.main().id()), 403, "UNAUTHORIZED_SCANNER", "RED");
+
+        catalog.assign(organizer, gate.event(), gate.main()); // assigned to MAIN like any volunteer
+        scanAs(token, scenario.liveToken(pass), gate.main().id()).andExpect(status().isOk());
+        PassRecord second = scenario.pass(gate, 2, "Arun Kumar");
+        rejected(scanAs(token, scenario.liveToken(second), gate.north().id()), 409, "WRONG_GATE", "AMBER");
+    }
+
+    @Test
+    void anAssignedVolunteerMayScanTheirOwnTicket() throws Exception {
+        PassRecord own = new PassRecord(
+                UUID.randomUUID(),
+                com.mitpass.common.pass.PassNumber.of(gate.event().code(), 5),
+                "ACTIVE",
+                UUID.randomUUID(),
+                gate.event().id(),
+                gate.volunteer(),
+                "Karthik Selvam",
+                "karthik@mitpass.test",
+                clock.instant(),
+                null,
+                null);
+        scenario.put(own);
+
+        scan(gate, scenario.liveToken(own), null, gate.main().id(), "IN")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result").value("ACCEPTED"));
+    }
+
+    ResultActions scanAs(String bearer, String token, long gateId) throws Exception {
+        return mvc.perform(post("/api/scans")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + bearer)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body(token, null, gateId, "IN")));
+    }
+
+    @Test
+    void studentsMayNotScanAndTheBodyIsValidated() throws Exception {
         mvc.perform(post("/api/scans")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtIssuer.token(Roles.ORGANIZER))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtIssuer.token(Roles.STUDENT))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(
                                 body(scenario.liveToken(pass), null, gate.main().id(), "IN")))

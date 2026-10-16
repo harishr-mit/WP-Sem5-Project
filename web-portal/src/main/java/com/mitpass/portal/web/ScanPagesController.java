@@ -1,6 +1,8 @@
 package com.mitpass.portal.web;
 
+import com.mitpass.portal.auth.PortalUser;
 import com.mitpass.portal.client.ApiModels.Assignment;
+import com.mitpass.portal.client.ApiModels.EventSummary;
 import com.mitpass.portal.client.ApiModels.Gate;
 import com.mitpass.portal.client.ApiModels.LookupAnswer;
 import com.mitpass.portal.client.ApiModels.ScanAnswer;
@@ -9,9 +11,12 @@ import com.mitpass.portal.client.GatewayClient;
 import jakarta.servlet.http.HttpSession;
 import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,8 +50,8 @@ public class ScanPagesController {
     }
 
     @GetMapping("/scan")
-    public String scanPage(Model model, HttpSession session) {
-        List<GateOption> options = gateOptions();
+    public String scanPage(@AuthenticationPrincipal PortalUser user, Model model, HttpSession session) {
+        List<GateOption> options = gateOptions(user);
         Long remembered = (Long) session.getAttribute(GATE);
         boolean stillAssigned = remembered != null && options.stream().anyMatch(o -> o.gateId() == remembered);
         Long gateId = stillAssigned
@@ -118,16 +123,29 @@ public class ScanPagesController {
         return "redirect:/scan";
     }
 
-    /** Every gate the volunteer may scan at: assigned gates, or all gates of an "any gate" assignment. */
-    private List<GateOption> gateOptions() {
-        List<GateOption> options = new ArrayList<>();
-        for (Assignment a : gateway.myAssignments()) {
-            List<Gate> gates = a.gate() != null ? List.of(a.gate()) : gateway.gates(a.eventId());
-            for (Gate gate : gates) {
-                options.add(new GateOption(gate.id(), a.eventCode() + " · " + gate.name()));
+    /**
+     * Every gate the user may scan at: assigned gates (all gates of an "any gate" assignment), and for an organizer every
+     * gate of the events they organize (RL11). A gate appears once.
+     */
+    private List<GateOption> gateOptions(PortalUser user) {
+        Map<Long, GateOption> options = new LinkedHashMap<>();
+        if (user.hasRole("ORGANIZER")) {
+            for (EventSummary event : gateway.events(null, null, user.id(), 0).content()) {
+                for (Gate gate : gateway.gates(event.id())) {
+                    options.putIfAbsent(
+                            gate.id(), new GateOption(gate.id(), event.code() + " · " + gate.name() + " (your event)"));
+                }
             }
         }
-        return options;
+        if (user.hasRole("VOLUNTEER")) {
+            for (Assignment a : gateway.myAssignments()) {
+                List<Gate> gates = a.gate() != null ? List.of(a.gate()) : gateway.gates(a.eventId());
+                for (Gate gate : gates) {
+                    options.putIfAbsent(gate.id(), new GateOption(gate.id(), a.eventCode() + " · " + gate.name()));
+                }
+            }
+        }
+        return new ArrayList<>(options.values());
     }
 
     /** A random id per browser session: the scan log tells this device's scans apart. */

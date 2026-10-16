@@ -16,7 +16,7 @@
         <a sec:authorize="isAuthenticated()" th:href="@{/my/registrations}">My registrations</a>
         <a sec:authorize="isAuthenticated()" th:href="@{/my/passes}">My passes</a>
         <a sec:authorize="hasAnyRole('ORGANIZER', 'ADMIN')" th:href="@{/organizer/events}">My events</a>
-        <a sec:authorize="hasRole('VOLUNTEER')" th:href="@{/scan}">Scan</a>
+        <a sec:authorize="hasAnyRole('VOLUNTEER', 'ORGANIZER')" th:href="@{/scan}">Scan</a>
     </nav>
     <div class="who">
         <th:block th:if="${currentUser != null}">

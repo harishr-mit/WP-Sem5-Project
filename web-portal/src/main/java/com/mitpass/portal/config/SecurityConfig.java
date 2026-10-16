@@ -42,7 +42,7 @@ public class SecurityConfig {
                         .requestMatchers("/organizer/**")
                         .hasAnyRole("ORGANIZER", "ADMIN")
                         .requestMatchers("/scan", "/scan/**")
-                        .hasRole("VOLUNTEER")
+                        .hasAnyRole("VOLUNTEER", "ORGANIZER") // organizers are volunteers too (RL11)
                         .anyRequest()
                         .authenticated())
                 .formLogin(form -> form.loginPage("/login")

@@ -64,7 +64,8 @@ class SecurityMatrixTest {
     @Test
     void everyRoleAgainstEveryEndpoint() throws Exception {
         clock.set(TestClock.START);
-        Rule volunteers = Rule.only(VOLUNTEER, STRANGER);
+        // RL11: organizers may scan too; which gate is the pipeline's business (owner: any gate of own events).
+        Rule scanners = Rule.only(VOLUNTEER, STRANGER, OWNER, OTHER);
         Rule ownerAdmin = Rule.only(OWNER, ADMIN);
         Function<Fixture, String> none = f -> null;
 
@@ -75,14 +76,14 @@ class SecurityMatrixTest {
                         f -> "/api/scans",
                         f -> "{\"token\":\"%s\",\"gateId\":%d,\"deviceId\":\"m-1\"}"
                                 .formatted(f.token(), f.gate().main().id()),
-                        volunteers),
+                        scanners),
                 new Endpoint(
                         HttpMethod.GET,
                         "/api/scans/lookup",
                         f -> "/api/scans/lookup?passNumber=" + f.pass().passNumber() + "&gateId="
                                 + f.gate().main().id(),
                         none,
-                        volunteers),
+                        scanners),
                 new Endpoint(
                         HttpMethod.GET,
                         "/api/attendance/events/{id}/summary",
