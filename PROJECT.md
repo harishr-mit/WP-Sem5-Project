@@ -47,9 +47,9 @@ Payments, native mobile apps, and multi-college tenancy. These are listed as pos
 
 **Students:** browse and search events (by category, date and department), register or cancel, see their waitlist position, keep a "My Passes" wallet with a rotating QR, download a PDF ticket, add events to their calendar (`.ics`), and view attendance history and certificate eligibility.
 
-**Organizers:** create and edit events (venue, capacity, registration window, eligibility rules, sessions), move an event through its lifecycle, see registrations, revoke passes, assign volunteers to gates, view a live attendance dashboard, and export attendance as CSV.
+**Organizers:** create and edit events (venue, capacity, registration window, eligibility rules, sessions), move an event through its lifecycle, see registrations, revoke passes, assign volunteers to gates, view a live attendance dashboard, and export attendance as CSV. **Every organizer is also a volunteer** (owner decision, 2026-10-16): they check people in and out at any gate of the events they organize without being assigned; at other events the volunteer rules apply to them.
 
-**Volunteers:** a full-screen camera scanner with a big green/red result, sound and vibration, a gate selector, manual pass-number entry, check-in/check-out mode, and offline mode with later sync.
+**Volunteers:** scan only at gates they are assigned to (they may scan their own ticket there; they can't revoke passes or undo a check-in). A full-screen camera scanner with a big green/red result, sound and vibration, a gate selector, manual pass-number entry, check-in/check-out mode, and offline mode with later sync.
 
 **Admins:** user and role management, and a system health overview.
 

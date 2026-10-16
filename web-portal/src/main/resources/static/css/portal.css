@@ -52,3 +52,6 @@ code { font-family: ui-monospace, monospace; }
 .scan-message { font-size: 1.15rem; margin: 0.25rem 0; }
 .scan-result code { color: #fff; }
 fieldset { border: 0; padding: 0; display: flex; gap: 1rem; }
+
+/* RL9: confirmation pages */
+.box.warn { border-left: 4px solid var(--err); }

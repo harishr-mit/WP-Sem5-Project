@@ -88,6 +88,12 @@ public class ScanScenario {
         return pass;
     }
 
+    /** Puts a ready-made pass in the copy and at the owner. */
+    public void put(PassRecord pass) {
+        directory.put(pass);
+        copy.upsert(ref(pass), clock.instant());
+    }
+
     /** A pass only the owner knows: no message reached this service. */
     public PassRecord ownerOnlyPass(Gate gate, int seq, String holder) {
         PassRecord pass = CheckinFixtures.pass(gate.event(), seq, holder);

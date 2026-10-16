@@ -54,6 +54,9 @@ class PassApiTests {
     static final String VOLUNTEER = TestJwtIssuer.token(Roles.STUDENT, Roles.VOLUNTEER);
 
     @Autowired
+    org.springframework.transaction.support.TransactionTemplate tx;
+
+    @Autowired
     MockMvc mvc;
 
     @Autowired
@@ -171,14 +174,16 @@ class PassApiTests {
     }
 
     @Test
-    void ticketPdfDownloadsWithThePassNumberAsFileName() throws Exception {
-        String number = passes.findById(activePass).orElseThrow().getPassNumber();
+    void ticketPdfIsNamedAfterTheEventTheHolderAndThePassNumber() throws Exception {
+        var pass = tx.execute(status -> {
+            var p = passes.findById(activePass).orElseThrow();
+            return TicketFileName.of(p.getEvent().getTitle(), p.getHolderName(), p.getPassNumber());
+        });
 
         byte[] pdf = mvc.perform(as(holder, get("/api/passes/{id}/ticket.pdf", activePass)))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_PDF))
-                .andExpect(
-                        header().string(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + number + ".pdf\""))
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, TicketFileName.header(pass)))
                 .andReturn()
                 .getResponse()
                 .getContentAsByteArray();

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Confirm')}"></head>
+<body>
+<header th:replace="~{fragments :: header}"></header>
+<main>
+    <!-- RL9: critical moves are confirmed here first (the server refuses them without confirmed=true). -->
+    <h1 th:text="${label} + ': ' + ${event.title()} + '?'">Cancel event: Tech Quiz?</h1>
+    <div th:replace="~{fragments :: flash}"></div>
+
+    <section class="box warn">
+        <p th:text="${consequence}">The event is cancelled for everyone. This can't be undone.</p>
+        <p class="hint">Event <code th:text="${event.code()}">MINIQUIZ26</code>, now
+            <span class="status" th:text="${event.status()}">REGISTRATION_OPEN</span>.</p>
+    </section>
+
+    <form th:action="@{/organizer/events/{id}/transitions(id=${event.id()})}" method="post" class="stack box">
+        <input type="hidden" name="to" th:value="${to}">
+        <input type="hidden" name="confirmed" value="true">
+        <label th:if="${needsCode}">Type the event code <code th:text="${event.code()}">MINIQUIZ26</code> to confirm
+            <input type="text" name="code" autocomplete="off" required autofocus>
+        </label>
+        <div>
+            <button type="submit" class="danger" th:text="${label}">Cancel event</button>
+            <a th:href="@{/organizer/events}">Go back</a>
+        </div>
+    </form>
+</main>
+</body>
+</html>

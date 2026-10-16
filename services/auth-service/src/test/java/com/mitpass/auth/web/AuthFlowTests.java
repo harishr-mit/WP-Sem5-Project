@@ -166,6 +166,27 @@ class AuthFlowTests {
                 .andExpect(status().isUnprocessableContent());
     }
 
+    /** RL11 (owner, 2026-10-16): every organizer is also a volunteer, automatically. */
+    @Test
+    void makingSomeoneAnOrganizerMakesThemAVolunteerToo() throws Exception {
+        User admin = accounts.verifiedUser(TestAccounts.uniqueGmail(), RoleName.ADMIN);
+        User user = accounts.verifiedUser(TestAccounts.uniqueGmail(), RoleName.STUDENT);
+        String adminToken = accessTokenOf(admin.getEmail());
+
+        mvc.perform(put("/api/users/{id}/roles", user.getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"roles\":[\"ORGANIZER\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles", hasItem("ORGANIZER")))
+                .andExpect(jsonPath("$.roles", hasItem("VOLUNTEER")));
+
+        assertThat(SignedJWT.parse(accessTokenOf(user.getEmail()))
+                        .getJWTClaimsSet()
+                        .getStringListClaim("roles"))
+                .containsExactlyInAnyOrder("ORGANIZER", "VOLUNTEER");
+    }
+
     @Test
     void keyRotationKeepsOldTokensValid() throws Exception {
         User admin = accounts.verifiedUser(TestAccounts.uniqueGmail(), RoleName.ADMIN);

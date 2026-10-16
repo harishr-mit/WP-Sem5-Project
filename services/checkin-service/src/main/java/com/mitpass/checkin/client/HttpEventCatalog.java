@@ -44,6 +44,7 @@ public class HttpEventCatalog implements EventCatalog {
     private final Cache<Long, EventInfo> events;
     private final Cache<Long, List<GateInfo>> gates;
     private final Cache<UUID, List<Assignment>> assignments;
+    private final Cache<UUID, List<Long>> organized;
 
     public HttpEventCatalog(RestClient rest, Duration eventTtl, Duration assignmentTtl, ZoneId zone, Clock clock) {
         this.rest = rest;
@@ -51,6 +52,7 @@ public class HttpEventCatalog implements EventCatalog {
         this.events = cache(eventTtl, clock);
         this.gates = cache(eventTtl, clock);
         this.assignments = cache(assignmentTtl, clock);
+        this.organized = cache(assignmentTtl, clock);
     }
 
     private static <K, V> Cache<K, V> cache(Duration ttl, Clock clock) {
@@ -96,6 +98,32 @@ public class HttpEventCatalog implements EventCatalog {
                                 .retrieve()
                                 .body(ASSIGNMENTS),
                         null));
+    }
+
+    @Override
+    public List<Long> eventsOrganizedBy(UUID organizerId) {
+        return organized.get(organizerId, id -> {
+            List<Long> ids = new ArrayList<>();
+            int page = 0;
+            SearchPage result;
+            do {
+                int current = page;
+                result = call(
+                        "events of organizer " + id,
+                        () -> rest.get()
+                                .uri(uri -> uri.path("/api/events")
+                                        .queryParam("organizerId", id)
+                                        .queryParam("page", current)
+                                        .queryParam("size", 100)
+                                        .build())
+                                .retrieve()
+                                .body(SearchPage.class),
+                        null);
+                result.content().forEach(e -> ids.add(e.id()));
+                page++;
+            } while (page < result.totalPages());
+            return ids;
+        });
     }
 
     @Override

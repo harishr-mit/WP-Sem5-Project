@@ -15,6 +15,7 @@ import com.mitpass.checkin.repository.PassCopyStore;
 import com.mitpass.checkin.service.PassCopyReconciler;
 import com.mitpass.common.pass.PassNumber;
 import com.mitpass.common.pass.PassTokenVerifier;
+import com.mitpass.common.security.Roles;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -31,7 +32,10 @@ public final class Steps {
 
     private Steps() {}
 
-    /** 10. Is this volunteer assigned to the gate's event, and to this gate (or any gate)? */
+    /**
+     * 10. Is this volunteer assigned to the gate's event, and to this gate (or any gate)? Or does this organizer run the
+     * gate's event (RL11)?
+     */
     @Component
     @Order(10)
     public static class ScannerAssigned implements ScanStep {
@@ -59,6 +63,16 @@ public final class Steps {
                     }
                 }
             }
+            // RL11 (owner, 2026-10-16): an organizer may scan at any gate of an event they organize, unassigned.
+            if (scan.volunteer().hasRole(Roles.ORGANIZER)) {
+                for (long eventId : catalog.eventsOrganizedBy(scan.volunteer().id())) {
+                    Optional<GateInfo> gate = gateOf(eventId, gateId);
+                    if (gate.isPresent()) {
+                        return admit(scan, eventId, gate.get());
+                    }
+                }
+            }
+            // Elsewhere the volunteer rules apply, to organizers too.
             for (Assignment a : assignments) {
                 if (a.gate() != null && gateOf(a.eventId(), gateId).isPresent()) {
                     return Rejection.of(

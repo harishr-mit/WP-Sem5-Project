@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Revoke pass')}"></head>
+<body>
+<header th:replace="~{fragments :: header}"></header>
+<main>
+    <!-- RL9: revoking can't be undone, so it is confirmed here first. -->
+    <h1>Revoke this pass?</h1>
+    <section class="box warn">
+        <dl class="facts">
+            <dt>Holder</dt>
+            <dd class="pass-holder" th:text="${pass.holderName()}">Priya Raman</dd>
+            <dt>Pass</dt>
+            <dd><code th:text="${pass.passNumber()}">TECHFEST26-000042-7</code></dd>
+            <dt>Event</dt>
+            <dd th:text="${pass.eventTitle()}">TechFest Hackathon</dd>
+        </dl>
+        <p>The pass stops working at once, at every gate and on the printed ticket. This can't be undone.</p>
+    </section>
+    <form th:action="@{/organizer/passes/{id}/revoke(id=${pass.id()})}" method="post" class="stack box">
+        <input type="hidden" name="eventId" th:value="${eventId}">
+        <input type="hidden" name="confirmed" value="true">
+        <label>Reason (optional)
+            <input type="text" name="note" maxlength="200" th:value="${note}">
+        </label>
+        <div>
+            <button type="submit" class="danger">Revoke pass</button>
+            <a th:href="@{/organizer/events/{id}/registrations(id=${eventId})}">Go back</a>
+        </div>
+    </form>
+</main>
+</body>
+</html>

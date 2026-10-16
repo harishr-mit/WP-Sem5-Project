@@ -327,6 +327,98 @@ class PortalPagesTest {
                 .andExpect(flash().attribute("message", "Tech Quiz is now REGISTRATION_CLOSED."));
     }
 
+    /** RL8: buttons say what they do ("Close registrations", "Cancel event"), not the target state's name. */
+    @Test
+    void lifecycleButtonsAreNamedAsActions() throws Exception {
+        mvc.perform(get("/organizer/events").with(authentication(TestTokens.login(organizer))))
+                .andExpect(content().string(containsString("<th>Actions</th>")))
+                .andExpect(content().string(containsString(">Close registrations</button>")))
+                .andExpect(content().string(containsString(">Cancel event</button>")))
+                .andExpect(content().string(not(containsString(">CANCELLED</button>"))));
+
+        given(gateway.event(1L)).willReturn(detail(1, List.of(), "LIVE", List.of("REGISTRATION_CLOSED", "COMPLETED")));
+        mvc.perform(get("/organizer/events").with(authentication(TestTokens.login(organizer))))
+                .andExpect(content().string(containsString(">Undo start</button>")))
+                .andExpect(content().string(containsString(">End event</button>")));
+
+        given(gateway.event(1L)).willReturn(detail(1, List.of(), "DRAFT", List.of("PUBLISHED")));
+        mvc.perform(get("/organizer/events").with(authentication(TestTokens.login(organizer))))
+                .andExpect(content().string(containsString(">Publish</button>")));
+    }
+
+    /** RL9: a critical move goes to a confirmation page first; nothing changes on the first click. */
+    @Test
+    void cancellingNeedsConfirmationAndTheEventCode() throws Exception {
+        mvc.perform(post("/organizer/events/1/transitions")
+                        .with(csrf())
+                        .with(authentication(TestTokens.login(organizer)))
+                        .param("to", "CANCELLED"))
+                .andExpect(redirectedUrl("/organizer/events/1/transitions/confirm?to=CANCELLED"));
+        verify(gateway, never()).transition(anyLong(), anyString());
+
+        mvc.perform(get("/organizer/events/1/transitions/confirm")
+                        .param("to", "CANCELLED")
+                        .with(authentication(TestTokens.login(organizer))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Cancel event")))
+                .andExpect(content().string(containsString("be undone")))
+                .andExpect(content().string(containsString("name=\"code\"")));
+
+        mvc.perform(post("/organizer/events/1/transitions")
+                        .with(csrf())
+                        .with(authentication(TestTokens.login(organizer)))
+                        .param("to", "CANCELLED")
+                        .param("confirmed", "true")
+                        .param("code", "WRONG"))
+                .andExpect(redirectedUrl("/organizer/events/1/transitions/confirm?to=CANCELLED"))
+                .andExpect(flash().attribute("error", containsString("MINIQUIZ26")));
+        verify(gateway, never()).transition(anyLong(), anyString());
+
+        given(gateway.transition(1L, "CANCELLED")).willReturn(detail(1, List.of(), "CANCELLED", List.of()));
+        mvc.perform(post("/organizer/events/1/transitions")
+                        .with(csrf())
+                        .with(authentication(TestTokens.login(organizer)))
+                        .param("to", "CANCELLED")
+                        .param("confirmed", "true")
+                        .param("code", " miniquiz26 "))
+                .andExpect(redirectedUrl("/organizer/events"))
+                .andExpect(flash().attribute("message", "Tech Quiz is now CANCELLED."));
+    }
+
+    @Test
+    void endingAndUndoingAStartAreConfirmedToo() throws Exception {
+        given(gateway.event(1L)).willReturn(detail(1, List.of(), "LIVE", List.of("REGISTRATION_CLOSED", "COMPLETED")));
+        for (String to : List.of("COMPLETED", "REGISTRATION_CLOSED")) {
+            mvc.perform(post("/organizer/events/1/transitions")
+                            .with(csrf())
+                            .with(authentication(TestTokens.login(organizer)))
+                            .param("to", to))
+                    .andExpect(redirectedUrl("/organizer/events/1/transitions/confirm?to=" + to));
+        }
+        verify(gateway, never()).transition(anyLong(), anyString());
+
+        given(gateway.transition(1L, "COMPLETED")).willReturn(detail(1, List.of(), "COMPLETED", List.of()));
+        mvc.perform(post("/organizer/events/1/transitions")
+                        .with(csrf())
+                        .with(authentication(TestTokens.login(organizer)))
+                        .param("to", "COMPLETED")
+                        .param("confirmed", "true"))
+                .andExpect(redirectedUrl("/organizer/events"));
+        verify(gateway).transition(1L, "COMPLETED");
+    }
+
+    @Test
+    void theConfirmPageRefusesMovesThatAreNotCriticalOrNotAllowed() throws Exception {
+        mvc.perform(get("/organizer/events/1/transitions/confirm")
+                        .param("to", "REGISTRATION_CLOSED") // REGISTRATION_OPEN → CLOSED: not critical
+                        .with(authentication(TestTokens.login(organizer))))
+                .andExpect(redirectedUrl("/organizer/events"));
+        mvc.perform(get("/organizer/events/1/transitions/confirm")
+                        .param("to", "COMPLETED") // not allowed from REGISTRATION_OPEN
+                        .with(authentication(TestTokens.login(organizer))))
+                .andExpect(redirectedUrl("/organizer/events"));
+    }
+
     @Test
     void studentsCannotOpenOrganizerPages() throws Exception {
         mvc.perform(get("/organizer/events").with(authentication(TestTokens.login(student))))

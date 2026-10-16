@@ -51,6 +51,14 @@ public class FakeEventCatalog implements EventCatalog {
     }
 
     @Override
+    public List<Long> eventsOrganizedBy(UUID organizerId) {
+        return events.values().stream()
+                .filter(e -> organizerId.equals(e.organizerId()))
+                .map(EventInfo::id)
+                .toList();
+    }
+
+    @Override
     public List<Assignment> assignmentsOf(CurrentUser volunteer) {
         return List.copyOf(assignments.getOrDefault(volunteer.id(), List.of()));
     }

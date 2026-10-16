@@ -26,13 +26,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Gate scans (docs/plans/phase-5.md §7). VOLUNTEER only; the assignment to the gate's event and gate is checked by the
- * pipeline's first step, so a 403 here can also be the {@code scan/unauthorized-scanner} result.
+ * Gate scans (docs/plans/phase-5.md §7). VOLUNTEER or ORGANIZER (organizers are volunteers too, RL11). Who may scan at
+ * which gate is the pipeline's first step: an assignment, or organizing the gate's event. So a 403 here can also be the
+ * {@code scan/unauthorized-scanner} result.
  */
 @RestController
 @Validated
 @RequestMapping("/api/scans")
-@PreAuthorize("hasRole('VOLUNTEER')")
+@PreAuthorize("hasAnyRole('VOLUNTEER', 'ORGANIZER')")
 @Tag(name = "Scans", description = "Verify what an attendee shows at a gate and check them in or out")
 public class ScanController {
 
@@ -44,7 +45,7 @@ public class ScanController {
 
     @PostMapping
     @Operation(
-            summary = "Scan a QR token or a typed pass number (VOLUNTEER assigned to the gate)",
+            summary = "Scan a QR token or a typed pass number (assigned VOLUNTEER, or the event's ORGANIZER)",
             description = "200 ACCEPTED / CHECKED_OUT. Anything else is a problem+json with `result`, `message` and "
                     + "`color`: 409 for state conflicts (ALREADY_CHECKED_IN, REVOKED, NOT_YET_OPEN, …), 422 for an "
                     + "unusable code, 404 UNKNOWN_PASS, 403 UNAUTHORIZED_SCANNER.")

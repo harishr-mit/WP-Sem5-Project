@@ -74,8 +74,8 @@ On first start each service creates its schema with Flyway and loads demo data: 
 | Account | Roles | Notes |
 |---|---|---|
 | `admin@mitpass.test` | ADMIN | manages users, roles and signing keys |
-| `organizer.a@mitpass.test` | ORGANIZER | Anitha Rao: owns TECHFEST26, RANG26, AIWS26, SPACETALK26 |
-| `organizer.b@mitpass.test` | ORGANIZER | Bharath Kumar: owns ROBOWARS26, CRICKET26 |
+| `organizer.a@mitpass.test` | ORGANIZER, VOLUNTEER | Anitha Rao: owns TECHFEST26, RANG26, AIWS26, SPACETALK26; can scan at any gate of them |
+| `organizer.b@mitpass.test` | ORGANIZER, VOLUNTEER | Bharath Kumar: owns ROBOWARS26, CRICKET26. Organizers are always volunteers too |
 | `volunteer@mitpass.test` | STUDENT, VOLUNTEER | Karthik Selvam: assign him to a gate (*phase-5.http* does), then *Scan* in the portal |
 | `2026509001@student.annauniv.edu`, `2026505014@student.annauniv.edu` | STUDENT | |
 

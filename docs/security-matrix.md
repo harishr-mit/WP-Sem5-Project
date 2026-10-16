@@ -23,7 +23,7 @@ even the event's organizer and admins get 403 there.
 (internal; the gateway answers 404 for that path). It may read only what checkin-service's reconciler needs from
 pass-service; everything else is 403 for it.
 
-**checkin-service:** an unassigned volunteer passes security on the scan endpoints and is then refused by the
+**checkin-service:** organizers may call the scan endpoints too (RL11: any gate of their own events). An unassigned volunteer or organizer passes security on the scan endpoints and is then refused by the
 pipeline's first step (`403 scan/unauthorized-scanner`, a business answer), so those cells count as allowed.
 
 ### auth-service
@@ -108,8 +108,8 @@ pipeline's first step (`403 scan/unauthorized-scanner`, a business answer), so t
 
 | Endpoint | Rule | anonymous | student | volunteer (assigned) | volunteer (not assigned) | organizer (owner) | organizer (other) | admin | service token |
 |---|---|---|---|---|---|---|---|---|---|
-| `POST /api/scans` | volunteer (assigned), volunteer (not assigned) | ✅ 401 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 |
-| `GET /api/scans/lookup` | volunteer (assigned), volunteer (not assigned) | ✅ 401 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 |
+| `POST /api/scans` | volunteer (assigned), volunteer (not assigned), organizer (owner), organizer (other) | ✅ 401 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 |
+| `GET /api/scans/lookup` | volunteer (assigned), volunteer (not assigned), organizer (owner), organizer (other) | ✅ 401 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 |
 | `GET /api/attendance/events/{id}/summary` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `GET /api/attendance/events/{id}/attendees` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `GET /api/attendance/events/{id}/export.csv` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |

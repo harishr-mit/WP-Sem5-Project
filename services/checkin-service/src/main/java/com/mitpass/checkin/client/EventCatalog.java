@@ -17,6 +17,9 @@ public interface EventCatalog {
     /** {@code GET /api/events/{id}/gates}, with the current caller's token relayed. */
     List<GateInfo> gates(long eventId);
 
+    /** Ids of the events this user organizes (public catalogue search by {@code organizerId}; RL11). */
+    List<Long> eventsOrganizedBy(UUID organizerId);
+
     /** {@code GET /api/volunteers/me/assignments} with the volunteer's own token. */
     List<Assignment> assignmentsOf(CurrentUser volunteer);
 

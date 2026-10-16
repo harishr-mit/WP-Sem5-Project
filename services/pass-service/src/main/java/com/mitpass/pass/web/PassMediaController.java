@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.http.CacheControl;
-import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -84,12 +83,7 @@ public class PassMediaController {
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .cacheControl(CacheControl.noStore())
-                .header(
-                        HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.attachment()
-                                .filename(media.passNumber(id) + ".pdf")
-                                .build()
-                                .toString())
+                .header(HttpHeaders.CONTENT_DISPOSITION, TicketFileName.header(media.ticketFileName(id)))
                 .body(pdf);
     }
 
