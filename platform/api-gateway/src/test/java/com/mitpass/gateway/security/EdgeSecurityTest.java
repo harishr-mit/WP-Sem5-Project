@@ -96,6 +96,24 @@ class EdgeSecurityTest {
                 .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
     }
 
+    /** Phase 4: pass-service routes. The pass JWK set is public (scanners); everything else needs a token. */
+    @Test
+    void passRoutesNeedATokenExceptThePassKeys() {
+        web.get()
+                .uri("/.well-known/pass-jwks.json")
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        web.get().uri("/api/passes/me").exchange().expectStatus().isUnauthorized();
+        web.get().uri("/api/revocations?since=0").exchange().expectStatus().isUnauthorized();
+        web.get()
+                .uri("/api/passes/me")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtIssuer.token(Roles.STUDENT))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
     static Stream<Arguments> badTokens() {
         return Stream.of(
                 Arguments.of("forged payload", TestJwtIssuer.forged(TestJwtIssuer.token(Roles.STUDENT))),

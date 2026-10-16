@@ -21,18 +21,18 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-16 (Claude Opus 5.5) — **Phase 4 planned (T27)** on branch `phase4` (from `main` after PR #2; Phase 3 checked and merged by the owner). Plan: `docs/plans/phase-4.md`; owner answered its §19 (Q1 ACTIVE = live code unlocks 2 h before doors open; Q2 minimal DLQ now, **completed in P7**; Q3 new `EventRescheduled`), recorded in PROJECT.md §3/§P4/§P7 and DECISIONS D12/D13 (T06.1 done). Next: the owner commits the planning docs and says go → T06.2. Phase 3 (T05) summary: event lifecycle + scheduler, overbooking-proof seat claims, waitlist promotion, eligibility, Idempotency-Key, outbox → RabbitMQ, `web-portal` slice (:8090); 285 tests green; security matrix 253/253. Parked questions for after P8: `docs/REVIEW-LATER.md`. Since 2026-10-15 (T21) P3–P5 each also include a thin `web-portal` slice (PROJECT.md §5). The shortcuts are intended, and P6 replaces them (`docs/DECISIONS.md` D9).
+* **Last updated:** 2026-10-16 (Claude Opus 5.5) — **Phase 4 done (T06)** on branch `phase4` (uncommitted; the post-phase commit is the owner's call). New `pass-service` (:8083): passes issued from `RegistrationConfirmed` exactly once (idempotent consumer + unique registration), ES256 JWS QR tokens (live 45 s, unlocks 2 h before doors open; static until end + 2 h), own JWK set + rotation, ZXing PNG/SVG, OpenPDF ticket, revocation + cursor feed, cancellation saga, scheduler, minimal DLQ (**P7 completes it**). event-service: V7 pass settings + `EventRescheduled`. Portal: My passes, pass page, organizer revoke. 378 tests green; security matrix 330/330; live exit demo 47/47. Next: post-phase commit (owner), then Phase 5 (T07): write `docs/plans/phase-5.md` first. Parked questions for after P8: `docs/REVIEW-LATER.md` (RL1–RL4). Since 2026-10-15 (T21) P3–P5 each also include a thin `web-portal` slice (PROJECT.md §5). The shortcuts are intended, and P6 replaces them (`docs/DECISIONS.md` D9).
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
 * **Architecture (planned):** Web Portal (Spring MVC + Thymeleaf) → API Gateway (:8080) → auth / event / pass / checkin / notification services, Eureka discovery, PostgreSQL (database per service), RabbitMQ (domain events via transactional outbox), Redis.
 * **Stack (pinned, see `docs/DECISIONS.md`):** Java 21 (project-local Temurin in `.tools/jdk-21`), Spring Boot 4.1.1, Spring Cloud 2025.1.3, Maven 3.9.16 through the wrapper, Docker Desktop 4.94.0.
-* **Built so far:** `libs/common-web` (ProblemDetail errors, PageResponse, correlation ids), `libs/common-security` (JWT resource server via JWKS/Eureka, roles, `CurrentUser`, 401/403 bodies), `libs/security-test-support` (test tokens, `SecurityMatrix`), `platform/discovery-server` (:8761), `platform/api-gateway` (:8080; JWT pre-check, CORS, Swagger UI), `services/auth-service` (:8081; sign-up/verify/login/refresh/JWKS/users), `services/event-service` (:8082; catalogue, ownership, gates, volunteers). Conventions: `docs/DECISIONS.md` D6 (REST), D7 (security), D8 (demo accounts, password `Passw0rd!`), D9 (portal slices).
+* **Built so far (P4 adds):** `services/pass-service` (:8083), `libs/common-messaging` consumer side (IdempotentConsumer, InboxQueues + DLQ), `libs/common-security` KeyEncryptor. Earlier: `libs/common-web` (ProblemDetail errors, PageResponse, correlation ids), `libs/common-security` (JWT resource server via JWKS/Eureka, roles, `CurrentUser`, 401/403 bodies), `libs/security-test-support` (test tokens, `SecurityMatrix`), `platform/discovery-server` (:8761), `platform/api-gateway` (:8080; JWT pre-check, CORS, Swagger UI), `services/auth-service` (:8081; sign-up/verify/login/refresh/JWKS/users), `services/event-service` (:8082; catalogue, ownership, gates, volunteers). Conventions: `docs/DECISIONS.md` D6 (REST), D7 (security), D8 (demo accounts, password `Passw0rd!`), D9 (portal slices).
 * **Commands** (full walkthrough: `README.md` "Quick start"):
   * First setup on a clean clone: `powershell -ExecutionPolicy Bypass -File scripts\setup-jdk.ps1`
   * Build + all tests: `./mvnw verify` (Git Bash) / `.\mvnw.cmd verify` (PowerShell); `./mvnw spotless:apply` fixes formatting. With `JAVA_HOME` unset, the wrapper uses `.tools/jdk-21`. The system `java` on PATH is **Java 8**, so don't call `java` directly; use `.tools/jdk-21/bin/java` or first run `. .\scripts\env.ps1` / `source scripts/env.sh`.
   * Infra: `docker compose -f infra/docker-compose.yml up -d --wait` / `down` (Docker Desktop must be running).
-  * Run: `./mvnw install -DskipTests`, then `./mvnw -pl <module> spring-boot:run` for discovery-server → auth-service → event-service → api-gateway (or `.tools/jdk-21/bin/java -jar <module>/target/<artifact>.jar`). Demo requests: `docs/http/phase-2.http`.
+  * Run: `./mvnw install -DskipTests`, then `./mvnw -pl <module> spring-boot:run` for discovery-server → auth-service → event-service → pass-service → api-gateway → web-portal (or `.tools/jdk-21/bin/java -jar <module>/target/<artifact>.jar`). Demo requests: `docs/http/phase-4.http` (and phase-1..3). Verify a QR: `.tools/jdk-21/bin/java scripts/VerifyPassToken.java "<token>"`.
 * **Blockers / Notes:**
   * Agents: stopping a background `spring-boot:run` task leaves Maven and the forked app JVM running on Windows. Kill them by PID afterwards (check `Get-NetTCPConnection -LocalPort 8761,8080,8081,8082`). Running the jars with `java -jar` as background tasks and stopping the task ended the JVM cleanly (2026-10-11).
   * Load-balanced client beans must be `@Bean(defaultCandidate = false)` and injected with `@LoadBalanced`; otherwise Eureka's own client picks them up and the service never registers (plan phase-2 §16).
@@ -82,20 +82,20 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T05.10: web-portal skeleton + auth (form login via auth-service, session tokens, expiry, sign-up page)
   * [x] T05.11: web-portal pages: catalogue, detail, register/cancel, my registrations, organizer transitions
   * [x] T05.12: Exit demo + docs (phase-3.http, README, PROJECT ticks, DECISIONS D10/D11, as-built)
-* [ ] T06: **Phase 4** — Pass issuance & QR generation (PROJECT.md §P4; plan and "done when" checks: `docs/plans/phase-4.md` §17). Plan written and answered 2026-10-16 (plan §19, D12/D13); waiting for the owner's pre-phase commit before T06.2
+* [x] T06: **Phase 4** — Pass issuance & QR generation (PROJECT.md §P4; plan and "done when" checks: `docs/plans/phase-4.md` §17, as built §20). Plan answered 2026-10-16 (plan §19, D12/D13); pre-phase commit `6f0a14c` by the owner. Done 2026-10-16 (uncommitted)
   * [x] T06.1: Owner decisions recorded (PROJECT.md §3/§P4, DECISIONS D12/D13 drafts) before code
-  * [ ] T06.2: common-security: `KeyEncryptor` moved from auth-service (format unchanged)
-  * [ ] T06.3: common-messaging consumer side: envelope reader, IdempotentConsumer, processed_message DDL, dead-letter topology, PassIssued/PassRevoked/EventRescheduled
-  * [ ] T06.4: event-service: V7 (static_qr_allowed, pass_color), contrast check, EventRescheduled, seed
-  * [ ] T06.5: pass-service skeleton (:8083), V1, gateway routes + Swagger + public JWKS path
-  * [ ] T06.6: Domain: PassStatus state machine, PassNumber (Luhn, ISIN-style letters), history, EventRef
-  * [ ] T06.7: ES256 keys (encrypted, rotation, max_token_exp), pass JWKS, PassTokenService, `scripts/VerifyPassToken.java`
-  * [ ] T06.8: Consumers: inbox queue + DLQ, issue/revoke/saga/expire/reschedule, tombstones, outbox
-  * [ ] T06.9: Pass lifecycle scheduler (unlock, expiry)
-  * [ ] T06.10: ZXing QR (PNG/SVG, level H, logo, colours), EventCatalogClient, live/static endpoints
-  * [ ] T06.11: PDF ticket (OpenPDF)
-  * [ ] T06.12: Read + revoke API, revocation feed, key rotation, security matrix + docs
-  * [ ] T06.13: Portal slice + exit demo + docs
+  * [x] T06.2: common-security: `KeyEncryptor` moved from auth-service (format unchanged)
+  * [x] T06.3: common-messaging consumer side: envelope reader, IdempotentConsumer, processed_message DDL, dead-letter topology, PassIssued/PassRevoked/EventRescheduled
+  * [x] T06.4: event-service: V7 (static_qr_allowed, pass_color), contrast check, EventRescheduled, seed
+  * [x] T06.5: pass-service skeleton (:8083), V1, gateway routes + Swagger + public JWKS path
+  * [x] T06.6: Domain: PassStatus state machine, PassNumber (Luhn, ISIN-style letters), history, EventRef
+  * [x] T06.7: ES256 keys (encrypted, rotation, max_token_exp), pass JWKS, PassTokenService, `scripts/VerifyPassToken.java`
+  * [x] T06.8: Consumers: inbox queue + DLQ, issue/revoke/saga/expire/reschedule, tombstones, outbox
+  * [x] T06.9: Pass lifecycle scheduler (unlock, expiry)
+  * [x] T06.10: ZXing QR (PNG/SVG, level H, logo, colours), EventCatalogClient, live/static endpoints
+  * [x] T06.11: PDF ticket (OpenPDF)
+  * [x] T06.12: Read + revoke API, revocation feed, key rotation, security matrix + docs
+  * [x] T06.13: Portal slice + exit demo + docs
 * [ ] T07: **Phase 5** — Scan, verify & attendance (PROJECT.md §P5)
 * [ ] T08: **Phase 6** — Web portal, Spring MVC (PROJECT.md §P6)
 * [ ] T09: **Phase 7** — Real-time dashboard, notifications & offline scanning (PROJECT.md §P7)
@@ -141,6 +141,50 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-16 — Claude (Opus 5.5) — T06.13: portal slice, exit demo, docs; Phase 4 done
+
+* **Task:** T06.13 (portal slice + exit demo + docs)
+* **Status:** DONE (Phase 4 complete; not committed: the post-phase commit is the owner's call)
+* **Files:**
+  * `web-portal`: `ApiModels` (+`Pass`, `Binary`; `Registration` + userName/userEmail), `GatewayClient` (+myPasses, pass, eventPasses, revokePass, liveQrPng, ticketPdf, eventRegistrations, byte pass-through), `PortalProperties` (+`qr-refresh` 30s), `application.yml`, new `MyPassesController`, `OrganizerController` (+registrations page, revoke), `EventPagesController` (confirmed flash mentions the pass), templates new `my/passes.html`, `my/pass.html`, `organizer/registrations.html`, `fragments.html` (My passes link), `organizer/events.html` (Registrations & passes link), `portal.css` (pass card); tests new `PassPagesTest` (11), `GatewayClientTest` (+1), `PortalPagesTest` (helper)
+  * docs: new `docs/http/phase-4.http`; `README.md` (status, six apps and start order, passes demo, verify script, RabbitMQ queues, troubleshooting); `PROJECT.md` (§P4 ticked + status); `docs/DECISIONS.md` (D1 pins, D9 two P4 rows, D12/D13 as built); `docs/plans/phase-4.md` (§20 As built); `docs/security-matrix.md` (pass-service, 330/330); `AGENTS.md` (parts table: Domain events, QR and signing rows); `log.md`
+* **Details:**
+  * Final `./mvnw verify` green: **378 tests** (common-web 27, common-security 13, security-test-support 15, common-messaging 22, discovery 1, gateway 19, auth-service 51, event-service 128, pass-service 58, web-portal 44). Security matrix 330/330 (auth 85, event 168, pass 77).
+  * **Live exit demo: 47/47 checks on the first run** (compose infra, Phase 3 volume kept, jars on the project JDK; script + ZXing decoder in the session scratchpad, same steps in `phase-4.http`): six apps up, inbox + DLQ bindings; pass 0.81 s after registering, valid check digit, ACTIVE, PassIssued with the request's correlation id; live QR PNG decoded → JWS VALID with `VerifyPassToken.java`, edited claim → INVALID SIGNATURE; 45 s tokens, new token 30 s later; static token + PDF, static-disabled event → 409 and a ticket without QR; same message republished via the management API → still one pass, duplicate logged; organizer revoke + feed + 409 pass-not-valid + PassRevoked; cancel → pass REVOKED (REGISTRATION_CANCELLED), promoted student gets a new pass; event cancelled → all passes REVOKED (EVENT_CANCELLED, SYSTEM); key rotation keeps the old kid, pre-rotation static token still VALID; portal wallet/pass page (no token in the page), QR and PDF pass-through, organizer revoke (CSRF 403, PRG), student sees REVOKED; Swagger lists pass-service.
+  * `.gitignore` reviewed: only sources untracked, `services/pass-service/target/` ignored by `target/`; no CRLF in new files.
+* **Notes / Errors:** At the end: the 6 JVMs stopped (ports 8761/8080-8083/8090 free, no project java.exe left), `docker compose down` (volume kept: it now holds the demo's P4A…/P4B…/P4C…/P4D… events and passes; run `down -v` for a fresh seed), Docker Desktop left running as found, no Testcontainers leftovers. The README notes that registrations confirmed while pass-service is down get no pass (no backfill).
+
+### 2026-10-16 — Claude (Opus 5.5) — T06.5–T06.12: pass-service built and tested
+
+* **Task:** T06.5 skeleton + gateway, T06.6 domain, T06.7 keys/tokens/verify script, T06.8 consumers + DLQ, T06.9 scheduler, T06.10 QR + media API, T06.11 PDF, T06.12 read/revoke API, feed, rotation, matrix
+* **Status:** WORKING (T06.5–T06.12 DONE; next T06.13 portal slice, exit demo, docs)
+* **Files:**
+  * root `pom.xml`: module `services/pass-service`; pins `zxing.version` 3.5.4 (core; javase test-only), `openpdf.version` 3.0.5
+  * new `services/pass-service/**`: `pom.xml` (openpdf without brotli4j; javase without jcommander/jai-imageio; surefire `java.awt.headless`), `application.yml`, `db/migration/V1__init.sql` (event_ref, pass, pass_history, revocation, cancelled_registration, signing_key, processed_message, outbox_message); `PassServiceApplication`; `config/` PassProperties, AppConfig (Clock, KeyEncryptor, auditing, conditional @EnableScheduling), ClientConfig (load-balanced builder `defaultCandidate=false`), OpenApiConfig; `domain/` PassStatus, TransitionTrigger, RevokeReason, PassNumber, AuditableEntity, EventRef, Pass, PassChange, SigningKey, Revocation; `repository/` PassRepository, PassChangeRepository, RevocationRepository, SigningKeyRepository, EventRefRepository, EventRefStore (JDBC upserts, reordering guards, sequence, tombstones); `keys/PassKeyService`; `token/PassTokenService`; `client/EventCatalogClient` (Caffeine 60 s); `service/` PassProblems, PassPolicy, PassEvents, PassLifecycleService, PassLifecycleScheduler, PassQueryService, PassMediaService; `messaging/` PassInbox (inbox + DLQ via InboxQueues), PassInboxListener; `security/PassSecurity`; `qr/QrRenderer`; `ticket/TicketPdfRenderer`; `web/` PassController, PassMediaController, RevocationController, PassKeysController, dto PassResponse, PassDtos
+  * tests (58): PassStatusTest 3, PassNumberTest 7, PassKeyServiceTest 4, PassTokenServiceTest 5, VerifyPassTokenScriptTest 1, PassLifecycleServiceTest 11, ConsumerIdempotencyTest 3, PassFlowTest 2 (RabbitMQ), PassLifecycleSchedulerTest 4, QrRendererTest 4, TicketPdfRendererTest 3, PassApiTests 9, SecurityMatrixTest 1 (77/77), context 1; support: PassIntegrationTest, TestcontainersConfiguration, TestClock, FakeEventCatalog, PassTestConfig, PassFixtures, `application-test.yml`
+  * new `scripts/VerifyPassToken.java` (JDK only: P-256 key from the JWK, `SHA256withECDSAinP1363Format`)
+  * gateway `application.yml` (routes `pass-service`, `pass-service-openapi`, Swagger entry, public `GET /.well-known/pass-jwks.json`), `EdgeSecurityTest` (+1 → 19 tests)
+  * docs: `docs/security-matrix.md` (pass-service table, 330/330), `docs/DECISIONS.md` D12 (check-digit claim corrected), `docs/plans/phase-4.md` (§4 check-digit wording)
+* **Details / findings:**
+  * **Check digit (found by `PassNumberTest`, docs corrected):** ISIN-style Luhn catches every digit typo but only about 9 in 10 letter typos (T→A in TECHFEST26 slipped through). No single decimal check digit can catch every substitution among 36 symbols (pigeonhole), so the behaviour stays and the claim in D12/plan was corrected; P5 also matches the code against the event.
+  * **JWK order (bug, fixed with a test):** keys sorted only by `createdAt` came back in random order when two were created in the same instant; the ACTIVE key is now listed first explicitly.
+  * OpenPDF 3.0.5 packages are `org.openpdf.text.*` (plan gotcha 1 confirmed). It requires `brotli4j`, which pulls a per-OS native jar: excluded, and the PDF tests show it isn't needed for tickets.
+  * Spring 7 removed `MediaType.sortByQualityValue`: a stable sort on `getQualityValue` instead.
+  * A 409 on a request with `Accept: image/png` is still `application/problem+json` (the media mappings declare no `produces`; tested).
+  * Eye-checked `target/qr-sample.png` and `target/ticket-sample.pdf` (written by the tests): colours, MIT badge, initials, map link, pass number all as planned.
+* **Notes / Errors:** none open. Plan deviation: no MapStruct in pass-service (records with `from(...)`), and `PassResponse` has no `staticQrAllowed` (it would need a catalogue call per pass in lists).
+
+### 2026-10-16 — Claude (Opus 5.5) — T06.2–T06.4: KeyEncryptor to lib, consumer side of common-messaging, event pass settings
+
+* **Task:** T06.2 (KeyEncryptor), T06.3 (common-messaging consumer side), T06.4 (event-service V7 + EventRescheduled)
+* **Status:** WORKING (T06.2–T06.4 DONE; next T06.5 pass-service skeleton)
+* **Files:**
+  * T06.2: new `libs/common-security/.../keys/KeyEncryptor.java` (plain class, `KeyEncryptor(String secret)`) + `KeyEncryptorTest` (4, incl. a value written by the old auth class); deleted `services/auth-service/.../keys/KeyEncryptor.java`; auth `AppConfig` (bean from `mitpass.auth.key-secret`), `SigningKeyService`, `SigningKeyServiceTest` (import), `SigningKey` (javadoc)
+  * T06.3 `libs/common-messaging`: new `contract/EventEnvelope`, `EnvelopeReader` (unknown fields ignored), `IdempotentConsumer` (processed_message claim in the handler transaction, MDC correlation, hourly cleanup), `InboxQueues` (inbox + `.dlq` via `mitpass.events.dlx`; minimal DLQ, P7 completes), `contract/PassIssued`, `PassRevoked`, `EventRescheduled`, reference DDL `mitpass/messaging/processed-message-postgresql.sql`; `MessagingProperties` (+`consumer`: retention 30d, dead-letter exchange); `MessagingAutoConfiguration` (+EnvelopeReader, IdempotentConsumer beans); tests `EnvelopeReaderTest` (4), `IdempotentConsumerTest` (6, incl. 4 concurrent duplicates → 1 run, rollback → retry runs), `DeadLetterTopologyTest` (1); `OutboxRelayTest` (constructor call)
+  * T06.4 event-service: `V7__pass_settings.sql` (static_qr_allowed default true, pass_color + CHECK); `Event` (+fields, colour upper-cased); `validation/PassColor` + `PassColorValidator` (WCAG contrast >= 4.5 vs white); create/update DTOs (+`staticQrAllowed`, `passColor`), `EventDetailResponse` (+both); `EventMapper` (staticQrAllowed set by the service: null = default on create, unchanged on update); `EventService.update` → `EventLifecycleService.recordRescheduled` when start/end change (not for DRAFT; actor from the security context); seed (TECHFEST26 blue, RANG26 purple, AIWS26 static QR off); tests: new `PassSettingsTests` (7), call sites in `EventServiceTest`, `RegistrationServiceTest`, `TestData`, `EventControllerTest`
+* **Details:** `./mvnw -pl services/event-service -am verify` green: common-web 27, common-security 13, security-test-support 15, common-messaging 22, event-service 128 (matrix 168/168). auth-service 51 green after T06.2.
+* **Notes / Errors:** none.
 
 ### 2026-10-16 — Claude (Opus 5.5) — T28: RL4 (check the DLQ after P8)
 

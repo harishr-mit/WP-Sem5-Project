@@ -277,7 +277,9 @@ class RegistrationServiceTest {
                 current.version(),
                 current.eligibleDepartments(),
                 current.minYear(),
-                current.maxYear());
+                current.maxYear(),
+                current.staticQrAllowed(),
+                current.passColor());
     }
 
     private int seatsTaken(long event) {

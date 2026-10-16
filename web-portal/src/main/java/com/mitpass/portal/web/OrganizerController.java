@@ -3,9 +3,14 @@ package com.mitpass.portal.web;
 import com.mitpass.portal.auth.PortalUser;
 import com.mitpass.portal.client.ApiModels.EventDetail;
 import com.mitpass.portal.client.ApiModels.EventSummary;
+import com.mitpass.portal.client.ApiModels.Pass;
+import com.mitpass.portal.client.ApiModels.Registration;
 import com.mitpass.portal.client.ApiProblemException;
 import com.mitpass.portal.client.GatewayClient;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -38,6 +43,41 @@ public class OrganizerController {
         model.addAttribute("events", details);
         return "organizer/events";
     }
+
+    /**
+     * The event's registrations with each one's pass and a revoke button (docs/plans/phase-4.md §10). Registrations
+     * come from event-service and passes from pass-service, joined here by registration id.
+     */
+    @GetMapping("/organizer/events/{id}/registrations")
+    public String registrations(@PathVariable long id, Model model) {
+        EventDetail event = gateway.event(id);
+        Map<UUID, Pass> passes = gateway.eventPasses(id).content().stream()
+                .collect(Collectors.toMap(Pass::registrationId, pass -> pass, (a, b) -> a));
+        List<Row> rows = gateway.eventRegistrations(id).content().stream()
+                .map(registration -> new Row(registration, passes.get(registration.id())))
+                .toList();
+        model.addAttribute("event", event);
+        model.addAttribute("rows", rows);
+        return "organizer/registrations";
+    }
+
+    @PostMapping("/organizer/passes/{passId}/revoke")
+    public String revoke(
+            @PathVariable UUID passId,
+            @RequestParam long eventId,
+            @RequestParam(required = false) String note,
+            RedirectAttributes redirect) {
+        try {
+            Pass pass = gateway.revokePass(passId, note);
+            redirect.addFlashAttribute("message", "Pass %s is now %s.".formatted(pass.passNumber(), pass.status()));
+        } catch (ApiProblemException ex) {
+            redirect.addFlashAttribute("error", ex.getMessage());
+        }
+        return "redirect:/organizer/events/" + eventId + "/registrations";
+    }
+
+    /** One line of the registrations table; {@code pass} is null until pass-service has issued it (or never). */
+    public record Row(Registration registration, Pass pass) {}
 
     @PostMapping("/organizer/events/{id}/transitions")
     public String transition(@PathVariable long id, @RequestParam String to, RedirectAttributes redirect) {

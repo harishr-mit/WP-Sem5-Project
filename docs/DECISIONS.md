@@ -26,7 +26,7 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 | Flyway | 12.4.0 | | Spring AMQP | 4.1.1 |
 | PostgreSQL JDBC | 42.7.13 | | Spring Cloud Gateway / Netflix | 5.0.3 / 5.0.2 |
 
-**Pinned in the root POM:** springdoc-openapi 3.1.1, MapStruct 1.6.3.
+**Pinned in the root POM:** springdoc-openapi 3.1.1, MapStruct 1.6.3, ZXing 3.5.4 (`core`; `javase` only in tests) and OpenPDF 3.0.5 (Phase 4; neither is in the Boot BOM; latest releases on Maven Central on 2026-10-16). OpenPDF 3 uses the `org.openpdf.text` packages; its `brotli4j` dependency (a per-OS native jar) is excluded because tickets don't need it.
 
 **Consequences.** Boot 4 differs from most tutorials (which target Boot 3). The practical differences are listed in `docs/plans/phase-1.md` ("Boot 4 gotchas"). Patch upgrades within 4.1.x are free. Moving to 4.2 waits for a Cloud train that supports it.
 
@@ -146,6 +146,8 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 | Attendance page updates on reload | P5 | Styled page in P6; live WebSocket updates in P7 |
 | Registration status and waitlist position update on reload (*My registrations*, event page) | P3 | HTMX refresh in P6; push updates with the P7 notifications |
 | Organizer "My events" loads each event's detail for its buttons (one call per event) | P3 | A list endpoint that carries `allowedTransitions`, or HTMX per row |
+| A new pass appears in *My passes* on reload (about a second after registering); the event page only says it is being issued | P4 | HTMX poll on the event page in P6; push with the P7 notifications |
+| The QR image and PDF are passed through the portal byte for byte (`/my/passes/{id}/qr.png`, `ticket.pdf`) | P4 | Kept in P6 (it is the BFF rule); P6 adds the countdown ring around it |
 
 **Consequences.** If a slice can't work without a P6 item, build the smallest version that works and add a row to this table. P6 is done when every row above is replaced.
 
@@ -186,16 +188,18 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 
 ## D12: Passes, pass tokens and their keys
 
-*2026-10-16 · accepted (owner answers to `docs/plans/phase-4.md` §19; details in the plan §4–§7). Built in Phase 4*
+*2026-10-16 · accepted (owner answers to `docs/plans/phase-4.md` §19; details in the plan §4–§7, as built §20). Built in Phase 4*
 
 **Decision.**
 - **State machine (owner).** ISSUED → ACTIVE → EXPIRED; ISSUED → EXPIRED; ISSUED/ACTIVE → REVOKED (enum table + `pass_history`, as D10). **ACTIVE = the live code is unlocked**, `mitpass.passes.code-unlock-before-start` (2 h 30 min = 2 h before doors open) before `startsAt`, as in the UI mockup's wallet. A pass issued after that time goes straight to ACTIVE in the issuing transaction. An ACTIVE pass stays ACTIVE if the event is rescheduled later or its LIVE is undone.
-- **Pass number.** `<EVENTCODE>-<NNNNNN>-<C>`: per-event 6-digit sequence plus a Luhn mod 10 check digit over the whole number, with letters expanded to two digits as in ISIN (A = 10 … Z = 35).
+- **Pass number.** `<EVENTCODE>-<NNNNNN>-<C>`: per-event 6-digit sequence plus a Luhn mod 10 check digit over the whole number, with letters expanded to two digits as in ISIN (A = 10 … Z = 35). Every single-digit typo is caught; a letter typo about 9 times in 10 (found by `PassNumberTest`: a letter becomes two digits, and no single decimal check digit can catch every substitution among 36 symbols). At the gate (P5) the code part is also matched against the event.
 - **Token.** Compact JWS, **ES256** (P-256), header `{alg, kid, typ: "mitpass-pass+jws"}`, claims `iss = mitpass-pass`, `pid`, `eid`, `sub`, `iat`, `exp`, `jti`, `knd` (`L` live / `S` static); `sid` reserved. A contract with scanners (P5) and the offline PWA (P7): claims are only ever added.
 - **Lifetimes.** Live token 45 s, refreshed every 30 s, only for ACTIVE passes. Static token (PDF, email) valid until `endsAt + 2 h`, only if the event's `staticQrAllowed` (event-service, default true).
 - **Keys.** Separate from auth's: pass-service generates ES256 keys, stores the private half encrypted with the shared `KeyEncryptor` (now in `libs/common-security`), publishes `/.well-known/pass-jwks.json`, rotates on `POST /api/passes/keys/rotate` (ADMIN). A retired key stays published until the longest token it signed (`max_token_exp`) has expired, plus 5 min.
 - **Access.** QR images, tokens and the PDF go to the holder only; the event's organizer and ADMIN see and revoke passes; the revocation feed (`GET /api/revocations?since=<cursor>`) is for VOLUNTEER, ORGANIZER and ADMIN.
 - **Event data.** pass-service keeps event times and status (`event_ref`) from the messages; venue, colours, `staticQrAllowed` and `organizerId` come from `GET /api/events/{id}` with a 60 s cache.
+
+**As built.** The JWK set lists the ACTIVE key first, then newest first (sorting by creation time alone shuffled two keys made in the same instant). Live tokens are minted per request and not stored; `exp − iat` is exactly 45 s (whole seconds). A holder asking for the live code just after the unlock time gets it at once (the pass is activated on the spot if the scheduler hasn't run yet).
 
 **Consequences.** P5 verifies with the pass JWK set, checks `knd` and the revocation list, and needs the event LIVE. Live codes for demo events with far-off dates stay locked: demos create an event starting soon (or override the config).
 
@@ -212,5 +216,7 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 - **Correlation.** The listener copies the message's `correlationId` into the MDC, so the consumer's own outbox events carry it on.
 - **Minimal DLQ (owner: pulled forward from P7, to be completed there).** 3 attempts with backoff, then reject without requeue → `mitpass.events.dlx` → `<service>.inbox.dlq`. Helper in `common-messaging`. **P7 completes it:** DLQs for every consumer, inspect/replay tooling and an alert or health signal when a DLQ isn't empty.
 - **`EventRescheduled` (owner).** event-service publishes it when `startsAt` / `endsAt` change on a non-DRAFT event; pass-service moves its unlock and expiry times.
+
+**As built.** `IdempotentConsumer` and `EnvelopeReader` are auto-configured by `common-messaging` (`InboxQueues.inbox(...)` returns the `Declarables`); a poison message reached `pass-service.inbox.dlq` after three attempts in `PassFlowTest`, and a message republished live with the same `message_id` was skipped (exit demo).
 
 **Consequences.** checkin-service (P5) and notification-service (P7) declare their inboxes with the same helper. Until P7, a dead-lettered message just sits in the DLQ (visible in the RabbitMQ UI) and is replayed by hand.

@@ -1,26 +1,27 @@
-package com.mitpass.auth.keys;
+package com.mitpass.common.security.keys;
 
-import com.mitpass.auth.config.AuthProperties;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
 import org.springframework.security.crypto.encrypt.AesGcmBytesEncryptor;
 import org.springframework.security.crypto.encrypt.BytesEncryptor;
 import org.springframework.security.crypto.keygen.KeyGenerators;
-import org.springframework.stereotype.Component;
 
 /**
- * Encrypts private signing keys at rest: AES-256-GCM with a key derived (PBKDF2-HMAC-SHA256, 600k rounds) from
- * {@code mitpass.auth.key-secret} and a random per-key salt. Stored as {@code <salt>:<ciphertext>}, both hex.
+ * Encrypts private signing keys at rest (auth-service's RS256 keys, pass-service's ES256 keys; docs/DECISIONS.md D7,
+ * D12): AES-256-GCM with a key derived (PBKDF2-HMAC-SHA256) from a service secret and a random per-key salt. Stored as
+ * {@code <salt>:<ciphertext>}, both hex. A plain class: each service creates the bean from its own property.
  */
-@Component
 public class KeyEncryptor {
 
     private static final HexFormat HEX = HexFormat.of();
 
     private final String secret;
 
-    public KeyEncryptor(AuthProperties properties) {
-        this.secret = properties.keySecret();
+    public KeyEncryptor(String secret) {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalArgumentException("The key secret must not be empty");
+        }
+        this.secret = secret;
     }
 
     public String encrypt(String plaintext) {

@@ -32,9 +32,9 @@ Rows marked (P3+) and so on describe parts that don't exist yet. They apply once
 | Database schema | `services/*/src/main/resources/db/migration` | never edit an applied `V*` migration; add a new one. Demo data lives in repeatable `db/seed/R__*.sql`, which is off in tests |
 | REST APIs | `services/*` controllers and DTOs | D6 conventions (paths, ProblemDetail, `PageResponse`); `@PreAuthorize`; a row in the service's `SecurityMatrixTest` and `docs/security-matrix.md`; the phase's `docs/http/*.http` |
 | Authentication | `services/auth-service`, `libs/common-security` | the security matrix and the forged-token check (`scripts/forge-token.sh`); token claims are a contract with every service |
-| Domain events (P3+) | outbox and consumers, `libs/common-messaging` | add fields only, never rename or remove; consumers stay idempotent; the outbox row commits in the business transaction |
+| Domain events (P3+) | outbox and consumers, `libs/common-messaging` | add fields only, never rename or remove; consumers stay idempotent; the outbox row commits in the business transaction. A new consumer declares its queue with `InboxQueues.inbox(...)` (gets a `.dlq`; D13), handles messages through `IdempotentConsumer`, and copies the `processed_message` reference DDL into a migration |
 | State machines (P3+) | Event, Registration, Pass, Presence | the enum transition table is the only source; an illegal move → 409 with the allowed states; `PROJECT.md` §3 table |
-| QR and signing (P4+) | `services/pass-service` | the JWS claims are a contract with scanners, including the offline PWA (P7); a rotated key stays in the JWKS until old tokens expire |
+| QR and signing (P4+) | `services/pass-service`, `scripts/VerifyPassToken.java` | the JWS claims are a contract with scanners, including the offline PWA (P7) and the verify script; a rotated key stays in the JWKS until old tokens expire (D12) |
 | Web portal (P3+) | `web-portal` | tokens never reach the browser (BFF); D9 slice rules until P6; the UI reference (`PROJECT.md` §2) |
 | Demo accounts | `db/seed` in auth- and event-service | fixed ids shared by both seeds (D8); change them together |
 | Tests | `src/test` in each module | tests for new behaviour; the full suite passes before a commit |

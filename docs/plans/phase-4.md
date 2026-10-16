@@ -101,7 +101,7 @@ com.mitpass.pass
 | Topic | Choice | Why |
 |---|---|---|
 | Pass state machine | `PassStatus implements LifecycleState<PassStatus>` (common-web, as D10), `EnumMap` table (§5), one `transition(to, actor, trigger, reason)` on `Pass`, a `pass_history` row per move | D10: every stateful aggregate gets an enum table and a history table |
-| Pass number | `<EVENTCODE>-<NNNNNN>-<C>`: the event code, a 6-digit per-event sequence, and a check digit. The check digit is Luhn mod 10 over the number with letters expanded to two digits (A = 10 … Z = 35, as in ISIN), so a typo anywhere in the number, letters included, is caught | PROJECT.md format `TECHFEST26-000042-7`; plain Luhn would only cover the digits |
+| Pass number | `<EVENTCODE>-<NNNNNN>-<C>`: the event code, a 6-digit per-event sequence, and a check digit. The check digit is Luhn mod 10 over the number with letters expanded to two digits (A = 10 … Z = 35, as in ISIN), so typos in the event code are covered too (as built: every digit typo, about 9 in 10 letter typos; see §20) | PROJECT.md format `TECHFEST26-000042-7`; plain Luhn would only cover the digits |
 | Per-event sequence | `event_ref.last_pass_seq`, incremented with `UPDATE … SET last_pass_seq = last_pass_seq + 1 … RETURNING` in the issuing transaction | Gap-free per event, and the row lock serializes the rare concurrent issuances for one event |
 | Event data in pass-service | `event_ref` (id, code, title, startsAt, endsAt, status, `status_changed_at`) is kept up to date from the messages. Display-only data (venue, map link, `staticQrAllowed`, `passColor`, `organizerId`) comes from `GET /api/events/{id}` through a load-balanced client with a 60 s Caffeine cache | Database per service: times and status drive pass-service's own state (scheduler, saga), so they are stored locally. Everything else is a REST query (PROJECT.md §3), with one call per minute per event at most |
 | Signing keys | ES256 (P-256), generated with Nimbus, private half encrypted at rest with the shared `KeyEncryptor` (key from `MITPASS_KEY_SECRET`, same as auth-service). At most one ACTIVE key (partial unique index). Rotation `POST /api/passes/keys/rotate` (ADMIN) | PROJECT.md: separate keys from auth, ES256, own JWKS. Same proven pattern as D7 |
@@ -341,3 +341,27 @@ Order: T06.1 → T06.2 → T06.3 → T06.4 → T06.5 → T06.6 → T06.7 → T06
 2. **Q2: Dead-letter queue now?** Yes, minimal, **and clearly marked as completed in P7**. PROJECT.md §P4 and §P7 bullets; D13.
 3. **Q3: `EventRescheduled`?** Yes, a new event from event-service. PROJECT.md §3 services table and §P4; D13.
 4. **Pre-phase commit:** the owner commits the planning docs and says when to start building (T06.2).
+
+## 20. As built: deviations and findings (2026-10-16)
+
+Phase 4 was built as planned, with the owner's answers (§19). Where the build differs from the sections above, this list is authoritative.
+
+| Topic | Plan said | As built / why |
+|---|---|---|
+| Check digit | "a typo anywhere, letters included, is caught" | **Corrected (found by `PassNumberTest`):** every digit typo is caught, letter typos about 9 in 10 (T→A in TECHFEST26 slipped through). A letter expands to two digits, and no single decimal check digit can catch every substitution among 36 symbols. Behaviour unchanged; D12 and §4 corrected; P5 also matches the code part against the event |
+| JWK set order | newest first | ACTIVE key first, then newest. **Bug found by `PassKeyServiceTest`:** two keys created in the same instant came back in random order |
+| Token times | — | Truncated to whole seconds before signing, so `exp − iat` is exactly 45 s and the reported times match the token |
+| Live code on time | scheduler only | `activateIfDue` also activates an ISSUED pass on the holder's request once the unlock time has passed, so the code never waits for the next scheduler run |
+| Scheduler bean | conditional | Always present (tests call `runOnce`); only `@EnableScheduling` depends on `mitpass.passes.scheduler.enabled` (same as event-service) |
+| Mapping | MapStruct | Records with `from(...)`: a handful of read models, no update mappings |
+| `PassResponse` | `staticQrAllowed` | Left out: it needs a catalogue call per pass in lists. The static endpoint answers `409 static-qr-disabled` instead |
+| OpenPDF | 3.0.5 | Packages `org.openpdf.text.*` (gotcha 1 confirmed). `brotli4j` (a per-OS native jar) excluded; tickets don't need it |
+| ZXing | `core` + test `javase` | `javase`'s jcommander is now `org.jcommander:jcommander` (exclusion updated) |
+| Accept negotiation | `produces` per format | One mapping without `produces`, format from `?format=` or `Accept` by quality; a 409 on an image request is still `problem+json` (tested). Spring 7 removed `MediaType.sortByQualityValue`, so a stable sort on the quality value |
+| Event upserts | entity | `EventRefStore` with SQL upserts (`ON CONFLICT`), `GREATEST` on the "observed at" columns, `UPDATE … RETURNING` for the pass sequence; the `EventRef` entity is read-only |
+| Organizer pass page | — | `GET /organizer/events/{id}/registrations` joins event-service's registrations with pass-service's passes in the portal (by registration id); event-service's `RegistrationResponse` already carried name and email |
+| Eureka | "lists the six apps" | Five clients (gateway, auth, event, pass, portal); the discovery server is the sixth running app |
+
+**Verified live** (2026-10-16, compose infra with the Phase 3 volume kept, jars on the project JDK): a scripted run of **47 checks, all passing on the first run**, covering exit criteria 1–11 (script and its QR decoder in the session scratchpad; the same steps are in `docs/http/phase-4.http`). Highlights: the pass existed 0.81 s after the registration; the live QR PNG decoded with ZXing and verified with `scripts/VerifyPassToken.java` against the gateway's `/.well-known/pass-jwks.json`, and one edited claim gave `INVALID SIGNATURE`; a `RegistrationConfirmed` republished through the RabbitMQ management API with the same `message_id` left one pass and a "Skipping duplicate" log line; cancelling a 1-seat event's registration revoked that pass and issued the promoted student's; cancelling an event revoked both its passes (`EVENT_CANCELLED`, trigger SYSTEM); after a key rotation a static token signed before it still verified; the portal journey (wallet, pass page without any token, QR and PDF pass-through, organizer revoke with PRG, CSRF 403, HttpOnly cookie). Criterion 12: `./mvnw verify` green locally (378 tests); CI runs on the next push.
+
+**Tests:** common-web 27, common-security 13, security-test-support 15, common-messaging 22, discovery 1, gateway 19, auth-service 51, event-service 128, pass-service 58, web-portal 44. Security matrix 330/330 (auth 85, event 168, pass 77).

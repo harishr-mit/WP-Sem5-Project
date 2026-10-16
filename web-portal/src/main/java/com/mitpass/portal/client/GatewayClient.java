@@ -1,6 +1,7 @@
 package com.mitpass.portal.client;
 
 import com.mitpass.portal.auth.PortalUser;
+import com.mitpass.portal.client.ApiModels.Binary;
 import com.mitpass.portal.client.ApiModels.Category;
 import com.mitpass.portal.client.ApiModels.Department;
 import com.mitpass.portal.client.ApiModels.Eligibility;
@@ -8,6 +9,7 @@ import com.mitpass.portal.client.ApiModels.EventDetail;
 import com.mitpass.portal.client.ApiModels.EventSummary;
 import com.mitpass.portal.client.ApiModels.FieldError;
 import com.mitpass.portal.client.ApiModels.Page;
+import com.mitpass.portal.client.ApiModels.Pass;
 import com.mitpass.portal.client.ApiModels.RegisterResult;
 import com.mitpass.portal.client.ApiModels.Registration;
 import com.mitpass.portal.client.ApiModels.TokenResponse;
@@ -182,6 +184,62 @@ public class GatewayClient {
                 .uri("/api/registrations/{id}/cancel", registrationId)
                 .retrieve()
                 .body(Registration.class);
+    }
+
+    // ---- pass-service (Phase 4) -----------------------------------------------------------------------------------
+
+    public Page<Pass> myPasses() {
+        return http.get().uri("/api/passes/me?size=50").retrieve().body(new ParameterizedTypeReference<>() {});
+    }
+
+    public Pass pass(UUID id) {
+        return http.get().uri("/api/passes/{id}", id).retrieve().body(Pass.class);
+    }
+
+    public Page<Pass> eventPasses(long eventId) {
+        return http.get()
+                .uri("/api/passes?eventId={id}&size=100", eventId)
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+    }
+
+    public Pass revokePass(UUID id, String note) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("note", note == null || note.isBlank() ? null : note.trim());
+        return http.post()
+                .uri("/api/passes/{id}/revoke", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(Pass.class);
+    }
+
+    /** The live QR as a PNG (a fresh 45 s token each time); the token itself stays inside the image. */
+    public Binary liveQrPng(UUID passId) {
+        return binary("/api/passes/{id}/qr/live", passId, MediaType.IMAGE_PNG);
+    }
+
+    public Binary ticketPdf(UUID passId) {
+        return binary("/api/passes/{id}/ticket.pdf", passId, MediaType.APPLICATION_PDF);
+    }
+
+    // ---- event-service: an event's registrations (organizer) -------------------------------------------------------
+
+    public Page<Registration> eventRegistrations(long eventId) {
+        return http.get()
+                .uri("/api/events/{id}/registrations?size=100", eventId)
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+    }
+
+    private Binary binary(String path, UUID id, MediaType accept) {
+        ResponseEntity<byte[]> response =
+                http.get().uri(path, id).accept(accept).retrieve().toEntity(byte[].class);
+        MediaType type = response.getHeaders().getContentType();
+        return new Binary(
+                response.getBody(),
+                type == null ? accept.toString() : type.toString(),
+                response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION));
     }
 
     // ---- plumbing --------------------------------------------------------------------------------------------------

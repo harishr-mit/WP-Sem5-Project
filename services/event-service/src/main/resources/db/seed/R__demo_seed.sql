@@ -87,3 +87,8 @@ FROM (VALUES
 ) AS g(event_code, code, name)
 JOIN event ev ON ev.code = g.event_code
 ON CONFLICT (event_id, code) DO NOTHING;
+
+-- Phase 4: pass colours and one event without a static QR (exit criterion 5 of docs/plans/phase-4.md).
+UPDATE event SET pass_color = '#1D4E89' WHERE code = 'TECHFEST26' AND pass_color IS NULL;
+UPDATE event SET pass_color = '#5B2A86' WHERE code = 'RANG26' AND pass_color IS NULL;
+UPDATE event SET static_qr_allowed = FALSE WHERE code = 'AIWS26';

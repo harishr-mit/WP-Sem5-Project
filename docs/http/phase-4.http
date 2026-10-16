@@ -1,0 +1,199 @@
+### MITPass Phase 4 demo: passes, signed QR codes, PDF tickets, revocation, the cancellation saga. All through the gateway.
+### Run with the VS Code "REST Client" extension, top to bottom (the event times use its {{$datetime ... offset}} syntax;
+### in another client, put an ISO time about 2 hours from now there). Start pass-service before registering anyone.
+### The expected status is in each request's title. Seeded accounts (password Passw0rd!): organizer.a@mitpass.test,
+###   2026509001@student.annauniv.edu (Priya), 2026505014@student.annauniv.edu (Arun), volunteer@mitpass.test, admin@mitpass.test
+### Domain events: RabbitMQ UI http://localhost:15672 (mitpass/mitpass) → Queues → mitpass.events.tap → Get messages
+### (pass.issued, pass.revoked). pass-service's own queue: pass-service.inbox (DLQ: pass-service.inbox.dlq).
+### Verify any QR text with the JDK only: .tools/jdk-21/bin/java scripts/VerifyPassToken.java "<token>"
+### Portal: http://localhost:8090 → My passes (student) and My events → Registrations & passes (organizer).
+
+@gw = http://localhost:8080
+
+### --- log in ------------------------------------------------------------------------------------------------------
+
+# @name organizer
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "organizer.a@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name priya
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "2026509001@student.annauniv.edu", "password": "Passw0rd!"}
+
+###
+# @name arun
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "2026505014@student.annauniv.edu", "password": "Passw0rd!"}
+
+###
+# @name volunteer
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "volunteer@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name admin
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "admin@mitpass.test", "password": "Passw0rd!"}
+
+### --- 1. An event starting in 2 hours (so the live code is already unlocked) -------------------------------------
+
+### 201 Change the code on a rerun. passColor must contrast with white (#FFFF00 → 400); staticQrAllowed defaults to true
+# @name event
+POST {{gw}}/api/events
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"code": "PASSDEMO1", "title": "Pass demo", "categoryId": 1, "venueId": 1, "capacity": 1,
+ "startsAt": "{{$datetime iso8601 2 h}}", "endsAt": "{{$datetime iso8601 5 h}}",
+ "registrationClosesAt": "{{$datetime iso8601 1 h}}", "passColor": "#1D4E89", "staticQrAllowed": true}
+
+### 200 DRAFT → PUBLISHED
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "PUBLISHED"}
+
+### 200 PUBLISHED → REGISTRATION_OPEN
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "REGISTRATION_OPEN"}
+
+### --- 2. Register → the pass is issued (RegistrationConfirmed → pass-service, exactly once) ----------------------
+
+### 201 CONFIRMED. The X-Correlation-Id travels into pass-service's PassIssued message (tap queue)
+# @name registration
+POST {{gw}}/api/registrations
+Authorization: Bearer {{priya.response.body.accessToken}}
+Content-Type: application/json
+X-Correlation-Id: http-phase4-demo
+
+{"eventId": {{event.response.body.id}}}
+
+### 200 About a second later: the pass, ACTIVE (unlocked 2 h 30 min before the start), number EVENTCODE-000001-C
+# @name wallet
+GET {{gw}}/api/passes/me
+Authorization: Bearer {{priya.response.body.accessToken}}
+
+### 200 One pass: codeUnlocksAt, holder, state
+GET {{gw}}/api/passes/{{wallet.response.body.content[0].id}}
+Authorization: Bearer {{priya.response.body.accessToken}}
+
+### --- 3. QR codes (holder only) ------------------------------------------------------------------------------------
+
+### 200 image/png: the live QR (a new 45 s token on every request; Cache-Control: no-store)
+GET {{gw}}/api/passes/{{wallet.response.body.content[0].id}}/qr/live
+Authorization: Bearer {{priya.response.body.accessToken}}
+
+### 200 JSON: token, issuedAt, expiresAt (= +45 s), refreshAfterSeconds 30. Paste the token into VerifyPassToken.java
+GET {{gw}}/api/passes/{{wallet.response.body.content[0].id}}/qr/live
+Authorization: Bearer {{priya.response.body.accessToken}}
+Accept: application/json
+
+### 200 image/svg+xml: the same, as SVG
+GET {{gw}}/api/passes/{{wallet.response.body.content[0].id}}/qr/live?format=svg
+Authorization: Bearer {{priya.response.body.accessToken}}
+
+### 200 JSON: the static token (kind STATIC, valid until the event ends + 2 h): what the PDF ticket carries
+GET {{gw}}/api/passes/{{wallet.response.body.content[0].id}}/qr/static
+Authorization: Bearer {{priya.response.body.accessToken}}
+Accept: application/json
+
+### 200 application/pdf: the A6 ticket (attachment; file name = pass number)
+GET {{gw}}/api/passes/{{wallet.response.body.content[0].id}}/ticket.pdf
+Authorization: Bearer {{priya.response.body.accessToken}}
+
+### 403 Not even the event's organizer gets a student's QR (D12)
+GET {{gw}}/api/passes/{{wallet.response.body.content[0].id}}/qr/live
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### 200 The public keys that verify every pass QR (ES256, kid in each token's header). No token needed
+GET {{gw}}/.well-known/pass-jwks.json
+
+### --- 4. A second student on the 1-seat event; cancellation hands over the seat and the pass -------------------
+
+### 201 WAITLISTED #1
+POST {{gw}}/api/registrations
+Authorization: Bearer {{arun.response.body.accessToken}}
+Content-Type: application/json
+
+{"eventId": {{event.response.body.id}}}
+
+### 200 Priya cancels: her pass becomes REVOKED (REGISTRATION_CANCELLED); Arun is promoted and gets a new pass
+POST {{gw}}/api/registrations/{{registration.response.body.id}}/cancel
+Authorization: Bearer {{priya.response.body.accessToken}}
+Content-Type: application/json
+
+{"reason": "Can't make it"}
+
+### 200 Priya's pass: status REVOKED, revokeReason REGISTRATION_CANCELLED
+GET {{gw}}/api/passes/{{wallet.response.body.content[0].id}}
+Authorization: Bearer {{priya.response.body.accessToken}}
+
+### 409 pass-not-valid: a revoked pass has no live code
+GET {{gw}}/api/passes/{{wallet.response.body.content[0].id}}/qr/live
+Authorization: Bearer {{priya.response.body.accessToken}}
+
+### 200 Arun's wallet: his new pass, number ...-000002-C
+# @name arunWallet
+GET {{gw}}/api/passes/me
+Authorization: Bearer {{arun.response.body.accessToken}}
+
+### --- 5. Organizer: list and revoke; scanners: the revocation feed -----------------------------------------------
+
+### 200 The event's passes (its organizer, or ADMIN)
+GET {{gw}}/api/passes?eventId={{event.response.body.id}}
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### 200 Revoke Arun's pass → REVOKED (ORGANIZER), PassRevoked on the tap queue
+POST {{gw}}/api/passes/{{arunWallet.response.body.content[0].id}}/revoke
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"note": "Demo revoke"}
+
+### 409 illegal-transition: already REVOKED, allowedStates []
+POST {{gw}}/api/passes/{{arunWallet.response.body.content[0].id}}/revoke
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{}
+
+### 200 The scanners' delta feed: start at since=0, then pass nextSince (VOLUNTEER, ORGANIZER, ADMIN)
+GET {{gw}}/api/revocations?since=0&eventId={{event.response.body.id}}
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+
+### 200 A pass's audited history: ISSUED → ACTIVE → REVOKED, with who and why
+GET {{gw}}/api/passes/{{arunWallet.response.body.content[0].id}}/history
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### --- 6. Saga step: cancelling an event revokes every valid pass -------------------------------------------------
+
+### 200 Cancel a seeded event that has passes (register for it first; EventStateChanged → pass-service revokes them all)
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "CANCELLED", "reason": "Demo saga"}
+
+### --- 7. Key rotation -----------------------------------------------------------------------------------------------
+
+### 200 ADMIN: a new kid; the old key stays in the JWK set until every token it signed has expired
+POST {{gw}}/api/passes/keys/rotate
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+### 200 Both keys listed, the new one first
+GET {{gw}}/.well-known/pass-jwks.json

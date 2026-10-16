@@ -335,21 +335,22 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 
 **Goal:** a confirmed registration automatically becomes a signed, scannable pass. Plan: `docs/plans/phase-4.md`.
 
-- [ ] `pass-service` consumes `RegistrationConfirmed` as an **idempotent consumer** (`processed_messages` table), so a redelivered message never issues two passes.
-- [ ] Pass state machine (ISSUED → ACTIVE → EXPIRED / REVOKED; ACTIVE = the live code unlocks 2 h before doors open); human-readable pass number `TECHFEST26-000042-7` (Luhn check digit).
-- [ ] **Minimal dead-letter queue** for pass-service's inbox (3 retries, then `pass-service.inbox.dlq`), with the helper in `libs/common-messaging` (owner decision, 2026-10-16). **Pulled forward from P7 and completed there** (see §P7).
-- [ ] event-service publishes `EventRescheduled` when an event's start or end time changes, so pass unlock and expiry times follow (owner decision, 2026-10-16). Per-event `staticQrAllowed` and `passColor` live in event-service.
-- [ ] QR payload = compact **JWS (ES256)** `{pid, eid, sub, sid?, iat, exp, jti}` with `kid`; separate signing keys from auth; pass-service publishes its own JWKS for scanners.
-- [ ] **ZXing** QR rendering: PNG and SVG endpoints, error-correction level H, centered college logo, colors themed per event.
-- [ ] **Rotating QR:** `GET /passes/{id}/qr/live` returns a token valid for about 45 s; the static PDF/email QR uses a longer-lived token if the event allows it.
-- [ ] **PDF ticket** (OpenPDF): event banner, attendee name and photo initials, QR, pass number, venue map link.
-- [ ] Revocation: an organizer revokes a pass (→ `PassRevoked`); `GET /revocations?since=` gives scanners a delta feed.
-- [ ] Saga step: `EventStateChanged(CANCELLED)` → revoke all passes for that event.
-- [ ] Tests: JWS sign/verify round trip, a tampered payload fails, consumer idempotency (deliver the same message twice).
-- [ ] **Portal slice** (rules and intended shortcuts: `docs/DECISIONS.md` D9): a "My Passes" page listing each pass with its number, state and QR; a pass page whose live QR image reloads every 30 s; a PDF download link; an organizer registrations list with a revoke button.
+- [x] `pass-service` consumes `RegistrationConfirmed` as an **idempotent consumer** (`processed_message` table, in the same transaction as the pass; one pass per registration is also a unique constraint), so a redelivered message never issues two passes.
+- [x] Pass state machine (ISSUED → ACTIVE → EXPIRED / REVOKED; ACTIVE = the live code unlocks 2 h before doors open); human-readable pass number `TECHFEST26-000042-7` (Luhn check digit: catches every digit typo and about 9 in 10 letter typos, see D12).
+- [x] **Minimal dead-letter queue** for pass-service's inbox (3 retries, then `pass-service.inbox.dlq`), with the helper in `libs/common-messaging` (owner decision, 2026-10-16). **Pulled forward from P7 and completed there** (see §P7).
+- [x] event-service publishes `EventRescheduled` when an event's start or end time changes, so pass unlock and expiry times follow (owner decision, 2026-10-16). Per-event `staticQrAllowed` and `passColor` live in event-service.
+- [x] QR payload = compact **JWS (ES256)** `{pid, eid, sub, sid?, iat, exp, jti}` plus `iss` and `knd` (live/static), with `kid` and `typ: mitpass-pass+jws`; separate signing keys from auth; pass-service publishes its own JWKS for scanners.
+- [x] **ZXing** QR rendering: PNG and SVG endpoints, error-correction level H, centered college logo, colors themed per event.
+- [x] **Rotating QR:** `GET /passes/{id}/qr/live` returns a token valid for about 45 s; the static PDF/email QR uses a longer-lived token if the event allows it.
+- [x] **PDF ticket** (OpenPDF): event banner, attendee name and photo initials, QR, pass number, venue map link.
+- [x] Revocation: an organizer revokes a pass (→ `PassRevoked`); `GET /revocations?since=` gives scanners a delta feed.
+- [x] Saga step: `EventStateChanged(CANCELLED)` → revoke all passes for that event.
+- [x] Tests: JWS sign/verify round trip, a tampered payload fails, consumer idempotency (deliver the same message twice).
+- [x] **Portal slice** (rules and intended shortcuts: `docs/DECISIONS.md` D9): a "My Passes" page listing each pass with its number and state; a pass page (QR, or when the code unlocks) whose live QR image reloads every 30 s; a PDF download link; an organizer registrations list with a revoke button.
 
 **Concepts:** QR generation, digital signatures, event-driven microservices, state management.
 **Exit criteria / demo:** register → the pass exists within about 1 s; decode the QR with any phone app → a JWS that verifies against the public JWKS; edit one character → verification fails. In the portal: register → the pass appears in "My Passes" → the organizer revokes it → it shows REVOKED.
+**Status:** done 2026-10-16. Live exit demo 47/47 checks on the first run (pass in 0.8 s; the decoded QR verified by `scripts/VerifyPassToken.java` with the JDK only; republished message → still one pass; saga; key rotation; portal journey); security matrix 330/330 cells; 378 tests green. As-built notes in `docs/plans/phase-4.md` §20, decisions in `docs/DECISIONS.md` D12/D13, demo requests in `docs/http/phase-4.http`.
 
 ---
 

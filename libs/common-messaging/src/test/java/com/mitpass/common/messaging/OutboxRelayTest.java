@@ -126,8 +126,8 @@ class OutboxRelayTest {
     @Test
     void aFailedPublishIsRecordedAndRetried() {
         publish(2);
-        MessagingProperties broken =
-                new MessagingProperties("no.such.exchange", properties.relay(), properties.tapQueue());
+        MessagingProperties broken = new MessagingProperties(
+                "no.such.exchange", properties.relay(), properties.tapQueue(), properties.consumer());
         OutboxRelay brokenRelay = new OutboxRelay(jdbc, tx, rabbit, broken, Clock.systemUTC());
 
         assertThat(brokenRelay.pollOnce()).isZero();

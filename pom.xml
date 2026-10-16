@@ -30,6 +30,7 @@
         <module>platform/api-gateway</module>
         <module>services/auth-service</module>
         <module>services/event-service</module>
+        <module>services/pass-service</module>
         <module>web-portal</module>
     </modules>
 
@@ -40,6 +41,9 @@
         <spring-cloud.version>2025.1.3</spring-cloud.version>
         <springdoc.version>3.1.1</springdoc.version>
         <mapstruct.version>1.6.3</mapstruct.version>
+        <!-- Not in the Boot BOM; latest releases on Maven Central, checked 2026-10-16 (docs/DECISIONS.md D1) -->
+        <zxing.version>3.5.4</zxing.version>
+        <openpdf.version>3.0.5</openpdf.version>
 
         <spotless-maven-plugin.version>3.10.4</spotless-maven-plugin.version>
         <palantir-java-format.version>2.102.0</palantir-java-format.version>
@@ -68,6 +72,23 @@
                 <groupId>org.mapstruct</groupId>
                 <artifactId>mapstruct</artifactId>
                 <version>${mapstruct.version}</version>
+            </dependency>
+            <!-- QR codes (pass-service). core only in main code; javase (decoding) in tests -->
+            <dependency>
+                <groupId>com.google.zxing</groupId>
+                <artifactId>core</artifactId>
+                <version>${zxing.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.zxing</groupId>
+                <artifactId>javase</artifactId>
+                <version>${zxing.version}</version>
+            </dependency>
+            <!-- PDF tickets (pass-service) -->
+            <dependency>
+                <groupId>com.github.librepdf</groupId>
+                <artifactId>openpdf</artifactId>
+                <version>${openpdf.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

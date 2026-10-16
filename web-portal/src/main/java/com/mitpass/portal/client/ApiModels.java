@@ -106,7 +106,9 @@ public final class ApiModels {
             Integer waitlistPosition,
             Boolean viaPromotion,
             Instant createdAt,
-            UUID promotedRegistrationId) {
+            UUID promotedRegistrationId,
+            String userName,
+            String userEmail) {
 
         public boolean isActive() {
             return !"CANCELLED".equals(status);
@@ -125,4 +127,36 @@ public final class ApiModels {
     public record RegisterResult(Registration registration, boolean replayed) {}
 
     public record FieldError(String field, String message) {}
+
+    /** A pass card from pass-service (docs/plans/phase-4.md §7). */
+    public record Pass(
+            UUID id,
+            String passNumber,
+            String status,
+            UUID registrationId,
+            Long eventId,
+            String eventCode,
+            String eventTitle,
+            Instant startsAt,
+            Instant endsAt,
+            String holderName,
+            Instant issuedAt,
+            Instant codeUnlocksAt,
+            Instant revokedAt,
+            String revokeReason,
+            String revokeNote) {
+
+        /** ACTIVE: the live code is shown. */
+        public boolean isActive() {
+            return "ACTIVE".equals(status);
+        }
+
+        /** ISSUED or ACTIVE: can still get its holder in (and be revoked). */
+        public boolean isValid() {
+            return "ISSUED".equals(status) || "ACTIVE".equals(status);
+        }
+    }
+
+    /** Bytes the portal passes through to the browser (QR image, PDF ticket); never a token. */
+    public record Binary(byte[] body, String contentType, String contentDisposition) {}
 }

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Pass')}"></head>
+<body>
+<header th:replace="~{fragments :: header}"></header>
+<main>
+    <p><a th:href="@{/my/passes}">&larr; My passes</a></p>
+    <div th:replace="~{fragments :: flash}"></div>
+
+    <section class="pass-card" th:classappend="${!pass.isValid()} ? 'void'">
+        <p class="pass-event" th:text="${pass.eventTitle()}">TechFest Hackathon</p>
+        <p th:text="${@fmt.when(pass.startsAt())}">Sat 14 Nov 2026, 09:00</p>
+        <p class="pass-label">HOLDER</p>
+        <p class="pass-holder" th:text="${pass.holderName()}">Priya Raman</p>
+        <p class="pass-label">PASS NO.</p>
+        <p><code class="pass-number" th:text="${pass.passNumber()}">TECHFEST26-000042-7</code></p>
+        <p>State: <span class="status" th:text="${pass.status()}">ACTIVE</span></p>
+
+        <div th:if="${pass.isActive()}" class="qr">
+            <img id="live-qr" alt="Live pass code" width="280" height="280"
+                 th:src="@{/my/passes/{id}/qr.png(id=${pass.id()})}">
+            <p class="hint">Live code: it changes every <span th:text="${refreshSeconds}">30</span> seconds, so a
+                screenshot stops working. Show this screen at the gate.</p>
+            <p id="qr-gone" class="flash err" hidden>The code is no longer available. Reload the page.</p>
+        </div>
+        <p th:if="${pass.status() == 'ISSUED'}" class="locked">
+            Code unlocks <strong th:text="${@fmt.when(pass.codeUnlocksAt())}">Fri 23 Oct, 16:30</strong>.
+            The scannable code appears 2 hours before doors open, so it can't be passed around early.
+        </p>
+        <p th:if="${pass.status() == 'REVOKED'}" class="flash err">
+            This pass was revoked<span th:if="${pass.revokeNote() != null}" th:text="': ' + ${pass.revokeNote()}"></span>.
+            It won't get you in.
+        </p>
+        <p th:if="${pass.status() == 'EXPIRED'}" class="flash err">This pass has expired.</p>
+
+        <p th:if="${pass.isValid()}">
+            <a th:href="@{/my/passes/{id}/ticket.pdf(id=${pass.id()})}">Download PDF ticket</a>
+        </p>
+    </section>
+
+    <!-- D9 shortcut: a plain timer swaps the image (P6: pass card with a countdown ring). -->
+    <script th:if="${pass.isActive()}" th:inline="javascript">
+        (function () {
+            const img = document.getElementById('live-qr');
+            const base = img.src.split('?')[0];
+            img.onerror = function () {
+                img.hidden = true;
+                document.getElementById('qr-gone').hidden = false;
+            };
+            setInterval(function () {
+                img.src = base + '?t=' + Date.now();
+            }, /*[[${refreshSeconds}]]*/ 30 * 1000);
+        })();
+    </script>
+</main>
+</body>
+</html>

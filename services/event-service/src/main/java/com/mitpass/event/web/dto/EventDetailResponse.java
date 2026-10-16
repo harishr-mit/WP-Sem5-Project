@@ -33,4 +33,7 @@ public record EventDetailResponse(
         /** The moves an organizer or admin may make now (never LIVE: only the scheduler starts an event). */
         List<EventStatus> allowedTransitions,
         int seatsTaken,
-        int seatsLeft) {}
+        int seatsLeft,
+        /** Phase 4 (D12): pass-service reads these to render passes. */
+        boolean staticQrAllowed,
+        String passColor) {}

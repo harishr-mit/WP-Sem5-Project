@@ -7,7 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import java.time.Instant;
 
-/** An RS256 key pair for access tokens. The private half is stored encrypted ({@code keys.KeyEncryptor}). */
+/** An RS256 key pair for access tokens. The private half is stored encrypted (common-security {@code KeyEncryptor}). */
 @Entity
 public class SigningKey {
 

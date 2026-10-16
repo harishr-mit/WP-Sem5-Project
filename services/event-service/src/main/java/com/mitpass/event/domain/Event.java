@@ -90,6 +90,14 @@ public class Event extends AuditableEntity {
     @JdbcTypeCode(SqlTypes.SMALLINT)
     private Integer maxYear;
 
+    /** May pass-service issue a long-lived (static) QR for the PDF ticket? The live code works either way (D12). */
+    @Column(nullable = false)
+    private boolean staticQrAllowed = true;
+
+    /** {@code #RRGGBB} for the QR and ticket header; {@code null} = MITPass maroon. Upper case in the database. */
+    @Column(length = 7)
+    private String passColor;
+
     /** Department codes allowed to register; empty = every department. */
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "event_eligible_department", joinColumns = @JoinColumn(name = "event_id"))
@@ -256,6 +264,22 @@ public class Event extends AuditableEntity {
 
     public Integer getMinYear() {
         return minYear;
+    }
+
+    public boolean isStaticQrAllowed() {
+        return staticQrAllowed;
+    }
+
+    public void setStaticQrAllowed(boolean staticQrAllowed) {
+        this.staticQrAllowed = staticQrAllowed;
+    }
+
+    public String getPassColor() {
+        return passColor;
+    }
+
+    public void setPassColor(String passColor) {
+        this.passColor = passColor == null ? null : passColor.toUpperCase(java.util.Locale.ROOT);
     }
 
     public void setMinYear(Integer minYear) {

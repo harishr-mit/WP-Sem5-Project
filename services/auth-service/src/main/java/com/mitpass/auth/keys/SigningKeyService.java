@@ -4,6 +4,7 @@ import com.mitpass.auth.config.AuthProperties;
 import com.mitpass.auth.domain.SigningKey;
 import com.mitpass.auth.domain.SigningKeyStatus;
 import com.mitpass.auth.repository.SigningKeyRepository;
+import com.mitpass.common.security.keys.KeyEncryptor;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.JWK;

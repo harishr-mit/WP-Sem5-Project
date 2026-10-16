@@ -32,6 +32,17 @@ spring:
                 - Path=/docs/event-service
               filters:
                 - SetPath=/v3/api-docs
+            # Phase 4: passes, QR codes, PDF tickets, the revocation feed and the public pass keys
+            - id: pass-service
+              uri: lb://pass-service
+              predicates:
+                - Path=/api/passes/**,/api/revocations/**,/.well-known/pass-jwks.json
+            - id: pass-service-openapi
+              uri: lb://pass-service
+              predicates:
+                - Path=/docs/pass-service
+              filters:
+                - SetPath=/v3/api-docs
           # Send X-Forwarded-* so services build links (Location, OpenAPI servers) that point back at the gateway.
           trusted-proxies: "127\\.0\\.0\\.1|0:0:0:0:0:0:0:1|::1"
 
@@ -52,6 +63,8 @@ springdoc:
         url: /docs/auth-service
       - name: event-service
         url: /docs/event-service
+      - name: pass-service
+        url: /docs/pass-service
     persist-authorization: true   # keep the pasted bearer token across page reloads
 
 management:
@@ -74,6 +87,7 @@ mitpass:
       - POST /api/auth/logout
       - GET /api/departments
       - GET /.well-known/jwks.json
+      - GET /.well-known/pass-jwks.json
       - GET /api/events
       - GET /api/events/{id}
       - GET /api/events/{id}/sessions
