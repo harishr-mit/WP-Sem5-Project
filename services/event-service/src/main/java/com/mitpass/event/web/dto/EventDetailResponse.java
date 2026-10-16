@@ -36,4 +36,7 @@ public record EventDetailResponse(
         int seatsLeft,
         /** Phase 4 (D12): pass-service reads these to render passes. */
         boolean staticQrAllowed,
-        String passColor) {}
+        String passColor,
+        /** Phase 5 (D14): checkin-service reads these. {@code certificateMinSessions} null = all sessions. */
+        boolean reentryAllowed,
+        Integer certificateMinSessions) {}

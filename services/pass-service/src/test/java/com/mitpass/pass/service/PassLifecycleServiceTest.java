@@ -9,13 +9,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.jayway.jsonpath.JsonPath;
 import com.mitpass.common.messaging.contract.EventRescheduled;
+import com.mitpass.common.pass.PassNumber;
 import com.mitpass.common.web.error.IllegalTransitionException;
 import com.mitpass.pass.PassFixtures;
 import com.mitpass.pass.PassFixtures.TestEvent;
 import com.mitpass.pass.PassIntegrationTest;
 import com.mitpass.pass.TestClock;
 import com.mitpass.pass.domain.Pass;
-import com.mitpass.pass.domain.PassNumber;
 import com.mitpass.pass.domain.PassStatus;
 import com.mitpass.pass.domain.RevokeReason;
 import com.mitpass.pass.messaging.PassInboxListener;

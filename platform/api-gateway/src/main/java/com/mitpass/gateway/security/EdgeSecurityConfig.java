@@ -30,7 +30,11 @@ import org.springframework.web.reactive.function.client.WebClient;
  */
 @Configuration(proxyBeanMethods = false)
 @EnableWebFluxSecurity
-@EnableConfigurationProperties({MitpassSecurityProperties.class, CorsProperties.class})
+@EnableConfigurationProperties({
+    MitpassSecurityProperties.class,
+    CorsProperties.class,
+    InternalPathsWebFilter.Properties.class
+})
 public class EdgeSecurityConfig {
 
     @Bean

@@ -89,6 +89,7 @@ public class EventService {
         mapper.apply(request, event);
         event.setEligibleDepartments(request.eligibleDepartments());
         event.setStaticQrAllowed(!Boolean.FALSE.equals(request.staticQrAllowed()));
+        event.setReentryAllowed(Boolean.TRUE.equals(request.reentryAllowed()));
         event.assignOrganizer(organizer.id(), organizer.name() != null ? organizer.name() : organizer.email());
         assignCategoryAndVenue(event, request.categoryId(), request.venueId());
 
@@ -134,6 +135,9 @@ public class EventService {
         event.setEligibleDepartments(request.eligibleDepartments());
         if (request.staticQrAllowed() != null) {
             event.setStaticQrAllowed(request.staticQrAllowed());
+        }
+        if (request.reentryAllowed() != null) {
+            event.setReentryAllowed(request.reentryAllowed());
         }
         assignCategoryAndVenue(event, request.categoryId(), request.venueId());
         for (EventSession session : event.getSessions()) {

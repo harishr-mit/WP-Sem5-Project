@@ -92,3 +92,8 @@ ON CONFLICT (event_id, code) DO NOTHING;
 UPDATE event SET pass_color = '#1D4E89' WHERE code = 'TECHFEST26' AND pass_color IS NULL;
 UPDATE event SET pass_color = '#5B2A86' WHERE code = 'RANG26' AND pass_color IS NULL;
 UPDATE event SET static_qr_allowed = FALSE WHERE code = 'AIWS26';
+
+-- Phase 5: check-in settings (docs/plans/phase-5.md §6). RANG26 lets people step out and back in; AIWS26 gives a
+-- certificate for 2 of its 3 sessions. Everything else: single entry, all sessions.
+UPDATE event SET reentry_allowed = TRUE WHERE code = 'RANG26';
+UPDATE event SET certificate_min_sessions = 2 WHERE code = 'AIWS26';

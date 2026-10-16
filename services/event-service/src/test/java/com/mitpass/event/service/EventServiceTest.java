@@ -175,6 +175,8 @@ class EventServiceTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 null);
 
         assertThatThrownBy(() -> service.update(1L, update))
@@ -224,6 +226,8 @@ class EventServiceTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 null);
     }
 
@@ -260,6 +264,8 @@ class EventServiceTest {
                 null,
                 null,
                 0L,
+                null,
+                null,
                 null,
                 null,
                 null,

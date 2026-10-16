@@ -53,6 +53,10 @@ public class Pass extends AuditableEntity {
     private Instant activatedAt;
     private Instant expiredAt;
     private Instant revokedAt;
+    /** First check-in at a gate (from checkin-service's AttendanceMarked, P5). */
+    private Instant checkedInAt;
+    /** Set with the first check-in when the event allows no re-entry: the pass is used up (owner Q2, no new state). */
+    private Instant usedAt;
 
     @Column(length = 64)
     private String revokedBy;
@@ -153,6 +157,27 @@ public class Pass extends AuditableEntity {
 
     public Instant getExpiredAt() {
         return expiredAt;
+    }
+
+    /**
+     * Records a check-in reported by checkin-service. Only the first one counts; a redelivery or a later session
+     * changes nothing. Works in any state: the gate decided, this is bookkeeping.
+     */
+    public void recordCheckIn(Instant at, boolean singleEntry) {
+        if (checkedInAt == null) {
+            checkedInAt = at;
+            if (singleEntry) {
+                usedAt = at;
+            }
+        }
+    }
+
+    public Instant getCheckedInAt() {
+        return checkedInAt;
+    }
+
+    public Instant getUsedAt() {
+        return usedAt;
     }
 
     public Instant getRevokedAt() {

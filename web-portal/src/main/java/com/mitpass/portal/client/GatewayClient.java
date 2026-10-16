@@ -1,17 +1,26 @@
 package com.mitpass.portal.client;
 
 import com.mitpass.portal.auth.PortalUser;
+import com.mitpass.portal.client.ApiModels.Assignment;
+import com.mitpass.portal.client.ApiModels.AttendanceSummary;
+import com.mitpass.portal.client.ApiModels.AttendeeRow;
 import com.mitpass.portal.client.ApiModels.Binary;
 import com.mitpass.portal.client.ApiModels.Category;
+import com.mitpass.portal.client.ApiModels.CertificateRow;
 import com.mitpass.portal.client.ApiModels.Department;
 import com.mitpass.portal.client.ApiModels.Eligibility;
 import com.mitpass.portal.client.ApiModels.EventDetail;
 import com.mitpass.portal.client.ApiModels.EventSummary;
 import com.mitpass.portal.client.ApiModels.FieldError;
+import com.mitpass.portal.client.ApiModels.Gate;
+import com.mitpass.portal.client.ApiModels.LookupAnswer;
 import com.mitpass.portal.client.ApiModels.Page;
 import com.mitpass.portal.client.ApiModels.Pass;
+import com.mitpass.portal.client.ApiModels.PassLookup;
 import com.mitpass.portal.client.ApiModels.RegisterResult;
 import com.mitpass.portal.client.ApiModels.Registration;
+import com.mitpass.portal.client.ApiModels.ScanAnswer;
+import com.mitpass.portal.client.ApiModels.SyncResult;
 import com.mitpass.portal.client.ApiModels.TokenResponse;
 import com.mitpass.portal.config.PortalProperties;
 import java.io.IOException;
@@ -232,7 +241,97 @@ public class GatewayClient {
                 .body(new ParameterizedTypeReference<>() {});
     }
 
-    private Binary binary(String path, UUID id, MediaType accept) {
+    // ---- Phase 5: staffing (event-service) and scans / attendance (checkin-service) ---------------------------------
+
+    public List<Assignment> myAssignments() {
+        return http.get().uri("/api/volunteers/me/assignments").retrieve().body(new ParameterizedTypeReference<>() {});
+    }
+
+    public List<Gate> gates(long eventId) {
+        return http.get().uri("/api/events/{id}/gates", eventId).retrieve().body(new ParameterizedTypeReference<>() {});
+    }
+
+    /**
+     * Sends a scan. A refusal (409, 422, 404, or the scanner 403) is not an error here: its ProblemDetail carries the
+     * same fields as an accepted scan, so both come back as a {@link ScanAnswer}. Anything else raises as usual.
+     */
+    public ScanAnswer scan(String token, String passNumber, long gateId, String deviceId, String mode) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("token", token);
+        body.put("passNumber", passNumber);
+        body.put("gateId", gateId);
+        body.put("deviceId", deviceId);
+        body.put("mode", mode);
+        return http.post()
+                .uri("/api/scans")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .exchange((request, response) -> scanAnswer(request, response, ScanAnswer.class));
+    }
+
+    /** Manual entry, step one: the holder's name for the visual check, or the refusal. */
+    public LookupAnswer lookup(String passNumber, long gateId, String deviceId) {
+        return http.get()
+                .uri(uri -> uri.path("/api/scans/lookup")
+                        .queryParam("passNumber", passNumber)
+                        .queryParam("gateId", gateId)
+                        .queryParam("deviceId", deviceId)
+                        .build())
+                .exchange((request, response) -> {
+                    if (response.getStatusCode().is2xxSuccessful()) {
+                        return new LookupAnswer(
+                                json.readValue(response.getBody().readAllBytes(), PassLookup.class), null);
+                    }
+                    return new LookupAnswer(null, scanAnswer(request, response, ScanAnswer.class));
+                });
+    }
+
+    public AttendanceSummary attendanceSummary(long eventId) {
+        return http.get()
+                .uri("/api/attendance/events/{id}/summary", eventId)
+                .retrieve()
+                .body(AttendanceSummary.class);
+    }
+
+    public Page<AttendeeRow> attendees(long eventId) {
+        return http.get()
+                .uri("/api/attendance/events/{id}/attendees?size=100", eventId)
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+    }
+
+    public List<CertificateRow> certificates(long eventId) {
+        return http.get()
+                .uri("/api/attendance/events/{id}/certificates", eventId)
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+    }
+
+    public Binary attendanceCsv(long eventId) {
+        return binary("/api/attendance/events/{id}/export.csv", eventId, MediaType.parseMediaType("text/csv"));
+    }
+
+    public SyncResult syncAttendance(long eventId) {
+        return http.post()
+                .uri("/api/attendance/events/{id}/sync", eventId)
+                .retrieve()
+                .body(SyncResult.class);
+    }
+
+    /** 2xx, or a refusal whose body has a {@code result}: read as {@code type}. Otherwise the usual error handling. */
+    private <T> T scanAnswer(HttpRequest request, ClientHttpResponse response, Class<T> type) throws IOException {
+        byte[] body = response.getBody().readAllBytes();
+        int status = response.getStatusCode().value();
+        boolean refusal = status == 403 || status == 404 || status == 409 || status == 422;
+        if (response.getStatusCode().is2xxSuccessful()
+                || (refusal && new String(body, java.nio.charset.StandardCharsets.UTF_8).contains("\"result\""))) {
+            return json.readValue(body, type);
+        }
+        raise(request, status, body);
+        throw new IllegalStateException("unreachable");
+    }
+
+    private Binary binary(String path, Object id, MediaType accept) {
         ResponseEntity<byte[]> response =
                 http.get().uri(path, id).accept(accept).retrieve().toEntity(byte[].class);
         MediaType type = response.getHeaders().getContentType();
@@ -261,11 +360,13 @@ public class GatewayClient {
             String type, String title, Integer status, String detail, List<FieldError> errors, List<String> reasons) {}
 
     private void raise(HttpRequest request, ClientHttpResponse response) throws IOException {
-        int status = response.getStatusCode().value();
+        raise(request, response.getStatusCode().value(), response.getBody().readAllBytes());
+    }
+
+    private void raise(HttpRequest request, int status, byte[] body) {
         if (status == 401 && request.getHeaders().containsHeader(HttpHeaders.AUTHORIZATION)) {
             throw new SessionExpiredException();
         }
-        byte[] body = response.getBody().readAllBytes();
         Problem problem;
         try {
             problem = body.length == 0 ? null : json.readValue(body, Problem.class);

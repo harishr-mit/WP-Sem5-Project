@@ -43,6 +43,7 @@ public class MyPassesController {
         Pass pass = gateway.pass(id);
         model.addAttribute("pass", pass);
         model.addAttribute("refreshSeconds", properties.qrRefresh().toSeconds());
+        model.addAttribute("refreshMillis", properties.qrRefresh().toMillis());
         return "my/pass";
     }
 

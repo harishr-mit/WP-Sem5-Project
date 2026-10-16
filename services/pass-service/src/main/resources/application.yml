@@ -87,6 +87,10 @@ mitpass:
     scheduler:
       enabled: true
       interval: 30s
+    # RL7 / D14: re-read status and times of events with valid passes from event-service (catches lost messages)
+    reconcile:
+      interval: 5m
+      initial-delay: 30s
     qr:
       size: 400
       margin: 2

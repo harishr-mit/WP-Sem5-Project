@@ -68,6 +68,7 @@ mitpass:
       - POST /api/auth/login
       - POST /api/auth/refresh
       - POST /api/auth/logout
+      - POST /api/auth/service-token
       - GET /api/departments
       - GET /.well-known/jwks.json
   auth:
@@ -84,6 +85,13 @@ mitpass:
     # P6 points this at a web-portal page instead.
     verify-link: ${MITPASS_VERIFY_LINK:http://localhost:8080/api/auth/verify-email?token={token}}
     mail-from: "MITPass <no-reply@mitpass.test>"
+    # Service tokens for background jobs (docs/plans/phase-5.md §4b). Dev secrets only: set the variables anywhere real.
+    service:
+      token-ttl: 5m
+      clients:
+        checkin-service:
+          subject: 00000000-0000-4000-8000-0000000000f1
+          secret: ${MITPASS_SERVICE_SECRET_CHECKIN:dev-only-checkin-secret}
     signup:
       domains:
         - domain: student.annauniv.edu

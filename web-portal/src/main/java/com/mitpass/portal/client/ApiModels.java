@@ -144,7 +144,10 @@ public final class ApiModels {
             Instant codeUnlocksAt,
             Instant revokedAt,
             String revokeReason,
-            String revokeNote) {
+            String revokeNote,
+            /** P5: first check-in at a gate; usedAt also set for a single-entry event. */
+            Instant checkedInAt,
+            Instant usedAt) {
 
         /** ACTIVE: the live code is shown. */
         public boolean isActive() {
@@ -159,4 +162,87 @@ public final class ApiModels {
 
     /** Bytes the portal passes through to the browser (QR image, PDF ticket); never a token. */
     public record Binary(byte[] body, String contentType, String contentDisposition) {}
+
+    // ---- Phase 5: staffing, scans, attendance
+    // ------------------------------------------------------------------------
+
+    public record Gate(Long id, String code, String name) {}
+
+    /** {@code gate} null = any gate of the event. */
+    public record Assignment(Long eventId, String eventCode, String eventTitle, Instant eventStartsAt, Gate gate) {}
+
+    public record Attendee(UUID passId, String passNumber, String holderName) {}
+
+    /**
+     * checkin-service's answer to a scan: the 200 body, or the same fields from a refusal's ProblemDetail
+     * ({@code result}, {@code message}, {@code color}, …). The portal shows both the same way.
+     */
+    public record ScanAnswer(
+            UUID scanId,
+            String result,
+            String message,
+            String color,
+            Attendee attendee,
+            String eventCode,
+            String gateCode,
+            Long sessionId,
+            String sessionTitle,
+            Instant checkedInAt,
+            Boolean reentry) {
+
+        public boolean accepted() {
+            return "ACCEPTED".equals(result) || "CHECKED_OUT".equals(result);
+        }
+
+        /** CSS class: green, amber or red. */
+        public String colorClass() {
+            return color == null ? "red" : color.toLowerCase(java.util.Locale.ROOT);
+        }
+    }
+
+    /** A typed number found for the visual check. */
+    public record PassLookup(
+            String passNumber,
+            String holderName,
+            String passStatus,
+            String presence,
+            String eventCode,
+            String gateCode,
+            Long sessionId,
+            String sessionTitle) {}
+
+    /** Exactly one is set: the pass to confirm, or the refusal. */
+    public record LookupAnswer(PassLookup pass, ScanAnswer refusal) {}
+
+    public record SessionCount(Long sessionId, String title, Long checkedIn, Double percent) {}
+
+    public record GateCount(String gateCode, Long checkedIn) {}
+
+    public record AttendanceSummary(
+            Long eventId,
+            String eventCode,
+            String eventTitle,
+            Long validPasses,
+            Long checkedIn,
+            Double percent,
+            Long insideNow,
+            List<SessionCount> sessions,
+            List<GateCount> gates,
+            Instant lastScanAt) {}
+
+    public record AttendeeRow(
+            UUID passId,
+            String passNumber,
+            String holderName,
+            String holderEmail,
+            String passStatus,
+            Integer sessionsAttended,
+            Instant firstCheckIn,
+            String lastGate,
+            String presence) {}
+
+    public record CertificateRow(
+            String passNumber, String holderName, String holderEmail, Integer sessionsAttended, Integer required) {}
+
+    public record SyncResult(Long eventId, Integer passes, Integer revoked) {}
 }

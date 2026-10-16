@@ -151,6 +151,25 @@ class PassTokenServiceTest {
                 .isAfterOrEqualTo(exp);
     }
 
+    /** Contract with the scanners (P5): the shared verifier in libs/common-pass accepts what this service signs. */
+    @Test
+    void theScannersVerifierAcceptsLiveAndStaticTokens() {
+        var verifier = new com.mitpass.common.pass.PassTokenVerifier("mitpass-pass");
+        java.util.function.Function<String, java.util.Optional<ECKey>> jwks =
+                kid -> java.util.Optional.ofNullable(publicKey(kid));
+
+        var live = verifier.verify(tokens.live(pass).value(), jwks);
+        var stat = verifier.verify(
+                tokens.staticToken(pass, TestClock.START.plusSeconds(3600)).value(), jwks);
+
+        assertThat(live.verified()).isTrue();
+        assertThat(live.token().passId()).isEqualTo(pass.getId());
+        assertThat(live.token().eventId()).isEqualTo(pass.getEvent().getId());
+        assertThat(live.token().isStatic()).isFalse();
+        assertThat(stat.verified()).isTrue();
+        assertThat(stat.token().isStatic()).isTrue();
+    }
+
     private ECKey publicKey(String kid) {
         return (ECKey) keys.publicJwkSet().getKeyByKeyId(kid);
     }

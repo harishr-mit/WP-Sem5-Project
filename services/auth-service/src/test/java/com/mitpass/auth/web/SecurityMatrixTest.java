@@ -87,6 +87,10 @@ class SecurityMatrixTest {
                         Rule.publicEndpoint()),
                 post("/api/auth/refresh", ids -> "{\"refreshToken\":\"not-a-real-token\"}", Rule.publicEndpoint()),
                 post("/api/auth/logout", ids -> "{\"refreshToken\":\"not-a-real-token\"}", Rule.publicEndpoint()),
+                post(
+                        "/api/auth/service-token",
+                        ids -> "{\"clientId\":\"checkin-service\",\"clientSecret\":\"wrong\"}",
+                        Rule.publicEndpoint()),
                 get("/.well-known/jwks.json", ids -> "/.well-known/jwks.json", Rule.publicEndpoint()),
                 get("/api/departments", ids -> "/api/departments", Rule.publicEndpoint()),
                 get("/api/users/me", ids -> "/api/users/me", Rule.authenticated()),

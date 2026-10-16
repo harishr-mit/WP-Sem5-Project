@@ -15,6 +15,10 @@
         <p class="pass-label">PASS NO.</p>
         <p><code class="pass-number" th:text="${pass.passNumber()}">TECHFEST26-000042-7</code></p>
         <p>State: <span class="status" th:text="${pass.status()}">ACTIVE</span></p>
+        <p th:if="${pass.checkedInAt() != null}" class="ok-text">
+            Checked in <span th:text="${@fmt.when(pass.checkedInAt())}">Sat 14 Nov, 09:02</span><span
+                th:if="${pass.usedAt() != null}"> (single entry: used)</span>.
+        </p>
 
         <div th:if="${pass.isActive()}" class="qr">
             <img id="live-qr" alt="Live pass code" width="280" height="280"
@@ -38,18 +42,27 @@
         </p>
     </section>
 
-    <!-- D9 shortcut: a plain timer swaps the image (P6: pass card with a countdown ring). -->
+    <!-- D9 shortcut: a plain timer swaps the image (P6: pass card with a countdown ring).
+         RL6: the inlined value must stand alone. Thymeleaf drops the text after an inlined expression, so
+         "/*[[${refreshSeconds}]]*/ 30 * 1000" rendered as 30 (ms). The next image is loaded off-screen and swapped
+         in only once it has arrived, so the code never blanks or half-paints. -->
     <script th:if="${pass.isActive()}" th:inline="javascript">
         (function () {
+            const refreshMillis = /*[[${refreshMillis}]]*/ 30000;
             const img = document.getElementById('live-qr');
             const base = img.src.split('?')[0];
-            img.onerror = function () {
+            function gone() {
+                clearInterval(timer);
                 img.hidden = true;
                 document.getElementById('qr-gone').hidden = false;
-            };
-            setInterval(function () {
-                img.src = base + '?t=' + Date.now();
-            }, /*[[${refreshSeconds}]]*/ 30 * 1000);
+            }
+            img.onerror = gone;
+            const timer = setInterval(function () {
+                const next = new Image();
+                next.onload = function () { img.src = next.src; };
+                next.onerror = gone;
+                next.src = base + '?t=' + Date.now();
+            }, refreshMillis);
         })();
     </script>
 </main>

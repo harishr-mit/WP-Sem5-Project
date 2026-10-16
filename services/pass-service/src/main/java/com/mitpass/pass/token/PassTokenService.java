@@ -1,5 +1,6 @@
 package com.mitpass.pass.token;
 
+import com.mitpass.common.pass.PassTokens;
 import com.mitpass.pass.config.PassProperties;
 import com.mitpass.pass.domain.Pass;
 import com.mitpass.pass.keys.PassKeyService;
@@ -28,12 +29,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PassTokenService {
 
-    public static final JOSEObjectType TYPE = new JOSEObjectType("mitpass-pass+jws");
+    public static final JOSEObjectType TYPE = PassTokens.TYPE;
 
     /** Live (rotating, short) or static (PDF/email, until the event ends). */
     public enum Kind {
-        LIVE("L"),
-        STATIC("S");
+        LIVE(PassTokens.KIND_LIVE),
+        STATIC(PassTokens.KIND_STATIC);
 
         private final String claim;
 
@@ -83,9 +84,9 @@ public class PassTokenService {
                 .issueTime(Date.from(issuedAt))
                 .expirationTime(Date.from(expiresAt))
                 .jwtID(UUID.randomUUID().toString())
-                .claim("pid", pass.getId().toString())
-                .claim("eid", pass.getEvent().getId())
-                .claim("knd", kind.claim())
+                .claim(PassTokens.PASS_ID, pass.getId().toString())
+                .claim(PassTokens.EVENT_ID, pass.getEvent().getId())
+                .claim(PassTokens.KIND, kind.claim())
                 .build();
         JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.ES256)
                 .keyID(key.getKeyID())

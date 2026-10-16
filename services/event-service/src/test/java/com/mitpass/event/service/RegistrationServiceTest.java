@@ -279,7 +279,9 @@ class RegistrationServiceTest {
                 current.minYear(),
                 current.maxYear(),
                 current.staticQrAllowed(),
-                current.passColor());
+                current.passColor(),
+                current.reentryAllowed(),
+                current.certificateMinSessions());
     }
 
     private int seatsTaken(long event) {

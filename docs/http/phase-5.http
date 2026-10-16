@@ -1,0 +1,324 @@
+### MITPass Phase 5 demo: gate scans, every result code, check-out/re-entry, manual entry, reports. All through the gateway.
+### Run with the VS Code "REST Client" extension, top to bottom. The expected status and result are in each title.
+### Start order: discovery → auth → event → pass → checkin → gateway → portal. checkin-service declares its queue on start;
+### passes issued before that are pulled in by its reconciler within 5 minutes (or when the event goes LIVE).
+### Seeded accounts (password Passw0rd!): organizer.a@mitpass.test, volunteer@mitpass.test (Karthik, VOLUNTEER),
+###   2026509001@student.annauniv.edu (Priya), 2026505014@student.annauniv.edu (Arun), admin@mitpass.test
+### RabbitMQ UI http://localhost:15672 (mitpass/mitpass): queue checkin-service.inbox (+ .dlq); attendance.marked on the tap queue.
+### Portal: http://localhost:8090 → Scan (volunteer), My events → Attendance (organizer), My passes (student).
+
+@gw = http://localhost:8080
+
+### --- log in ------------------------------------------------------------------------------------------------------
+
+# @name organizer
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "organizer.a@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name volunteer
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "volunteer@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name priya
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "2026509001@student.annauniv.edu", "password": "Passw0rd!"}
+
+###
+# @name arun
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "2026505014@student.annauniv.edu", "password": "Passw0rd!"}
+
+### --- 1. An event starting in 25 minutes, two gates, the volunteer at MAIN ------------------------------------------
+
+### 201 Change the code on a rerun. Single entry (reentryAllowed false is the default)
+# @name event
+POST {{gw}}/api/events
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"code": "SCANDEMO1", "title": "Scan demo", "categoryId": 1, "venueId": 1, "capacity": 10,
+ "startsAt": "{{$datetime iso8601 25 m}}", "endsAt": "{{$datetime iso8601 4 h}}",
+ "registrationClosesAt": "{{$datetime iso8601 20 m}}", "reentryAllowed": false}
+
+### 200 DRAFT → PUBLISHED
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "PUBLISHED"}
+
+### 200 PUBLISHED → REGISTRATION_OPEN
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "REGISTRATION_OPEN"}
+
+### 201 Gate MAIN
+# @name main
+POST {{gw}}/api/events/{{event.response.body.id}}/gates
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"code": "MAIN", "name": "Main Gate"}
+
+### 201 Gate NORTH
+# @name north
+POST {{gw}}/api/events/{{event.response.body.id}}/gates
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"code": "NORTH", "name": "North Gate"}
+
+### 201 The volunteer scans at MAIN only
+POST {{gw}}/api/events/{{event.response.body.id}}/volunteers
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"email": "volunteer@mitpass.test", "gateId": {{main.response.body.id}}}
+
+### --- 2. Two students register → two passes (ACTIVE at once: the code unlocks 2.5 h before start) -------------------
+
+### 201 CONFIRMED
+POST {{gw}}/api/registrations
+Authorization: Bearer {{priya.response.body.accessToken}}
+Content-Type: application/json
+
+{"eventId": {{event.response.body.id}}}
+
+### 201 CONFIRMED
+POST {{gw}}/api/registrations
+Authorization: Bearer {{arun.response.body.accessToken}}
+Content-Type: application/json
+
+{"eventId": {{event.response.body.id}}}
+
+### 200 Priya's pass (wait a second after registering)
+# @name priyaPasses
+GET {{gw}}/api/passes/me
+Authorization: Bearer {{priya.response.body.accessToken}}
+
+### 200 Arun's pass
+# @name arunPasses
+GET {{gw}}/api/passes/me
+Authorization: Bearer {{arun.response.body.accessToken}}
+
+### 200 Priya's live token (45 s): what her QR carries. Re-run this before each scan of Priya below
+# @name priyaLive
+GET {{gw}}/api/passes/{{priyaPasses.response.body.$.content[0].id}}/qr/live
+Authorization: Bearer {{priya.response.body.accessToken}}
+Accept: application/json
+
+### 200 Arun's static token (the PDF ticket's QR), kept for the REVOKED and EVENT_CLOSED steps
+# @name arunStatic
+GET {{gw}}/api/passes/{{arunPasses.response.body.$.content[0].id}}/qr/static
+Authorization: Bearer {{arun.response.body.accessToken}}
+Accept: application/json
+
+### --- 3. Before LIVE ------------------------------------------------------------------------------------------------
+
+### 409 NOT_YET_OPEN (amber): the event isn't LIVE yet
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"token": "{{priyaLive.response.body.token}}", "gateId": {{main.response.body.id}}, "deviceId": "http-demo"}
+
+### 200 Close registration now; the scheduler makes the event LIVE within 30 s (doors open 30 min before start)
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "REGISTRATION_CLOSED"}
+
+### 200 Wait until status is LIVE (re-run)
+GET {{gw}}/api/events/{{event.response.body.id}}
+
+### --- 4. The gate ---------------------------------------------------------------------------------------------------
+
+### 200 A seeded event the volunteer is NOT assigned to (TechFest Hackathon) and its gates
+# @name techfest
+GET {{gw}}/api/events?q=TechFest
+
+###
+# @name techfestGates
+GET {{gw}}/api/events/{{techfest.response.body.$.content[0].id}}/gates
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+
+### 403 UNAUTHORIZED_SCANNER (red): scanning at a gate of an event the volunteer isn't assigned to
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"token": "{{priyaLive.response.body.token}}", "gateId": {{techfestGates.response.body.$[0].id}}, "deviceId": "http-demo"}
+
+### 200 ACCEPTED (green) "Welcome, Priya Raman." Re-fetch priyaLive first if it is older than 45 s
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"token": "{{priyaLive.response.body.token}}", "gateId": {{main.response.body.id}}, "deviceId": "http-demo"}
+
+### 409 ALREADY_CHECKED_IN (amber) "Already checked in at … at MAIN." (send twice quickly: still exactly one ACCEPTED)
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"token": "{{priyaLive.response.body.token}}", "gateId": {{main.response.body.id}}, "deviceId": "http-demo-2"}
+
+### 409 WRONG_GATE (amber): the volunteer is assigned to MAIN, not NORTH
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"token": "{{priyaLive.response.body.token}}", "gateId": {{north.response.body.id}}, "deviceId": "http-demo"}
+
+### 200 CHECKED_OUT (green)
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"token": "{{priyaLive.response.body.token}}", "gateId": {{main.response.body.id}}, "deviceId": "http-demo", "mode": "OUT"}
+
+### 409 REENTRY_NOT_ALLOWED (red): single-entry event. (With "reentryAllowed": true it would be ACCEPTED, reentry: true)
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"token": "{{priyaLive.response.body.token}}", "gateId": {{main.response.body.id}}, "deviceId": "http-demo"}
+
+### 409 NOT_CHECKED_IN (amber): Arun never came in, so he can't check out
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"token": "{{arunStatic.response.body.token}}", "gateId": {{main.response.body.id}}, "deviceId": "http-demo", "mode": "OUT"}
+
+### 422 INVALID_SIGNATURE (red): one character of the token changed (edit any character in the middle part)
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"token": "{{priyaLive.response.body.token}}x", "gateId": {{main.response.body.id}}, "deviceId": "http-demo"}
+
+### 422 EXPIRED_TOKEN (red): send a live token again more than 55 s after it was fetched (45 s + 10 s skew)
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"token": "{{priyaLive.response.body.token}}", "gateId": {{main.response.body.id}}, "deviceId": "http-demo"}
+
+### --- 5. Manual entry: look up, check the name, confirm --------------------------------------------------------------
+
+### 200 Arun's name and state for the visual check (no check-in yet)
+GET {{gw}}/api/scans/lookup?passNumber={{arunPasses.response.body.$.content[0].passNumber}}&gateId={{main.response.body.id}}&deviceId=http-demo
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+
+### 200 ACCEPTED, method MANUAL
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"passNumber": "{{arunPasses.response.body.$.content[0].passNumber}}", "gateId": {{main.response.body.id}}, "deviceId": "http-demo"}
+
+### 422 INVALID_PASS_NUMBER (red): change the last digit of a pass number (the Luhn check digit catches it)
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"passNumber": "SCANDEMO1-000001-0", "gateId": {{main.response.body.id}}, "deviceId": "http-demo"}
+
+### 409 WRONG_EVENT (red): a number of another event (any TECHFEST26 number with a valid check digit; this one is)
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"passNumber": "TECHFEST26-000042-5", "gateId": {{main.response.body.id}}, "deviceId": "http-demo"}
+
+### 404 UNKNOWN_PASS (amber): a well-formed number nobody was issued. Take a pass number of this event, raise the
+### sequence (000001 → 000099) and fix the check digit: the exit-demo script prints one. pass-service is asked first.
+
+### --- 6. Revocation reaches the gate --------------------------------------------------------------------------------
+
+### 200 The organizer revokes Arun's pass (PassRevoked → checkin-service within about a second; the reconciler's
+### revocation feed would catch it within a minute even if the message were lost)
+POST {{gw}}/api/passes/{{arunPasses.response.body.$.content[0].id}}/revoke
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"note": "Phase 5 demo"}
+
+### 409 REVOKED (red): Arun's printed ticket no longer works
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"token": "{{arunStatic.response.body.token}}", "gateId": {{main.response.body.id}}, "deviceId": "http-demo"}
+
+### --- 7. Reports ----------------------------------------------------------------------------------------------------
+
+### 200 Valid passes, checked in, %, inside now, per session and gate
+GET {{gw}}/api/attendance/events/{{event.response.body.id}}/summary
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### 200 One row per pass
+GET {{gw}}/api/attendance/events/{{event.response.body.id}}/attendees
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### 200 CSV download
+GET {{gw}}/api/attendance/events/{{event.response.body.id}}/export.csv
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### 200 Who qualifies for a certificate (all sessions unless certificateMinSessions says fewer)
+GET {{gw}}/api/attendance/events/{{event.response.body.id}}/certificates
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### 200 Priya's own attendance
+GET {{gw}}/api/attendance/me
+Authorization: Bearer {{priya.response.body.accessToken}}
+
+### 200 Priya's pass now has checkedInAt and usedAt (single entry): AttendanceMarked reached pass-service
+GET {{gw}}/api/passes/{{priyaPasses.response.body.$.content[0].id}}
+Authorization: Bearer {{priya.response.body.accessToken}}
+
+### 200 Admin tool only: re-read the event's passes now (the reconciler does it by itself)
+POST {{gw}}/api/attendance/events/{{event.response.body.id}}/sync
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### 404 Service tokens are internal: the gateway refuses the path
+POST {{gw}}/api/auth/service-token
+Content-Type: application/json
+
+{"clientId": "checkin-service", "clientSecret": "dev-only-checkin-secret"}
+
+### --- 8. After the event --------------------------------------------------------------------------------------------
+
+### 200 Priya's static token (valid until the end + 2 h); fetched now, because COMPLETED expires the pass
+# @name priyaStatic
+GET {{gw}}/api/passes/{{priyaPasses.response.body.$.content[0].id}}/qr/static
+Authorization: Bearer {{priya.response.body.accessToken}}
+Accept: application/json
+
+### 200 The organizer ends the event early (LIVE → COMPLETED)
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "COMPLETED"}
+
+### 409 EVENT_CLOSED (red): the token is still genuine, but the event is over
+POST {{gw}}/api/scans
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"token": "{{priyaStatic.response.body.token}}", "gateId": {{main.response.body.id}}, "deviceId": "http-demo"}

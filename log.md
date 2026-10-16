@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-16 (Claude Opus 5.5) — **Phase 4 done (T06)** on branch `phase4` (uncommitted; the post-phase commit is the owner's call). New `pass-service` (:8083): passes issued from `RegistrationConfirmed` exactly once (idempotent consumer + unique registration), ES256 JWS QR tokens (live 45 s, unlocks 2 h before doors open; static until end + 2 h), own JWK set + rotation, ZXing PNG/SVG, OpenPDF ticket, revocation + cursor feed, cancellation saga, scheduler, minimal DLQ (**P7 completes it**). event-service: V7 pass settings + `EventRescheduled`. Portal: My passes, pass page, organizer revoke. 378 tests green; security matrix 330/330; live exit demo 47/47. Next: post-phase commit (owner), then Phase 5 (T07): write `docs/plans/phase-5.md` first. Parked questions for after P8: `docs/REVIEW-LATER.md` (RL1–RL6). Since 2026-10-15 (T21) P3–P5 each also include a thin `web-portal` slice (PROJECT.md §5). The shortcuts are intended, and P6 replaces them (`docs/DECISIONS.md` D9).
+* **Last updated:** 2026-10-16 (Claude Opus 5.5) — **Phase 5 done (T07)** on branch `phase5` (uncommitted; the post-phase commit is the owner's call). New `checkin-service` (:8084): scan pipeline (15 result codes), race-safe check-in (20 simultaneous scans → 1 ACCEPTED), presence IN/OUT, sessions, manual entry, reports/CSV/certificates; pass data is a reconciled copy (D14: owners re-read automatically, service tokens from auth-service, D7). RL6 fixed (T07.0); RL7 built (pass-service event copy reconciler). New `libs/common-pass`. 470 tests green; security matrix 410/410; live exit demo passed, including both gaps and RL7 closing on their own. Nothing running. Next: post-phase commit (owner), then Phase 6 (T08): write `docs/plans/phase-6.md` first. Parked for after P8: `docs/REVIEW-LATER.md` (RL1–RL5 and RL8–RL11 open; RL6, RL7 resolved).
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
@@ -96,7 +96,24 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T06.11: PDF ticket (OpenPDF)
   * [x] T06.12: Read + revoke API, revocation feed, key rotation, security matrix + docs
   * [x] T06.13: Portal slice + exit demo + docs
-* [ ] T07: **Phase 5** — Scan, verify & attendance (PROJECT.md §P5)
+* [x] T07: **Phase 5** — Scan, verify & attendance (PROJECT.md §P5; plan and "done when" checks: `docs/plans/phase-5.md` §17). Plan written 2026-10-16; all answers in (Q6 = automatic reconciler + service identity); pre-phase commit `ed5b989` by the owner. Done 2026-10-16 (uncommitted)
+  * [x] T07.0: RL6 fix (owner: part of Phase 5; done as T31)
+  * [x] T07.1: Owner decisions recorded (PROJECT.md §3/§P5, DECISIONS D14 draft) before code; Q6 recorded too (D7/D14, plan §4a/§4b)
+  * [x] T07.2: `libs/common-pass`: PassNumber moved, PassTokens, PassTokenVerifier; pass-service switched over
+  * [x] T07.3: AttendanceMarked contract; event-service V8 (reentry, certificate N); pass-service V2 + attendance.marked handler
+  * [x] T07.4: checkin-service skeleton (:8084), V1, gateway routes + Swagger
+  * [x] T07.5: Copies: inbox + DLQ, pass_ref/event_ref handlers, EventCatalogClient, pass JWKS cache
+  * [x] T07.6: Domain: PresenceState, ScanResult, SessionResolver, entities
+  * [x] T07.7: Verification pipeline (step beans), scan log for rejections
+  * [x] T07.8: Check-in transaction (presence lock + unique attendance), check-out/re-entry, outbox; race test
+  * [x] T07.9: Manual path (lookup + pass-number scans)
+  * [x] T07.10: Reports (summary, attendees, CSV, certificates, /me) + pass sync
+  * [x] T07.14: Service identity: Roles.SERVICE, auth-service service tokens, gateway refuses them, pass-service SERVICE reads
+  * [x] T07.15: PassCopyReconciler: revocation catch-up, scanning-window sync, single-pass fetch, advisory locks
+  * [x] T07.11: Security matrix + docs/security-matrix.md
+  * [x] T07.12: Portal slice (scan, confirm, result, attendance page, CSV proxy, wallet line)
+  * [x] T07.16: RL7 (owner, mid-phase): pass-service EventCopyReconciler for its own event copy
+  * [x] T07.13: Exit demo + docs
 * [ ] T08: **Phase 6** — Web portal, Spring MVC (PROJECT.md §P6)
 * [ ] T09: **Phase 7** — Real-time dashboard, notifications & offline scanning (PROJECT.md §P7)
 * [ ] T10: **Phase 8** — Hardening, observability & showcase (PROJECT.md §P8)
@@ -127,6 +144,8 @@ Shared context for every agent working in this directory. Read this file **befor
 
 * [x] T29: Start MITPass for the owner and set up a live-code demo event (left running on request; stopped in T30)
 * [x] T30: `docs/REVIEW-LATER.md` RL5 (PDF name = event name + student id), RL6 (live QR glitch after ~30 s); shut everything down
+* [x] T31: Fix RL6 (live QR reloaded every 30 ms: Thymeleaf inlining dropped `* 1000`) with a regression test (owner: counts as Phase 5 work, T07.0)
+* [x] T32: Check Phase 4 is complete; plan Phase 5 → `docs/plans/phase-5.md` + T07 sub-tasks (no Phase 5 code)
 
 *Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -144,6 +163,110 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-16 — Claude (Opus 5.5) — RL11 parked
+
+* **Task:** owner asked to add "an organizer can also be a volunteer" to the review-for-later doc
+* **Status:** DONE
+* **Files:** `docs/REVIEW-LATER.md` (RL11), `log.md`
+* **Details:** Checked first: roles are a set per user, so ORGANIZER + VOLUNTEER is possible today only through an admin role change; scanning needs the VOLUNTEER role plus an assignment; seeded organizers have ORGANIZER only. Options listed (implied role, owner scans without assignment, self-assignment, admins).
+
+### 2026-10-16 — Claude (Opus 5.5) — RL8–RL10 parked
+
+* **Task:** owner asked to add three points to the review-for-later doc
+* **Status:** DONE
+* **Files:** `docs/REVIEW-LATER.md` (RL8 rename the "Move to" lifecycle buttons to actions such as Publish / Open registrations / Cancel; RL9 confirmation before critical actions such as cancelling an event; RL10 admin can undo a cancellation and do almost anything, with the consequences for revoked passes), `log.md`
+* **Details:** Checked the current state first: `organizer/events.html` prints raw state names under "Move to"; no confirmation on any destructive button; CANCELLED and REVOKED are final states for everyone (D10, D12).
+
+### 2026-10-16 — Claude (Opus 5.5) — README: when to rebuild
+
+* **Task:** owner asked whether step 3 (`./mvnw install -DskipTests`) is needed before every run
+* **Status:** DONE
+* **Files:** `README.md` (step 3: rebuild only after code/config changes, `git pull` or `clean`; one-service rebuild; *bad class file* hint; top links list phase-5.md)
+* **Details:** Answer: no. The jars and installed libraries from the final Phase 5 build are current (pass-service was reinstalled after the RL7 change; only docs changed afterwards).
+
+### 2026-10-16 — Claude (Opus 5.5) — T07.12, T07.16, T07.13: portal, RL7, exit demo, docs; Phase 5 done
+
+* **Task:** T07.12 portal slice, T07.16 RL7 (owner asked mid-phase: "yes, take care of it too"), T07.13 exit demo + docs
+* **Status:** DONE (Phase 5 complete; not committed: the post-phase commit is the owner's call)
+* **Files:**
+  * web-portal: `ApiModels` (+Gate, Assignment, Attendee, ScanAnswer, PassLookup, LookupAnswer, attendance records; `Pass` +checkedInAt/usedAt), `GatewayClient` (+myAssignments, gates, scan/lookup reading refusals as answers, attendance calls, CSV bytes; `raise` split), `SecurityConfig` (`/scan/**` VOLUNTEER), new `ScanPagesController`, `AttendancePagesController`, templates new `scan/scan.html`, `scan/confirm.html`, `organizer/attendance.html`, edited `fragments.html` (Scan link), `organizer/events.html` (Attendance link), `my/pass.html` (checked-in line), `portal.css`; tests new `ScanPagesTest` (9), `PassPagesTest` (+1, fixture), `GatewayClientTest` (+1)
+  * T07.16 pass-service: new `service/EventCopyReconciler` (5 min, public catalogue, applies differences through the message handlers), `application.yml` (`mitpass.passes.reconcile`); tests new `EventCopyReconcilerTest` (4), `FakeEventCatalog` (+outage switch)
+  * docs: new `docs/http/phase-5.http`; `README.md` (status, seven apps, gate demo, race demo, troubleshooting); `PROJECT.md` (§P5 ticked + RL7 bullet + status); `docs/DECISIONS.md` (D14 as built, consequences); `docs/plans/phase-5.md` (§21 as built + live verification); `docs/security-matrix.md` (regenerated, 410/410); `docs/REVIEW-LATER.md` (RL3 P5 note; RL7 added and resolved); `AGENTS.md` (parts table: common-pass, service tokens, data copies row)
+* **Details:**
+  * Full `./mvnw clean install`: green, **470 tests**, matrix 410/410. The first run stopped in event-service with "bad class file … NoSuchFileException" (VS Code's Java server deleted class files in `target/` mid-build, the known note); `-rf :event-service` was green.
+  * **Live exit demo** (compose infra with the old volume, jars on the project JDK; scripts in the session scratchpad `demo5/`): every result code through the gateway, AttendanceMarked → pass-service `usedAt`, reports/CSV/certificates/`me`, service-token path 404, Swagger, portal scan → confirm → result, CSRF 403, organizer attendance + CSV. **Gap 1:** Priya registered before checkin-service ever ran (queue 404); ~20 s after start her pass was in `pass_ref` (DB check, no scan). **Gap 2:** checkin-service stopped, Priya revoked, queue purged; after restart "Revocation catch-up applied 1 revocation(s)", scan → REVOKED. **RL7:** pass-service stopped, event cancelled, `pass-service.inbox` purged; 30 s after restart "copy says REGISTRATION_OPEN, event-service says CANCELLED", pass REVOKED (EVENT_CANCELLED).
+  * Demo-script problems on the first run (none in the app): a lookup before LIVE wrongly expected 200; `TECHFEST26-000042-7` (mockup number used in `phase-5.http`) has a wrong check digit, the valid one is `…-5` (file corrected); a cp1252 console error on `→`; the script's purge step didn't take effect, so the purge was redone by hand before the restart. Affected steps rerun: all passed.
+  * `.gitignore` reviewed: new modules' `target/` ignored; no dependency or tool files untracked.
+* **Notes / Errors:** At the end: all 7 project JVMs stopped (ports 8761/8080-8084/8090 free; only VS Code's Java server left), `docker compose down` (volume kept: it now holds the demo's SCAN…/RLSEVEN… events; `down -v` for a fresh seed), no containers left.
+
+### 2026-10-16 — Claude (Opus 5.5) — T07.10, T07.15, T07.11: reports, reconciler, matrix (+1 bug)
+
+* **Task:** T07.10 reports + sync, T07.15 automatic reconciliation (Q6), T07.11 security matrix
+* **Status:** WORKING (DONE; next T07.12 portal slice)
+* **Files:** checkin-service `service/AttendanceReportService` (summary, attendees, CSV with formula defusing, certificates, `/me`), `security/CheckinSecurity`, `web/AttendanceController` (`/api/attendance/events/{id}/summary|attendees|export.csv|certificates|sync`, `/api/attendance/me`), `web/dto/AttendanceDtos`; tests `AttendanceReportTest` (7), `PassCopyReconcilerTest` (7: lost revocation caught in one run, owner-only passes present after one window run, lost LIVE corrected, LIVE triggers an immediate sync, typed-number miss re-syncs once per interval, outage retried, advisory lock), `HttpClientsTest` (4: service token cached/renewed and sent, JWKS refetch limit, 404/503 mapping), `SecurityMatrixTest` (64/64); `libs/security-test-support` `SecurityMatrix` (a 5xx never passes) + new `SecurityMatrixHarnessTest` (2)
+* **Details:** **Bug found by the matrix and fixed with a test:** the summary and CSV of an event without scans returned 500 (`max(received_at)` is NULL and `JdbcClient…single()` refuses a null value). The harness counted that 500 as "allowed" because it only looks for 401/403 problem types. It now fails any 5xx; the other services' matrices had no 5xx cells.
+* **Notes / Errors:** none open.
+
+### 2026-10-16 — Claude (Opus 5.5) — T07.4–T07.9: checkin-service core
+
+* **Task:** T07.4 skeleton + gateway, T07.5 copies, T07.6 domain, T07.7 pipeline, T07.8 check-in transaction + race test, T07.9 manual path
+* **Status:** WORKING (T07.4–T07.9 DONE; next T07.10 reports + sync)
+* **Files:**
+  * root `pom.xml` (module `services/checkin-service`); new `services/checkin-service/**`: `pom.xml`; `application.yml` (:8084, `mitpass.checkin.*` incl. reconcile + service client); `db/migration/V1__init.sql` (event_ref, pass_ref, attendance UNIQUE(pass_id, session_id), presence, presence_history, scan_log, sync_cursor, processed_message, outbox_message); `CheckinServiceApplication`; `config/` CheckinProperties, AppConfig (Clock, PassTokenVerifier, reconcile schedule via SchedulingConfigurer), ClientConfig (load-balanced builder `defaultCandidate=false`), OpenApiConfig; `client/` EventCatalog + HttpEventCatalog (Caffeine caches, scanning-window search), PassDirectory + HttpPassDirectory (service token), PassKeys + PassJwksCache (refetch on unknown kid, rate-limited), ServiceTokenProvider; `domain/` PassRef, PresenceState, ScanResult (15 codes, status, colour, message), ScanMode, ScanMethod, SessionResolver, Attendance, Presence, PresenceChange, ScanLog; `repository/` PassCopyStore (sticky REVOKED upserts), EventRefStore (newest wins), Attendance/Presence (createIfMissing + `lockById` FOR UPDATE)/PresenceChange/ScanLog repositories; `verify/` ScanContext, ScanStep, Steps (ScannerAssigned, Signature, TypedNumber, Expiry, EventMatch, EventLive, SessionOpen, PassKnown, NotRevoked), ScanPipeline; `service/` CopyUpdates, CheckinProblems, ScanOutcome(s), ScanLogWriter (REQUIRES_NEW), CheckInTransaction, CheckinEvents (outbox), PassCopyReconciler (built here, tested in T07.15), ScanService; `messaging/` CheckinInbox (+DLQ), CheckinInboxListener; `web/` ScanController (`POST /api/scans`, `GET /api/scans/lookup`), ScanRejectedException, dto/ScanDtos
+  * tests: CheckinIntegrationTest, TestcontainersConfiguration, TestClock, CheckinTestConfig, FakeEventCatalog, FakePassDirectory, TestPassKeys, CheckinFixtures, ScanScenario, `application-test.yml`; CheckinServiceApplicationTests (1), CheckinConsumerTest (5), DomainRulesTest (4), ScanVerificationTest (21: every result code + static, manual, sessions, re-entry, validation), DoubleScanRaceTest (3 repeats + no-lock variant)
+  * gateway `application.yml` (route `checkin-service` `/api/scans/**,/api/attendance/**`, openapi route, Swagger entry), `EdgeSecurityTest` (+1 → 21)
+* **Details:** checkin-service 35 tests green. **Race: 20 simultaneous scans → 1 ACCEPTED / 19 ALREADY_CHECKED_IN, 1 attendance, 20 scan log rows, 1 AttendanceMarked, three repeats in a row**; without the row lock the unique constraint still admitted only one. Libraries installed into `~/.m2` (`./mvnw install -DskipTests` for the libs) so single-module runs work.
+* **Notes / Errors:** One test of mine was wrong (12:30 is exactly when session 2's doors open); the resolver was right, the test's time was corrected to 12:20.
+
+### 2026-10-16 — Claude (Opus 5.5) — T07.14: service identity
+
+* **Task:** T07.14 (Q6: service tokens for background jobs)
+* **Status:** WORKING (T07.14 DONE; next T07.4 checkin-service skeleton)
+* **Files:** common-security `Roles` (+`SERVICE`, not in `ALL`); auth-service new `config/ServiceClientProperties` (`mitpass.auth.service.*`), `service/ServiceTokenService` (constant-time secret check, 401 `invalid-client`), `web/ServiceTokenController` (`POST /api/auth/service-token`, `no-store`), `AccessTokenService.mintService`, `application.yml` (public path, client `checkin-service` with subject `…00f1` and secret `${MITPASS_SERVICE_SECRET_CHECKIN:dev-only-checkin-secret}`), tests new `ServiceTokenTest` (3), `SecurityMatrixTest` (+1 row); gateway new `security/InternalPathsWebFilter` (404 problem for internal paths, normalized: case, `//`, percent-encoding, trailing parts), `EdgeSecurityConfig` (properties), `EdgeSecurityTest` (+1); pass-service `PassController` / `RevocationController` (`SERVICE` on `GET /api/passes?eventId=`, `GET /api/passes/{id}`, `GET /api/revocations`), `SecurityMatrixTest` (+SERVICE column)
+* **Details:** auth-service 54, gateway 20, pass-service 55 with matrix 88/88 (the new column was red in exactly the three cells before the rule change). A separate controller keeps `AuthControllerTest` (`@WebMvcTest(AuthController.class)`) unchanged.
+* **Notes / Errors:** Spring 7 removed `PathPatternParser.setMatchOptionalTrailingSeparator`, so the filter normalizes paths itself. Bash heredocs with apostrophes still break the tool wrapper (log note from P3): Python edits are written to a scratchpad file first.
+
+### 2026-10-16 — Claude (Opus 5.5) — T07.2–T07.3: common-pass, AttendanceMarked, V8/V2
+
+* **Task:** T07.2 (shared pass library), T07.3 (contract + per-event settings + pass check-in fields)
+* **Status:** WORKING (T07.2, T07.3 DONE; next T07.14 service identity)
+* **Files:**
+  * T07.2: root `pom.xml` (module `libs/common-pass`); new `libs/common-pass/**`: `pom.xml`, `PassNumber` (moved with `git mv` from pass-service, + `normalize`, `eventCode`), `PassTokens` (typ, issuer, claim names, knd values), `PassTokenVerifier` (ES256, typ/iss checks, typed failures, never throws); tests `PassNumberTest` (moved, +1), `PassTokenVerifierTest` (6). pass-service: `pom.xml` (+common-pass), `PassTokenService` (lib constants), `PassLifecycleService` + `PassLifecycleServiceTest` (import), `PassTokenServiceTest` (+1 contract test: the lib verifier accepts live and static tokens)
+  * T07.3: common-messaging `contract/AttendanceMarked`; event-service `V8__checkin_settings.sql`, `Event` (+`reentryAllowed`, `certificateMinSessions`), create/update/detail DTOs, `EventMapper`, `EventService`, seed (RANG26 re-entry, AIWS26 2 of 3), tests: new `CheckinSettingsTests` (4) and call sites in `EventServiceTest`, `RegistrationServiceTest`, `TestData`, `EventControllerTest`; pass-service `V2__check_in.sql`, `Pass` (+`checkedInAt`, `usedAt`, `recordCheckIn`), `PassLifecycleService.attendanceMarked`, `PassInbox` (+`attendance.marked` binding), `PassInboxListener`, `PassResponse` (+2 fields); test new `AttendanceMarkedHandlerTest` (3)
+* **Details:** common-pass 14, event-service 132, pass-service 55 (7 PassNumber tests moved out), libs green. Deviation from plan §15: `certificateMinSessions` is not checked against the session count when saved (sessions are edited separately, so it could go stale); reports use `min(N, sessions)`.
+* **Notes / Errors:** none.
+
+### 2026-10-16 — Claude (Opus 5.5) — Q6 answered: automatic reconciliation
+
+* **Task:** T07.1 (cont.) — record the owner's answer to Q6
+* **Status:** DONE
+* **Files:** `docs/plans/phase-5.md` (status, §4a reconciler jobs, new §4b service identity, §17 new steps T07.14/T07.15 and order, §19 Q6 resolved), `docs/DECISIONS.md` (D7 service-token exception, D14 reconciliation bullet), `PROJECT.md` (§P5 bullet), `log.md`
+* **Details:** Owner: "do the needful to close both gaps; manual means human error is possible, avoid relying on users; go with (a)". Design: revocation feed every 60 s from a stored cursor; scanning-window sync every 5 min / at startup / on LIVE; single-pass fetch during a scan; advisory locks; service tokens from auth-service (`SERVICE` role, 5 min, internal only). The owner committed (`ed5b989`) and said to start building.
+
+### 2026-10-16 — Claude (Opus 5.5) — T07.1: Phase 5 owner answers recorded
+
+* **Task:** T07.1 — record the owner's answers to `docs/plans/phase-5.md` §19 before any code
+* **Status:** DONE (Q6 open)
+* **Files:** `PROJECT.md` (§3 services table: checkin-service consumes `PassIssued` and keeps a read-only pass copy, pass-service consumes `AttendanceMarked`; new "Source of truth" paragraph; §P5 pipeline order, 15 result codes, pass copy + per-event settings bullet, `checkedInAt`/`usedAt`), `docs/DECISIONS.md` (new D14: data owners, how copies stay in step, fail-safe direction, pipeline, single entry, settings), `docs/plans/phase-5.md` (status, §2 heading, new §4a source of truth + drift table, §5 "why not an existing code" column, §19 resolved + Q6, §20 renamed T07.0), `log.md`
+* **Details:** Answers: Q1 accepted, plus the question "what keeps pass data consistent, and what is the source of truth?" Answer: pass-service owns passes, and copies are read-only caches. No scheduled reconciliation exists (P4 included), so Q6 offers options (a) reconciler + service identity (recommended), (b) none, (c) on-demand only. Q2 and Q3 accepted. Q4 accepted on condition that extra codes cover unique cases: all six were checked and none is redundant; `EVENT_CLOSED` narrowed (cancelled events already give `REVOKED`). Q5: RL6 becomes T07.0 of Phase 5; the owner commits before T07.2.
+* **Notes / Errors:** Nothing committed by the agent. Nothing running.
+
+### 2026-10-16 — Claude (Opus 5.5) — T32: Phase 4 checked, Phase 5 planned
+
+* **Task:** T32 — owner asked for a quick check that Phase 4 is complete and a Phase 5 plan, on branch `phase5`
+* **Status:** DONE (plan waits for the owner's answers to §19)
+* **Files:** created `docs/plans/phase-5.md`; edited `PROJECT.md` (§P5 goal line links the plan), `log.md` (status, T07.1–T07.13, T31, T32, entries)
+* **Details:** Phase 4: all §P4 items ticked, as-built written, merged to `main` as PR #4 (`20c9f2e`); `phase5` branches from it, tree was clean. CI status not checked (`gh` isn't installed here). Plan: new checkin-service :8084 (`checkin_db` already exists, no `down -v`), new `libs/common-pass` (PassNumber + ES256 verifier), pipeline of step beans with the scanner check first, 15 result codes, presence row lock + `UNIQUE (pass_id, session_id)`, 20-thread race test, `AttendanceMarked` → pass-service `checkedInAt`/`usedAt`, event-service V8 (`reentry_allowed`, `certificate_min_sessions`), reports + CSV + certificates, portal scan/confirm/attendance pages. 12 exit criteria, 13 steps.
+* **Notes / Errors:** Defaults the owner may change (plan §19): Q1 local pass copy from `PassIssued` (+ sync button), Q2 attributes instead of a USED state, Q3 per-event settings in event-service, Q4 six extra result codes and the scanner check first. PROJECT.md §3/§P5 left as they are until the owner answers (T07.1). Nothing started or left running.
+
+### 2026-10-16 — Claude (Opus 5.5) — T31: RL6 fixed (live QR reloaded every 30 ms)
+
+* **Task:** T31 — owner asked to look after RL6
+* **Status:** DONE
+* **Files:** `web-portal/src/main/java/com/mitpass/portal/web/MyPassesController.java` (+`refreshMillis`), `web-portal/src/main/resources/templates/my/pass.html` (inlined `const refreshMillis`, preload-then-swap, timer stops on error), `web-portal/src/test/java/com/mitpass/portal/web/PassPagesTest.java` (+1 regression test), `docs/REVIEW-LATER.md` (RL6 RESOLVED with the outcome), `docs/plans/phase-5.md` §20 and gotcha 1
+* **Details:** Reproduced by rendering the script with Thymeleaf 3.1.5 (scratch program in the session scratchpad): `/*[[${refreshSeconds}]]*/ 30 * 1000` → `30`, because JavaScript inlining drops the default text after the expression. So the page swapped the image every 30 ms (about 33 token mints and PNG renders per second per open pass page). The new test failed on the old template and passes now; `./mvnw -pl web-portal -am verify` green. No other template inlines JavaScript.
+* **Notes / Errors:** RL6's cause (b) (400 → 280 px downscale with `pixelated`) is cosmetic and left to P6.
 
 ### 2026-10-16 — Claude (Opus 5.5) — T30: RL5/RL6 parked, everything shut down
 

@@ -26,9 +26,9 @@ public class RevocationController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('VOLUNTEER', 'ORGANIZER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('VOLUNTEER', 'ORGANIZER', 'ADMIN', 'SERVICE')")
     @Operation(
-            summary = "Revocations after a cursor (VOLUNTEER, ORGANIZER, ADMIN)",
+            summary = "Revocations after a cursor (VOLUNTEER, ORGANIZER, ADMIN, service token)",
             description = "Start with `since=0`, then pass the returned `nextSince`. A cursor, not a time, so "
                     + "scanner clocks don't matter and nothing is missed.")
     public RevocationFeed revocations(

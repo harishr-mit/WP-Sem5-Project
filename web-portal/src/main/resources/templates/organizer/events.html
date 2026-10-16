@@ -15,7 +15,8 @@
         <tr th:each="e : ${events}">
             <td><a th:href="@{/events/{id}(id=${e.id()})}" th:text="${e.title()}">TechFest Hackathon</a>
                 <br><code th:text="${e.code()}">TECHFEST26</code>
-                <br><a th:href="@{/organizer/events/{id}/registrations(id=${e.id()})}">Registrations &amp; passes</a></td>
+                <br><a th:href="@{/organizer/events/{id}/registrations(id=${e.id()})}">Registrations &amp; passes</a>
+                · <a th:href="@{/organizer/events/{id}/attendance(id=${e.id()})}">Attendance</a></td>
             <td th:text="${@fmt.when(e.startsAt())}">Sat 14 Nov 2026, 09:00</td>
             <td><span class="status" th:text="${e.status()}">PUBLISHED</span></td>
             <td th:text="${e.seatsTaken() + ' / ' + e.capacity()}">0 / 100</td>
