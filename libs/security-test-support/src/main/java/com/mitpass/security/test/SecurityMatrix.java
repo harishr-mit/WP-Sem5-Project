@@ -63,10 +63,11 @@ public final class SecurityMatrix {
         }
     }
 
+    /** A 5xx never passes: it hides whether security let the call through (found in P5, checkin-service). */
     private record Cell(Verdict expected, Verdict actual, int status) {
 
         boolean passed() {
-            return expected == actual;
+            return expected == actual && status < 500;
         }
     }
 
@@ -105,8 +106,14 @@ public final class SecurityMatrix {
         List<String> failures = new ArrayList<>();
         cells.forEach((endpoint, row) -> row.forEach((caller, cell) -> {
             if (!cell.passed()) {
-                failures.add("%s as %s: expected %s, got %s (HTTP %d)"
-                        .formatted(endpoint, caller, cell.expected(), cell.actual(), cell.status()));
+                failures.add("%s as %s: expected %s, got %s (HTTP %d%s)"
+                        .formatted(
+                                endpoint,
+                                caller,
+                                cell.expected(),
+                                cell.actual(),
+                                cell.status(),
+                                cell.status() >= 500 ? ", a server error" : ""));
             }
         }));
         return failures;

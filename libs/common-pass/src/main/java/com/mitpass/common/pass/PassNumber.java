@@ -1,6 +1,7 @@
-package com.mitpass.pass.domain;
+package com.mitpass.common.pass;
 
 import java.util.Locale;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -37,6 +38,20 @@ public final class PassNumber {
         }
         int expected = checkDigit(matcher.group(1) + matcher.group(2));
         return expected == matcher.group(3).charAt(0) - '0';
+    }
+
+    /** The stored form (trimmed, upper case) of a number typed at the gate, if its format and check digit are right. */
+    public static Optional<String> normalize(String number) {
+        return isValid(number) ? Optional.of(number.strip().toUpperCase(Locale.ROOT)) : Optional.empty();
+    }
+
+    /** The event-code part of a valid number ({@code TECHFEST26} for {@code TECHFEST26-000042-7}). */
+    public static String eventCode(String number) {
+        Matcher matcher = FORMAT.matcher(number.strip().toUpperCase(Locale.ROOT));
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException("Not a pass number: " + number);
+        }
+        return matcher.group(1);
     }
 
     /** Luhn check digit for letters and digits, letters expanded ISIN style. */

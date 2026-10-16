@@ -104,6 +104,16 @@ class PassPagesTest {
     }
 
     @Test
+    void aCheckedInSingleEntryPassSaysSo() throws Exception {
+        given(gateway.pass(PASS_ID)).willReturn(pass("ACTIVE", START, START));
+
+        mvc.perform(get("/my/passes/" + PASS_ID).with(authentication(TestTokens.login(student))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Checked in")))
+                .andExpect(content().string(containsString("single entry: used")));
+    }
+
+    @Test
     void issuedPassSaysWhenTheCodeUnlocks() throws Exception {
         given(gateway.pass(PASS_ID)).willReturn(pass("ISSUED"));
 
@@ -199,6 +209,10 @@ class PassPagesTest {
     }
 
     static Pass pass(String status) {
+        return pass(status, null, null);
+    }
+
+    static Pass pass(String status, Instant checkedInAt, Instant usedAt) {
         return new Pass(
                 PASS_ID,
                 "TECHFEST26-000042-7",
@@ -214,7 +228,9 @@ class PassPagesTest {
                 START.minusSeconds(150 * 60),
                 "REVOKED".equals(status) ? START : null,
                 "REVOKED".equals(status) ? "ORGANIZER" : null,
-                null);
+                null,
+                checkedInAt,
+                usedAt);
     }
 
     static Registration registration() {

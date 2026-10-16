@@ -1,0 +1,34 @@
+# Active in every test (@ActiveProfiles("test")). The datasource comes from Testcontainers (@ServiceConnection);
+# event-, pass- and auth-service are in-memory fakes (CheckinTestConfig).
+eureka:
+  client:
+    enabled: false
+
+mitpass:
+  security:
+    load-balanced: false     # tests import TestSecurityConfig (in-memory key); nothing fetches a JWK set
+  checkin:
+    reconcile:
+      enabled: false         # tests run PassCopyReconciler's jobs themselves
+    listener:
+      auto-startup: false    # tests call CheckinInboxListener.onMessage; only CheckinFlowTest consumes from RabbitMQ
+  messaging:
+    relay:
+      enabled: false         # outbox rows are asserted; only CheckinFlowTest sends them
+    tap-queue:
+      enabled: false
+
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 25  # DoubleScanRaceTest runs 20 scans at once
+  rabbitmq:
+    listener:
+      simple:
+        retry:
+          initial-interval: 100ms
+
+management:
+  health:
+    rabbit:
+      enabled: false         # no broker in most tests

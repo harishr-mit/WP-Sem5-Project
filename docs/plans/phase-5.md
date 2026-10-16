@@ -2,7 +2,7 @@
 
 > **Source:** `PROJECT.md` §P5 (including the portal slice from T21 and `docs/DECISIONS.md` D9). **Tracked in:** `log.md` as T07, sub-tasks T07.1–T07.13 (same numbering as the steps in §17).
 > **Written:** 2026-10-16, after Phase 4 was merged to `main` (PR #4) and branch `phase5` was created from it. This plan is a guide: if a step turns out simpler or different in practice, do the sensible thing and record the deviation in `log.md` and in a closing "As built" section here.
-> **Status:** the owner accepted Q1–Q4 on 2026-10-16. Q4 came with a condition: extra codes are fine only for unique cases, so each one is justified in §5. The answers are recorded in PROJECT.md §3/§P5 and `docs/DECISIONS.md` D14 (T07.1). **Open:** Q6, the consistency safety net (§4a). The RL6 fix is part of this phase (T07.0, §20). The owner commits before T07.2 starts.
+> **Status:** all questions answered on 2026-10-16 (Q6: automatic reconciler + service identity, §4a/§4b). Pre-phase commit `ed5b989` by the owner. Building. The owner accepted Q1–Q4 on 2026-10-16. Q4 came with a condition: extra codes are fine only for unique cases, so each one is justified in §5. The answers are recorded in PROJECT.md §3/§P5 and `docs/DECISIONS.md` D14 (T07.1). **Open:** Q6, the consistency safety net (§4a). The RL6 fix is part of this phase (T07.0, §20). Q6 (resolved, see above).
 
 ## 1. Goal and exit criteria
 
@@ -128,7 +128,26 @@ com.mitpass.checkin
 | An `EventStateChanged` lost | Scans accepted after COMPLETED, or refused while LIVE | REST seed only when no row exists |
 | Manual interference (purged queue, restored DB) | any of the above | nothing automatic yet |
 
-**There is no scheduled reconciliation today**, in P4's pass-service or in this plan. **Q6 (open)** decides whether P5 adds one (§19).
+**Q6 resolved (owner, 2026-10-16): option (a). Close both gaps automatically; don't rely on people pressing a button ("manual means human error").** checkin-service gets a `PassCopyReconciler`. It calls the owners with a **service identity** (§4b) and runs without anyone pressing anything:
+
+| Job | When | What | Closes |
+|---|---|---|---|
+| Revocation catch-up | every 60 s, and at startup | `GET /api/revocations?since=<cursor>` (pass-service, built in P4 for this), page by page; each entry → `pass_ref` REVOKED. The cursor is stored in `sync_cursor` | **lost or parked `PassRevoked`** (the unsafe gap) |
+| Scanning-window sync | every 5 min, at startup, and right after an event goes LIVE | events in the scanning window (from event-service's public catalogue: status REGISTRATION_OPEN / REGISTRATION_CLOSED / LIVE, `startsAt ≤ now + 3 h`, not ended) → refresh `event_ref` status from the owner, then page through `GET /api/passes?eventId=` and upsert every pass | **passes issued before the queue existed**, a lost/parked `PassIssued`, a lost `EventStateChanged` |
+| Single-pass fetch | during a scan, when the signature is genuine but the pass isn't in the copy | `GET /api/passes/{id}` with the service identity, upsert, continue the pipeline | the last seconds of lag; `UNKNOWN_PASS` then only means pass-service is unreachable *and* the pass is new |
+
+The "Sync passes" endpoint stays, but only as an admin tool (it runs the same window sync for one event). Nothing depends on anyone pressing it. Each job takes a PostgreSQL advisory lock, so two checkin-service instances don't run the same job at once (ShedLock comes in P7). An owner change always wins: the sync overwrites the copy, except that REVOKED never turns back into VALID (pass-service has no such edge either).
+
+## 4b. Service identity (Q6)
+
+D7 relays the *caller's* token, but a scheduled job has no caller. auth-service therefore issues **service tokens**:
+
+- `POST /api/auth/service-token {clientId, clientSecret}` → `{accessToken, expiresIn}`. The token is RS256, signed by the same key as user tokens, with `sub` = the client's fixed UUID, `name` = client id, `roles = [SERVICE]`, and **5 min** lifetime. No refresh token: the client just asks again.
+- Clients are configured in auth-service: `mitpass.auth.service-clients.<id>: {subject, secret}`. The secret comes from an environment variable with a dev default (D8 style). Comparison is constant-time. A wrong secret gives `401 invalid-credentials`, logged.
+- **Internal only:** the gateway refuses `/api/auth/service-token` (404), so only services on the internal network (through Eureka) can get a token.
+- New role `SERVICE` in `common-security` (`Roles.SERVICE`, not in `Roles.ALL`, so it can't be granted to users through the admin API). pass-service allows `SERVICE` on `GET /api/revocations`, `GET /api/passes?eventId=` and `GET /api/passes/{id}`.
+- checkin-service's `ServiceTokenProvider` caches the token until 30 s before it expires. A `ServiceAuthInterceptor` adds it to the reconciler's client, a separate load-balanced client from the token-relaying one.
+- Security matrices: auth-service gains the endpoint row; pass-service gains a SERVICE column for its three readable endpoints (every other pass endpoint → 403 for SERVICE).
 
 ## 5. Result codes
 
@@ -297,11 +316,13 @@ Each step ends with `./mvnw -pl <module> -am verify` green, a full `./mvnw verif
 | T07.8 | **Check-in transaction:** presence lock, attendance, check-out, re-entry, `AttendanceMarked` outbox | M | `ScanVerificationTest` all green; **`DoubleScanRaceTest` green 3 runs** |
 | T07.9 | **Manual path:** lookup + `passNumber` scans | S | manual cases green |
 | T07.10 | **Reports + sync:** summary, attendees, CSV, certificates, `/me`, sync | M | `AttendanceReportTest`, `PassSyncTest` green |
+| T07.14 | **Service identity (Q6):** `Roles.SERVICE`, auth-service `POST /api/auth/service-token` + config + tests, gateway 404 for it, pass-service SERVICE access on the three read endpoints | M | `ServiceTokenTest` green; auth and pass matrices green; `EdgeSecurityTest` case |
+| T07.15 | **Reconciler (Q6):** `sync_cursor`, revocation catch-up, scanning-window sync, single-pass fetch, advisory locks, `ServiceTokenProvider` | M | `PassCopyReconcilerTest` green: a revocation that never came by message is caught within one run; passes of an event that never came by message are present after one run; an unknown pass with a genuine signature is accepted after the single fetch |
 | T07.11 | **Security matrix** + `docs/security-matrix.md` | S | every cell green |
 | T07.12 | **Portal slice:** scan, confirm, result, attendance page, CSV proxy, wallet line | M | portal tests green |
 | T07.13 | **Exit demo + docs** (`phase-5.http`, README, PROJECT ticks, D14, as built, log) | M | all twelve exit criteria pass; nothing left running |
 
-Order: T07.1 → T07.2 → T07.3 → T07.4 → T07.5 → T07.6 → T07.7 → T07.8 → T07.9 → T07.10 → T07.11 → T07.12 → T07.13. T07.6 can run alongside T07.5.
+Order: T07.1 → T07.2 → T07.3 → T07.14 → T07.4 → T07.5 → T07.6 → T07.7 → T07.8 → T07.9 → T07.10 → T07.15 → T07.11 → T07.12 → T07.13. T07.6 can run alongside T07.5. (T07.14/T07.15 were added after Q6. IDs aren't renumbered, so they sit out of numeric order.)
 
 ## 18. Gotchas to check at build time
 
@@ -326,9 +347,9 @@ Q1–Q5 resolved 2026-10-16:
 4. **Q4:** accepted, on condition that extra codes only cover unique cases. Each one was checked (§5, last column), and none turned out redundant. `EVENT_CLOSED` no longer covers cancelled events, because the saga already makes those `REVOKED`.
 5. **Pre-phase commit:** the owner commits; work waits for that. RL6 is part of Phase 5 (T07.0).
 
-Open:
+6. **Q6: resolved 2026-10-16: (a)**, closing both gaps automatically ("manual means human error is possible; avoid relying on users"). Design in §4a/§4b; steps T07.14/T07.15. The options as they were put:
 
-6. **Q6: Scheduled reconciliation of the pass copy?**
+   **Q6: Scheduled reconciliation of the pass copy?**
    - **(a) Recommended: a reconciler in checkin-service.** Every minute it pulls pass-service's revocation feed from a stored cursor (`GET /api/revocations?since=`, built in P4 for exactly this), which closes the one unsafe gap. Every 10 minutes, and when an event goes LIVE, it compares each LIVE or soon-starting event's valid-pass count with pass-service and re-syncs that event if they differ. A background job has no user token (D7 relays the caller's token), so this needs a **service identity**: auth-service issues short-lived tokens to configured service clients (client-credentials style, role `SERVICE`), and pass-service lets `SERVICE` read the feed and the pass list. P7 (notification reminders) and P8 can reuse it. Cost: about 1–2 steps more (one auth-service endpoint, matrix rows, D7 update).
    - **(b)** No job. Rely on the outbox/inbox guarantees plus the manual "Sync passes" button, and park the gap in REVIEW-LATER. Smaller, but a lost revocation stays unnoticed.
    - **(c)** A middle way: the reconciler runs only on demand ("Sync passes" also pulls the revocation feed with the organizer's token). No service identity needed, but nothing happens unless someone presses the button.
@@ -336,3 +357,32 @@ Open:
 ## 20. T07.0: RL6 fixed as part of this phase (2026-10-16)
 
 `docs/REVIEW-LATER.md` RL6 ("the live QR glitches") was reproduced by rendering the pass page's script with Thymeleaf. **Cause:** JavaScript inlining replaced `/*[[${refreshSeconds}]]*/ 30 * 1000` with just `30`, because Thymeleaf drops the default text after an inlined expression. The page therefore swapped the image every **30 ms**, not every 30 s, so each second it minted about 33 tokens and PNGs and the image kept re-painting. None of the suspected causes in RL6 was the real one. **Fix** (`web-portal`): the controller passes `refreshMillis`, and the script inlines it into its own `const`. It also preloads the next image off-screen and swaps it in only once it has loaded, so the code never blanks (RL6 option a). `PassPagesTest.liveQrRefreshesEveryThirtySecondsNotEveryThirtyMilliseconds` fails on the old template and passes now. RL6 suspected cause (b), the 400 → 280 px downscale with `pixelated`, is cosmetic and goes to P6 with the pass card.
+
+## 21. As built: deviations and findings (2026-10-16)
+
+Phase 5 was built as planned, with the owner's answers (§19, including Q6). Where the build differs from the sections above, this list is authoritative.
+
+| Topic | Plan said | As built / why |
+|---|---|---|
+| Steps added after Q6 | — | T07.14 service identity, T07.15 `PassCopyReconciler` (§4a/§4b) |
+| Window sync | compare counts, then re-sync | Always re-reads all passes of each event in the window (status included): simpler, also catches status differences, cheap at college scale |
+| Event discovery | — | The window comes from event-service's public catalogue search (LIVE; or REGISTRATION_OPEN/CLOSED and starting within 3 h), so events checkin-service never heard about are found too |
+| Manual miss | `UNKNOWN_PASS` | A typed number the copy lacks first re-syncs its event (at most once per 30 s per event), then `UNKNOWN_PASS` |
+| `certificateMinSessions` | 400 when greater than the sessions | Not checked when saved (sessions are edited separately, so the check would go stale); reports use `min(N, sessions)` |
+| Revoked stub rows | — | A revocation (feed or message) for a pass the copy hasn't seen creates a bare REVOKED row (`pass_number` nullable): a scan of that pass says `REVOKED`, not `UNKNOWN_PASS` |
+| Gateway | refuse the service-token path | `InternalPathsWebFilter` answers 404 before security and routing, with the path normalized (case, `//`, percent-encoding); Spring 7 removed the trailing-separator option |
+| Security matrix harness | — | **Bug found by the checkin matrix:** summary and CSV of an event without scans returned 500 (`max()` of no rows is NULL; `JdbcClient.single()` refuses a null). Fixed with a test. The harness counted the 500 as "allowed"; `SecurityMatrix` now fails any 5xx |
+| Portal scan client | — | `GatewayClient.scan/lookup` read refusals (403/404/409/422 with a `result` field) as answers, not errors, so the page shows them in their colour |
+| Mapping | MapStruct | Records with `from(...)`, as pass-service |
+| RL7 (owner, mid-phase) | parked for after P8 | Built: pass-service `EventCopyReconciler` (§4a pattern for pass-service's own event copy), `mitpass.passes.reconcile.*`, `EventCopyReconcilerTest` (4) |
+| Mockup pass number | `TECHFEST26-000042-7` used as a valid example | Its check digit is wrong (the valid one is `…-5`); found by the live demo, `phase-5.http` corrected. README/PROJECT keep it only as an illustration of the format |
+
+**Verified live** (2026-10-16, compose infra with the earlier volume, jars on the project JDK; scripts `phase5_demo.py` and `rl7_demo.py` in the session scratchpad, same steps in `docs/http/phase-5.http`):
+
+- **Exit criteria 1–11:** checkin-service in Eureka; `checkin-service.inbox` bound to the three keys, its `.dlq`, and `pass-service.inbox` bound to `attendance.marked`. Every result code produced through the gateway with its status and colour: NOT_YET_OPEN, UNAUTHORIZED_SCANNER, ACCEPTED (Priya, green), ALREADY_CHECKED_IN, WRONG_GATE, CHECKED_OUT, REENTRY_NOT_ALLOWED, NOT_CHECKED_IN, INVALID_SIGNATURE (one character), lookup + MANUAL accept, INVALID_PASS_NUMBER, WRONG_EVENT, UNKNOWN_PASS, REVOKED (message path), EXPIRED_TOKEN (56 s), EVENT_CLOSED (after COMPLETED). pass-service recorded `checkedInAt` / `usedAt`. Reports, CSV, certificates, `/me`; service token 404 at the gateway; Swagger lists checkin-service. Portal: scan page, typed number → confirm page with the name → red REENTRY_NOT_ALLOWED block, no token in pages, CSRF 403, organizer attendance page and CSV.
+- **Owner Q6, both gaps, shown live:** (1) Priya registered while checkin-service had never run (its queue didn't exist); about 20 s after it started, her pass was in `pass_ref` (checked in the database, before any scan). (2) checkin-service stopped, Priya's pass revoked, `checkin-service.inbox` purged; after the restart the log said "Revocation catch-up applied 1 revocation(s)" and her static ticket scanned REVOKED.
+- **RL7 shown live:** pass-service stopped, an event with one pass cancelled, `pass-service.inbox` purged (pass still ISSUED); 30 s after the restart: "copy says REGISTRATION_OPEN, event-service says CANCELLED", pass REVOKED (`EVENT_CANCELLED`).
+- **First-run failures, all in the demo script, not the app:** a lookup before LIVE expected 200 (the app answered NOT_YET_OPEN, correctly), the mockup number's check digit (above), and a Windows console encoding error; the script's purge step also didn't run, so the purge was done by hand with the management API before the restart. Rerun of the affected steps: all passed.
+- **Criterion 12:** full `./mvnw install` green locally (one rerun: the VS Code Java server deleted class files in `event-service/target` mid-build, the known log.md note). CI runs on the next push.
+
+**Tests:** common-web 27, common-security 13, security-test-support 17, common-messaging 22, common-pass 14, discovery 1, gateway 21, auth-service 54, event-service 132, pass-service 59, checkin-service 54, web-portal 56 = **470**. Security matrix 410/410 (auth 90, event 168, pass 88, checkin 64).

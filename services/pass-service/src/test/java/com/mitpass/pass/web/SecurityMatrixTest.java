@@ -46,6 +46,8 @@ class SecurityMatrixTest {
     static final String OWNER = "organizer (owner)";
     static final String OTHER = "organizer (other)";
     static final String ADMIN = "admin";
+    /** A service token (P5, D7): checkin-service's reconciler reads the copy it keeps. */
+    static final String SERVICE = "service (checkin)";
 
     static final UUID HOLDER_ID = UUID.randomUUID();
     static final Map<String, String> TOKENS = new LinkedHashMap<>();
@@ -57,6 +59,7 @@ class SecurityMatrixTest {
         TOKENS.put(OWNER, TestJwtIssuer.tokenFor(PassFixtures.ORGANIZER, Roles.ORGANIZER));
         TOKENS.put(OTHER, TestJwtIssuer.token(Roles.ORGANIZER));
         TOKENS.put(ADMIN, TestJwtIssuer.token(Roles.ADMIN));
+        TOKENS.put(SERVICE, TestJwtIssuer.token(Roles.SERVICE));
     }
 
     /** A fresh ACTIVE pass of {@link #HOLDER} for an event owned by {@link #OWNER}. */
@@ -85,11 +88,20 @@ class SecurityMatrixTest {
         Rule holderOwnerAdmin = Rule.only(HOLDER, OWNER, ADMIN);
         Rule ownerAdmin = Rule.only(OWNER, ADMIN);
         Rule holderOnly = Rule.only(HOLDER);
+        Rule ownerAdminService = Rule.only(OWNER, ADMIN, SERVICE);
 
         List<Endpoint> endpoints = List.of(
                 endpoint(HttpMethod.GET, "/api/passes/me", f -> "/api/passes/me", Rule.authenticated()),
-                endpoint(HttpMethod.GET, "/api/passes?eventId=", f -> "/api/passes?eventId=" + f.event(), ownerAdmin),
-                endpoint(HttpMethod.GET, "/api/passes/{id}", f -> "/api/passes/" + f.pass(), holderOwnerAdmin),
+                endpoint(
+                        HttpMethod.GET,
+                        "/api/passes?eventId=",
+                        f -> "/api/passes?eventId=" + f.event(),
+                        ownerAdminService),
+                endpoint(
+                        HttpMethod.GET,
+                        "/api/passes/{id}",
+                        f -> "/api/passes/" + f.pass(),
+                        Rule.only(HOLDER, OWNER, ADMIN, SERVICE)),
                 endpoint(
                         HttpMethod.GET,
                         "/api/passes/{id}/history",
@@ -119,7 +131,7 @@ class SecurityMatrixTest {
                         HttpMethod.GET,
                         "/api/revocations",
                         f -> "/api/revocations?since=0",
-                        Rule.only(VOLUNTEER, OWNER, OTHER, ADMIN)),
+                        Rule.only(VOLUNTEER, OWNER, OTHER, ADMIN, SERVICE)),
                 endpoint(
                         HttpMethod.GET,
                         "/.well-known/pass-jwks.json",
@@ -127,7 +139,7 @@ class SecurityMatrixTest {
                         Rule.publicEndpoint()),
                 endpoint(HttpMethod.POST, "/api/passes/keys/rotate", f -> "/api/passes/keys/rotate", Rule.only(ADMIN)));
 
-        List<String> callers = List.of(ANONYMOUS, HOLDER, STUDENT, VOLUNTEER, OWNER, OTHER, ADMIN);
+        List<String> callers = List.of(ANONYMOUS, HOLDER, STUDENT, VOLUNTEER, OWNER, OTHER, ADMIN, SERVICE);
         SecurityMatrix matrix = new SecurityMatrix("pass-service", callers);
         for (Endpoint endpoint : endpoints) {
             for (String caller : callers) {

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Confirm pass')}"></head>
+<body>
+<header th:replace="~{fragments :: header}"></header>
+<main>
+    <h1>Is this the person?</h1>
+    <section class="box">
+        <dl class="facts">
+            <dt>Name</dt>
+            <dd class="pass-holder" th:text="${lookup.holderName()}">Priya Raman</dd>
+            <dt>Pass</dt>
+            <dd><code th:text="${lookup.passNumber()}">TECHFEST26-000042-7</code></dd>
+            <dt>Pass state</dt>
+            <dd><span class="status" th:text="${lookup.passStatus()}">VALID</span></dd>
+            <dt>Now</dt>
+            <dd><span class="status" th:text="${lookup.presence()}">NOT_ARRIVED</span></dd>
+            <dt th:if="${lookup.sessionTitle() != null}">Session</dt>
+            <dd th:if="${lookup.sessionTitle() != null}" th:text="${lookup.sessionTitle()}">Data preparation</dd>
+        </dl>
+    </section>
+    <form th:action="@{/scan/confirm}" method="post" class="inline">
+        <input type="hidden" name="passNumber" th:value="${lookup.passNumber()}">
+        <input type="hidden" name="gateId" th:value="${gateId}">
+        <input type="hidden" name="mode" th:value="${mode}">
+        <button type="submit" th:text="${mode == 'OUT'} ? 'Confirm check-out' : 'Confirm check-in'">Confirm check-in</button>
+    </form>
+    <a th:href="@{/scan}">Cancel</a>
+</main>
+</body>
+</html>

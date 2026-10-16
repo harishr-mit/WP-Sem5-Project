@@ -166,4 +166,33 @@ class GatewayClientTest {
                         ApiProblemException.class,
                         ex -> assertThat(ex.getStatus()).isEqualTo(503));
     }
+
+    /** Phase 5: a refused scan is an answer, not an error; a real error still raises. */
+    @Test
+    void scanRefusalsComeBackAsAnswersWithTheirColour() {
+        server.expect(requestTo("http://gateway.test/api/scans"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("{\"passNumber\":\"X26-000001-5\",\"gateId\":11,\"mode\":\"IN\"}"))
+                .andRespond(
+                        withStatus(HttpStatus.CONFLICT)
+                                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                                .body(
+                                        "{\"type\":\"urn:mitpass:problem:scan/already-checked-in\",\"status\":409,"
+                                                + "\"result\":\"ALREADY_CHECKED_IN\",\"message\":\"Already checked in at 09:02 at MAIN.\","
+                                                + "\"color\":\"AMBER\",\"attendee\":{\"passNumber\":\"X26-000001-5\",\"holderName\":\"Priya\"}}"));
+        server.expect(requestTo("http://gateway.test/api/scans"))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST)
+                        .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"type\":\"urn:mitpass:problem:validation\",\"status\":400,\"detail\":\"bad\"}"));
+
+        ApiModels.ScanAnswer answer = client.scan(null, "X26-000001-5", 11, "portal-1", "IN");
+
+        assertThat(answer.result()).isEqualTo("ALREADY_CHECKED_IN");
+        assertThat(answer.colorClass()).isEqualTo("amber");
+        assertThat(answer.accepted()).isFalse();
+        assertThat(answer.attendee().holderName()).isEqualTo("Priya");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.scan("t", null, 11, "portal-1", "IN"))
+                .isInstanceOf(ApiProblemException.class);
+        server.verify();
+    }
 }

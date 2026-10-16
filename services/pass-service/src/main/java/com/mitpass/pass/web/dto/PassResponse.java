@@ -28,7 +28,10 @@ public record PassResponse(
         Instant expiredAt,
         Instant revokedAt,
         RevokeReason revokeReason,
-        String revokeNote) {
+        String revokeNote,
+        /** P5: first check-in at a gate; {@code usedAt} also set for single-entry events. */
+        Instant checkedInAt,
+        Instant usedAt) {
 
     public static PassResponse from(Pass pass, Instant codeUnlocksAt) {
         return new PassResponse(
@@ -50,6 +53,8 @@ public record PassResponse(
                 pass.getExpiredAt(),
                 pass.getRevokedAt(),
                 pass.getRevokeReason(),
-                pass.getRevokeNote());
+                pass.getRevokeNote(),
+                pass.getCheckedInAt(),
+                pass.getUsedAt());
     }
 }

@@ -1,0 +1,101 @@
+server:
+  port: 8084
+  # Honour X-Forwarded-* from the gateway (Location headers, springdoc server URLs).
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: checkin-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/checkin_db
+    username: ${DB_USER:checkin_svc}
+    password: ${DB_PASSWORD:checkin_svc}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate          # Flyway owns the schema
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  data:
+    web:
+      pageable:
+        max-page-size: 100
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    username: ${RABBITMQ_USER:mitpass}
+    password: ${RABBITMQ_PASSWORD:mitpass}
+    publisher-confirm-type: simple   # the outbox relay waits for confirms (D11)
+    listener:
+      simple:
+        # One thread: pass and event messages are applied in publish order (D13).
+        concurrency: 1
+        max-concurrency: 1
+        prefetch: 20
+        default-requeue-rejected: false   # after the retries, a failing message goes to the DLQ
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 4
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+  instance:
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+mitpass:
+  clients:
+    # Eureka service ids (Spring Cloud LoadBalancer)
+    event-service: http://event-service
+    pass-service: http://pass-service
+    auth-service: http://auth-service
+  messaging:
+    exchange: mitpass.events
+    relay:
+      poll-interval: 500ms
+      batch-size: 100
+      retention: 7d
+    consumer:
+      retention: 30d
+      dead-letter-exchange: mitpass.events.dlx   # minimal DLQ (D13); P7 completes the handling
+    tap-queue:
+      enabled: false                             # event-service declares it
+  checkin:
+    pass-issuer: mitpass-pass
+    token-clock-skew: 10s                # a live token is still accepted this long after exp (phone clocks drift)
+    doors-open-before-session: 30m       # check-in for a session opens this long before it starts
+    assignment-cache-ttl: 30s            # a volunteer removed from an event can scan for at most this long
+    event-cache-ttl: 60s
+    jwks-refetch-min-interval: 30s       # an unknown kid refetches the pass JWK set at most this often
+    time-zone: Asia/Kolkata              # times in messages and the CSV
+    # Automatic reconciliation of the pass copy (docs/plans/phase-5.md §4a, owner Q6): no button to press.
+    reconcile:
+      enabled: true
+      revocations-interval: 60s
+      window-interval: 5m
+      window-ahead: 3h                   # events starting within this are in the scanning window
+      page-size: 100
+      on-demand-min-interval: 30s        # a manual-entry miss re-syncs its event at most this often
+    # This service's identity for background calls (D7 exception). Dev secret only: set the variable anywhere real.
+    service-client:
+      id: checkin-service
+      secret: ${MITPASS_SERVICE_SECRET_CHECKIN:dev-only-checkin-secret}
+
+logging:
+  pattern:
+    level: "%5p [%X{correlationId:-}] [%X{userId:-}]"

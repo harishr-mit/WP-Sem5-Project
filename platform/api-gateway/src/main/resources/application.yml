@@ -43,6 +43,17 @@ spring:
                 - Path=/docs/pass-service
               filters:
                 - SetPath=/v3/api-docs
+            # Phase 5: gate scans and attendance
+            - id: checkin-service
+              uri: lb://checkin-service
+              predicates:
+                - Path=/api/scans/**,/api/attendance/**
+            - id: checkin-service-openapi
+              uri: lb://checkin-service
+              predicates:
+                - Path=/docs/checkin-service
+              filters:
+                - SetPath=/v3/api-docs
           # Send X-Forwarded-* so services build links (Location, OpenAPI servers) that point back at the gateway.
           trusted-proxies: "127\\.0\\.0\\.1|0:0:0:0:0:0:0:1|::1"
 
@@ -65,6 +76,8 @@ springdoc:
         url: /docs/event-service
       - name: pass-service
         url: /docs/pass-service
+      - name: checkin-service
+        url: /docs/checkin-service
     persist-authorization: true   # keep the pasted bearer token across page reloads
 
 management:
@@ -77,6 +90,7 @@ mitpass:
   security:
     # Edge pre-check only: requests on these paths pass without a token, everything else needs a valid one.
     # Each service enforces its own list (and all role rules) again. Keep this a superset of the services' lists.
+    # Internal paths (404 at the edge, InternalPathsWebFilter): /api/auth/service-token by default.
     public-paths:
       - POST /api/auth/signup
       - GET /api/auth/verify-email

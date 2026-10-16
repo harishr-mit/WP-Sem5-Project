@@ -42,3 +42,13 @@ code { font-family: ui-monospace, monospace; }
 .pass-number { font-family: ui-monospace, Consolas, monospace; font-size: 1.05rem; }
 .qr img { display: block; margin: 0.75rem auto; image-rendering: pixelated; }
 .locked { background: #fff7e6; border-left: 4px solid #d98e04; padding: 0.5rem 0.75rem; }
+
+/* Phase 5 slice: scan result (UI reference screen 6; P6 adds the full-screen flash, sound and vibration) */
+.scan-result { border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0; color: #fff; }
+.scan-result.green { background: #1f7a3a; }
+.scan-result.amber { background: #b86e00; }
+.scan-result.red { background: #a4161a; }
+.scan-code { font-family: ui-monospace, Consolas, monospace; font-size: 1.4rem; font-weight: bold; margin: 0; }
+.scan-message { font-size: 1.15rem; margin: 0.25rem 0; }
+.scan-result code { color: #fff; }
+fieldset { border: 0; padding: 0; display: flex; gap: 1rem; }

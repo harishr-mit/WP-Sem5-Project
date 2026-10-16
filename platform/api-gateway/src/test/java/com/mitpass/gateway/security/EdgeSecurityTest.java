@@ -30,6 +30,9 @@ class EdgeSecurityTest {
     @Autowired
     WebTestClient web;
 
+    @org.springframework.boot.test.web.server.LocalServerPort
+    int port;
+
     @Test
     void publicPathsPassWithoutAToken() {
         web.get().uri("/api/events").exchange().expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
@@ -97,6 +100,59 @@ class EdgeSecurityTest {
     }
 
     /** Phase 4: pass-service routes. The pass JWK set is public (scanners); everything else needs a token. */
+    /** Service tokens are internal (docs/plans/phase-5.md §4b): the edge doesn't route them, with or without a token. */
+    @Test
+    void serviceTokensAreNotReachableFromOutside() {
+        web.post()
+                .uri("/api/auth/service-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"clientId\":\"checkin-service\",\"clientSecret\":\"x\"}")
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectHeader()
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo("urn:mitpass:problem:not-found");
+        web.post()
+                .uri("/api/auth/service-token/")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtIssuer.token(Roles.ADMIN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{}")
+                .exchange()
+                .expectStatus()
+                .isNotFound();
+        for (String sneaky :
+                new String[] {"/API/auth/Service-Token", "//api//auth/service-token", "/api/auth/service%2Dtoken"}) {
+            web.post()
+                    .uri(java.net.URI.create("http://localhost:" + port + sneaky))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{}")
+                    .exchange()
+                    .expectStatus()
+                    .isNotFound();
+        }
+    }
+
+    @Test
+    void scanAndAttendanceRoutesNeedAToken() {
+        web.post()
+                .uri("/api/scans")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{}")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized();
+        web.get().uri("/api/attendance/me").exchange().expectStatus().isUnauthorized();
+        web.get()
+                .uri("/api/attendance/me")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtIssuer.token(Roles.STUDENT))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
     @Test
     void passRoutesNeedATokenExceptThePassKeys() {
         web.get()

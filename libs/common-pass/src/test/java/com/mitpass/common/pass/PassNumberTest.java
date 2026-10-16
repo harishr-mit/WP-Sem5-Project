@@ -1,4 +1,4 @@
-package com.mitpass.pass.domain;
+package com.mitpass.common.pass;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -100,6 +100,16 @@ class PassNumberTest {
         assertThat(PassNumber.isValid("TECHFEST26-42-7")).isFalse();
         assertThat(PassNumber.isValid("TECHFEST26000042-7")).isFalse();
         assertThat(PassNumber.isValid("TF-000042-7")).isFalse();
+    }
+
+    @Test
+    void typedNumbersAreNormalizedAndTheirEventCodeRead() {
+        String number = PassNumber.of("TECHFEST26", 42);
+
+        assertThat(PassNumber.normalize("  " + number.toLowerCase() + " ")).contains(number);
+        assertThat(PassNumber.normalize("TECHFEST26-000042-0")).isEmpty();
+        assertThat(PassNumber.eventCode(" " + number.toLowerCase())).isEqualTo("TECHFEST26");
+        assertThatThrownBy(() -> PassNumber.eventCode("nope")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

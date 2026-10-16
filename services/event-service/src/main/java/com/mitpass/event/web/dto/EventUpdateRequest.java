@@ -51,5 +51,11 @@ public record EventUpdateRequest(
                 example = "#1D4E89",
                 description = "Pass colour (#RRGGBB, contrast >= 4.5 against white); empty = maroon")
         @PassColor
-        String passColor)
+        String passColor,
+
+        @Schema(example = "false", description = "Allow re-entry after checking out (P5); empty = unchanged")
+        Boolean reentryAllowed,
+
+        @Schema(example = "2", description = "Sessions needed for a certificate; empty = all sessions") @Min(1) @Max(50)
+        Integer certificateMinSessions)
         implements TimeWindow {}

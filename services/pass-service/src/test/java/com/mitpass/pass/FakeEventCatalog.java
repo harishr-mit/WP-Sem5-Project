@@ -2,6 +2,7 @@ package com.mitpass.pass;
 
 import com.mitpass.common.web.error.NotFoundException;
 import com.mitpass.pass.client.EventCatalogClient;
+import com.mitpass.pass.service.PassProblems;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Map;
@@ -13,6 +14,9 @@ public class FakeEventCatalog extends EventCatalogClient {
 
     private final Map<Long, EventInfo> events = new ConcurrentHashMap<>();
 
+    /** Simulates event-service being unreachable (the real client answers 503 then). */
+    public volatile boolean down;
+
     public FakeEventCatalog() {
         super(RestClient.create(), Duration.ZERO, Clock.systemUTC());
     }
@@ -23,6 +27,9 @@ public class FakeEventCatalog extends EventCatalogClient {
 
     @Override
     public EventInfo get(long eventId) {
+        if (down) {
+            throw PassProblems.eventServiceUnavailable(eventId);
+        }
         EventInfo event = events.get(eventId);
         if (event == null) {
             throw NotFoundException.of("Event", eventId);

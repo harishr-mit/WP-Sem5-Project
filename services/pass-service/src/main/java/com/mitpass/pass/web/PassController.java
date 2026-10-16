@@ -51,8 +51,9 @@ public class PassController {
     }
 
     @GetMapping
-    @PreAuthorize("@passSecurity.ownsEvent(#eventId)")
-    @Operation(summary = "Passes of an event (its organizer, or ADMIN)")
+    // SERVICE: checkin-service's reconciler keeps its pass copy in step (docs/plans/phase-5.md §4a, D14).
+    @PreAuthorize("hasRole('SERVICE') or @passSecurity.ownsEvent(#eventId)")
+    @Operation(summary = "Passes of an event (its organizer, ADMIN, or a service token)")
     public PageResponse<PassResponse> forEvent(
             @RequestParam Long eventId,
             @RequestParam(required = false) PassStatus status,
@@ -61,8 +62,8 @@ public class PassController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@passSecurity.canView(#id)")
-    @Operation(summary = "One pass (its holder, the event's organizer, or ADMIN)")
+    @PreAuthorize("hasRole('SERVICE') or @passSecurity.canView(#id)")
+    @Operation(summary = "One pass (its holder, the event's organizer, ADMIN, or a service token)")
     public PassResponse get(@PathVariable UUID id) {
         return queries.get(id);
     }

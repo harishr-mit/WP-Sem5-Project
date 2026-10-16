@@ -1,14 +1,15 @@
 package com.mitpass.pass.service;
 
+import com.mitpass.common.messaging.contract.AttendanceMarked;
 import com.mitpass.common.messaging.contract.EventRescheduled;
 import com.mitpass.common.messaging.contract.EventStateChanged;
 import com.mitpass.common.messaging.contract.RegistrationCancelled;
 import com.mitpass.common.messaging.contract.RegistrationConfirmed;
+import com.mitpass.common.pass.PassNumber;
 import com.mitpass.common.web.error.NotFoundException;
 import com.mitpass.pass.domain.EventRef;
 import com.mitpass.pass.domain.Pass;
 import com.mitpass.pass.domain.PassChange;
-import com.mitpass.pass.domain.PassNumber;
 import com.mitpass.pass.domain.PassStatus;
 import com.mitpass.pass.domain.Revocation;
 import com.mitpass.pass.domain.RevokeReason;
@@ -199,6 +200,14 @@ public class PassLifecycleService {
                 rescheduled.endsAt(),
                 rescheduled.changedAt(),
                 clock.instant());
+    }
+
+    /** {@code AttendanceMarked} (P5): the first check-in, and "used" for single-entry events (owner Q2). */
+    public void attendanceMarked(AttendanceMarked marked) {
+        passes.findById(marked.passId())
+                .ifPresentOrElse(
+                        pass -> pass.recordCheckIn(marked.checkedInAt(), marked.singleEntry()),
+                        () -> log.warn("AttendanceMarked for unknown pass {}; ignored", marked.passId()));
     }
 
     /** An organizer or admin revokes a pass (409 {@code illegal-transition} if it is no longer valid). */

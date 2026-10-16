@@ -6,6 +6,7 @@ import com.mitpass.auth.domain.User;
 import com.mitpass.auth.keys.SigningKeyService;
 import com.mitpass.common.security.MitpassClaims;
 import com.mitpass.common.security.MitpassSecurityProperties;
+import com.mitpass.common.security.Roles;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
@@ -43,6 +44,34 @@ public class AccessTokenService {
     }
 
     public record IssuedAccessToken(String value, Instant expiresAt) {}
+
+    /**
+     * A service token (docs/plans/phase-5.md §4b): same key, issuer and audience as user tokens, so every service's
+     * validators accept it; {@code roles = [SERVICE]}, no email, department or year.
+     */
+    public IssuedAccessToken mintService(UUID subject, String clientId, Duration lifetime) {
+        RSAKey key = signingKeys.activeKey();
+        JwtEncoder encoder = encoders.computeIfAbsent(
+                key.getKeyID(), kid -> new NimbusJwtEncoder(new ImmutableJWKSet<>(new JWKSet(key))));
+        Instant now = clock.instant();
+        Instant expiresAt = now.plus(lifetime);
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(security.getIssuer())
+                .audience(List.of(security.getAudience()))
+                .subject(subject.toString())
+                .issuedAt(now)
+                .expiresAt(expiresAt)
+                .id(UUID.randomUUID().toString())
+                .claim(MitpassClaims.NAME, clientId)
+                .claim(MitpassClaims.ROLES, List.of(Roles.SERVICE))
+                .build();
+        JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256)
+                .keyId(key.getKeyID())
+                .type("JWT")
+                .build();
+        return new IssuedAccessToken(
+                encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue(), expiresAt);
+    }
 
     /** Needs the user's roles and department loaded (call inside the transaction that read the user). */
     public IssuedAccessToken mint(User user) {

@@ -15,6 +15,10 @@
         <p class="pass-label">PASS NO.</p>
         <p><code class="pass-number" th:text="${pass.passNumber()}">TECHFEST26-000042-7</code></p>
         <p>State: <span class="status" th:text="${pass.status()}">ACTIVE</span></p>
+        <p th:if="${pass.checkedInAt() != null}" class="ok-text">
+            Checked in <span th:text="${@fmt.when(pass.checkedInAt())}">Sat 14 Nov, 09:02</span><span
+                th:if="${pass.usedAt() != null}"> (single entry: used)</span>.
+        </p>
 
         <div th:if="${pass.isActive()}" class="qr">
             <img id="live-qr" alt="Live pass code" width="280" height="280"

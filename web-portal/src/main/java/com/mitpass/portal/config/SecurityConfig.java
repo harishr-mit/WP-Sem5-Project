@@ -41,6 +41,8 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers("/organizer/**")
                         .hasAnyRole("ORGANIZER", "ADMIN")
+                        .requestMatchers("/scan", "/scan/**")
+                        .hasRole("VOLUNTEER")
                         .anyRequest()
                         .authenticated())
                 .formLogin(form -> form.loginPage("/login")

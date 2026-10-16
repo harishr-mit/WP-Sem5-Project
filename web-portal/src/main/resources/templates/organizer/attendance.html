@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Attendance')}"></head>
+<body>
+<header th:replace="~{fragments :: header}"></header>
+<main>
+    <p><a th:href="@{/organizer/events}">&larr; My events</a></p>
+    <h1 th:text="'Attendance: ' + ${summary.eventTitle()}">Attendance: TechFest Hackathon</h1>
+    <div th:replace="~{fragments :: flash}"></div>
+
+    <!-- D9 shortcut: reload for new numbers (P7 makes this live). -->
+    <section class="box">
+        <dl class="facts">
+            <dt>Checked in</dt>
+            <dd><strong th:text="${summary.checkedIn()}">42</strong> of <span th:text="${summary.validPasses()}">80</span>
+                valid passes (<span th:text="${summary.percent()}">52.5</span>%)</dd>
+            <dt>Inside now</dt>
+            <dd th:text="${summary.insideNow()}">40</dd>
+            <dt>Last scan</dt>
+            <dd th:text="${summary.lastScanAt() == null} ? 'none yet' : ${@fmt.when(summary.lastScanAt())}">Sat 14 Nov, 09:12</dd>
+        </dl>
+        <p>
+            <a th:href="@{/organizer/events/{id}/attendance.csv(id=${summary.eventId()})}">Export CSV</a>
+            · <a th:href="@{/organizer/events/{id}/attendance(id=${summary.eventId()})}">Reload</a>
+        </p>
+    </section>
+
+    <h2>Per session</h2>
+    <table>
+        <thead><tr><th>Session</th><th>Checked in</th><th>%</th></tr></thead>
+        <tbody>
+        <tr th:each="s : ${summary.sessions()}">
+            <td th:text="${s.title()}">Data preparation</td>
+            <td th:text="${s.checkedIn()}">30</td>
+            <td th:text="${s.percent()}">37.5</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <h2>Per gate</h2>
+    <p th:if="${summary.gates().isEmpty()}" class="hint">No check-ins yet.</p>
+    <table th:unless="${summary.gates().isEmpty()}">
+        <thead><tr><th>Gate</th><th>Check-ins</th></tr></thead>
+        <tbody>
+        <tr th:each="g : ${summary.gates()}">
+            <td th:text="${g.gateCode()}">MAIN</td>
+            <td th:text="${g.checkedIn()}">30</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <h2>Attendees</h2>
+    <table>
+        <thead><tr><th>Pass</th><th>Name</th><th>Pass state</th><th>Sessions</th><th>First in</th><th>Now</th></tr></thead>
+        <tbody>
+        <tr th:each="a : ${attendees.content()}">
+            <td><code th:text="${a.passNumber()}">TECHFEST26-000042-7</code></td>
+            <td th:text="${a.holderName()}">Priya Raman</td>
+            <td><span class="status" th:text="${a.passStatus()}">VALID</span></td>
+            <td th:text="${a.sessionsAttended()}">1</td>
+            <td th:text="${a.firstCheckIn() == null} ? '' : ${@fmt.when(a.firstCheckIn())}">Sat 14 Nov, 09:02</td>
+            <td><span class="status" th:text="${a.presence()}">IN</span></td>
+        </tr>
+        </tbody>
+    </table>
+    <p th:if="${attendees.hasNext()}" class="hint">Showing the first 100; the CSV has everyone.</p>
+
+    <h2>Certificates</h2>
+    <p th:if="${certificates.isEmpty()}" class="hint">Nobody qualifies yet.</p>
+    <ul th:unless="${certificates.isEmpty()}">
+        <li th:each="c : ${certificates}">
+            <span th:text="${c.holderName()}">Priya Raman</span> (<code th:text="${c.passNumber()}">TECHFEST26-000042-7</code>):
+            <span th:text="${c.sessionsAttended()} + ' of ' + ${c.required()} + ' sessions'">2 of 2 sessions</span>
+        </li>
+    </ul>
+
+    <form th:action="@{/organizer/events/{id}/attendance/sync(id=${summary.eventId()})}" method="post" class="box">
+        <p class="hint">Passes are kept in step with pass-service automatically (every few minutes and when the event
+            goes LIVE). Use this only if a pass is reported missing at the gate right now.</p>
+        <button type="submit" class="secondary">Sync passes now</button>
+    </form>
+</main>
+</body>
+</html>

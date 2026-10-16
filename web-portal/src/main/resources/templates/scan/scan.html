@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Scan')}"></head>
+<body>
+<header th:replace="~{fragments :: header}"></header>
+<main>
+    <h1>Scan at the gate</h1>
+    <div th:replace="~{fragments :: flash}"></div>
+
+    <!-- The last result (screen 6, thin): colour, code, message and the attendee's name. -->
+    <section th:if="${result != null}" class="scan-result" th:classappend="${result.colorClass()}">
+        <p class="scan-code" th:text="${result.result()}">ACCEPTED</p>
+        <p class="scan-message" th:text="${result.message()}">Welcome, Priya Raman.</p>
+        <p th:if="${result.attendee() != null}">
+            <span th:text="${result.attendee().holderName()}">Priya Raman</span> ·
+            <code th:text="${result.attendee().passNumber()}">TECHFEST26-000042-7</code>
+        </p>
+        <p th:if="${result.sessionTitle() != null}" class="hint" th:text="'Session: ' + ${result.sessionTitle()}">
+            Session: Data preparation</p>
+    </section>
+
+    <p th:if="${options.isEmpty()}" class="flash err">
+        You aren't assigned to any gate yet. Ask the event's organizer to assign you.
+    </p>
+
+    <!-- D9 shortcut: a text field instead of the camera (P6 adds html5-qrcode). -->
+    <form th:unless="${options.isEmpty()}" th:action="@{/scan}" method="post" class="stack box">
+        <label>Gate
+            <select name="gateId">
+                <option th:each="o : ${options}" th:value="${o.gateId()}" th:text="${o.label()}"
+                        th:selected="${o.gateId() == gateId}">TECHFEST26 · Main Gate</option>
+            </select>
+        </label>
+        <fieldset>
+            <legend>Mode</legend>
+            <label><input type="radio" name="mode" value="IN" th:checked="${mode == 'IN'}"> Check in</label>
+            <label><input type="radio" name="mode" value="OUT" th:checked="${mode == 'OUT'}"> Check out</label>
+        </fieldset>
+        <label>Pass number or QR code
+            <input type="text" name="code" autocomplete="off" autofocus
+                   placeholder="TECHFEST26-000042-7, or paste the code">
+        </label>
+        <button type="submit">Check</button>
+        <p class="hint">A typed pass number is looked up first, so you can compare the name with the person.</p>
+    </form>
+</main>
+</body>
+</html>

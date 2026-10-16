@@ -98,6 +98,14 @@ public class Event extends AuditableEntity {
     @Column(length = 7)
     private String passColor;
 
+    /** May an attendee who checked out come back in during the same session (P5, D14)? Off = single entry. */
+    @Column(nullable = false)
+    private boolean reentryAllowed;
+
+    /** Sessions needed for a certificate; {@code null} = all of them (P5, D14). */
+    @JdbcTypeCode(SqlTypes.SMALLINT)
+    private Integer certificateMinSessions;
+
     /** Department codes allowed to register; empty = every department. */
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "event_eligible_department", joinColumns = @JoinColumn(name = "event_id"))
@@ -272,6 +280,22 @@ public class Event extends AuditableEntity {
 
     public void setStaticQrAllowed(boolean staticQrAllowed) {
         this.staticQrAllowed = staticQrAllowed;
+    }
+
+    public boolean isReentryAllowed() {
+        return reentryAllowed;
+    }
+
+    public void setReentryAllowed(boolean reentryAllowed) {
+        this.reentryAllowed = reentryAllowed;
+    }
+
+    public Integer getCertificateMinSessions() {
+        return certificateMinSessions;
+    }
+
+    public void setCertificateMinSessions(Integer certificateMinSessions) {
+        this.certificateMinSessions = certificateMinSessions;
     }
 
     public String getPassColor() {
