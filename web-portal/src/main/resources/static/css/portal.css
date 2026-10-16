@@ -32,3 +32,13 @@ form.inline { display: inline; }
 .facts dt { font-weight: 600; }
 .facts dd { margin: 0; }
 code { font-family: ui-monospace, monospace; }
+
+/* Phase 4 slice: pass card (UI reference screens 3-4; P6 restyles it with the countdown ring) */
+.pass-card { max-width: 340px; border: 2px solid #7a1f2b; border-radius: 12px; padding: 1rem 1.25rem; }
+.pass-card.void { border-color: #999; color: #666; }
+.pass-event { font-weight: bold; font-size: 1.2rem; margin-bottom: 0.25rem; }
+.pass-label { font-size: 0.7rem; letter-spacing: 0.08em; color: #666; margin: 0.75rem 0 0; }
+.pass-holder { font-weight: bold; margin: 0; }
+.pass-number { font-family: ui-monospace, Consolas, monospace; font-size: 1.05rem; }
+.qr img { display: block; margin: 0.75rem auto; image-rendering: pixelated; }
+.locked { background: #fff7e6; border-left: 4px solid #d98e04; padding: 0.5rem 0.75rem; }

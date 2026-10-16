@@ -159,7 +159,23 @@ class EventServiceTest {
         given(events.findDetailedById(1L)).willReturn(Optional.of(stored));
 
         EventUpdateRequest update = new EventUpdateRequest(
-                "HACK26", "New title", null, 1L, 1L, null, 100, START, END, null, null, 2L, null, null, null);
+                "HACK26",
+                "New title",
+                null,
+                1L,
+                1L,
+                null,
+                100,
+                START,
+                END,
+                null,
+                null,
+                2L,
+                null,
+                null,
+                null,
+                null,
+                null);
 
         assertThatThrownBy(() -> service.update(1L, update))
                 .isInstanceOf(ConflictException.class)
@@ -206,6 +222,8 @@ class EventServiceTest {
                 sessions,
                 List.of("CSE"),
                 null,
+                null,
+                null,
                 null);
     }
 
@@ -230,7 +248,23 @@ class EventServiceTest {
         setField(live, "status", EventStatus.LIVE);
         given(events.findDetailedById(1L)).willReturn(Optional.of(live));
         EventUpdateRequest update = new EventUpdateRequest(
-                "HACK26", "New title", null, 1L, 1L, null, 100, START, END, null, null, 0L, null, null, null);
+                "HACK26",
+                "New title",
+                null,
+                1L,
+                1L,
+                null,
+                100,
+                START,
+                END,
+                null,
+                null,
+                0L,
+                null,
+                null,
+                null,
+                null,
+                null);
 
         assertThatThrownBy(() -> service.update(1L, update))
                 .isInstanceOf(ConflictException.class)

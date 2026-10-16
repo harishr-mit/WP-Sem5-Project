@@ -57,7 +57,9 @@ public class EventPagesController {
             RegisterResult result = gateway.register(id, idempotencyKey);
             Registration registration = result.registration();
             if ("CONFIRMED".equals(registration.status())) {
-                redirect.addFlashAttribute("message", "You're in: your registration is CONFIRMED.");
+                redirect.addFlashAttribute(
+                        "message",
+                        "You're in: your registration is CONFIRMED. Your pass is being issued; it appears in My passes in a moment.");
             } else {
                 redirect.addFlashAttribute(
                         "message",

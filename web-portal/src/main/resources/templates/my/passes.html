@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('My passes')}"></head>
+<body>
+<header th:replace="~{fragments :: header}"></header>
+<main>
+    <h1>My passes</h1>
+    <div th:replace="~{fragments :: flash}"></div>
+    <p class="hint">A pass appears here a moment after your registration is confirmed. Reload to see new ones.</p>
+
+    <table th:if="${!passes.isEmpty()}">
+        <thead><tr><th>Event</th><th>Starts</th><th>Pass number</th><th>State</th><th></th></tr></thead>
+        <tbody>
+        <tr th:each="p : ${passes}">
+            <td th:text="${p.eventTitle()}">TechFest Hackathon</td>
+            <td th:text="${@fmt.when(p.startsAt())}">Sat 14 Nov 2026, 09:00</td>
+            <td><code class="pass-number" th:text="${p.passNumber()}">TECHFEST26-000042-7</code></td>
+            <td><span class="status" th:text="${p.status()}">ACTIVE</span></td>
+            <td><a th:href="@{/my/passes/{id}(id=${p.id()})}">Open pass</a></td>
+        </tr>
+        </tbody>
+    </table>
+    <p th:if="${passes.isEmpty()}">No passes yet. Register for an event and your pass shows up here.
+        <a th:href="@{/events}">Browse events</a>.</p>
+</main>
+</body>
+</html>

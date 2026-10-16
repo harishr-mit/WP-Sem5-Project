@@ -1,0 +1,30 @@
+# Active in every test (@ActiveProfiles("test")). The datasource comes from Testcontainers (@ServiceConnection).
+eureka:
+  client:
+    enabled: false
+
+mitpass:
+  security:
+    load-balanced: false     # tests import TestSecurityConfig (in-memory key); nothing fetches a JWK set
+  passes:
+    scheduler:
+      enabled: false         # tests call PassLifecycleScheduler.runOnce(at) themselves
+    listener:
+      auto-startup: false    # tests call PassInboxListener.onMessage; only PassFlowTest consumes from RabbitMQ
+  messaging:
+    relay:
+      enabled: false         # outbox rows are asserted; only PassFlowTest sends them
+    tap-queue:
+      enabled: false
+
+spring:
+  rabbitmq:
+    listener:
+      simple:
+        retry:
+          initial-interval: 100ms   # PassFlowTest waits for three attempts before the DLQ
+
+management:
+  health:
+    rabbit:
+      enabled: false         # no broker in most tests

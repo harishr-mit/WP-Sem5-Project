@@ -33,12 +33,14 @@ public interface EventMapper {
     SessionResponse toResponse(EventSession session);
 
     // eligibleDepartments is set by the service: MapStruct would clear() the entity's read-only getter list.
+    // staticQrAllowed too: null means "default" on create and "unchanged" on update.
     @Mapping(target = "category", ignore = true)
     @Mapping(target = "venue", ignore = true)
     @Mapping(target = "sessions", ignore = true)
     @Mapping(target = "organizerId", ignore = true)
     @Mapping(target = "organizerName", ignore = true)
     @Mapping(target = "eligibleDepartments", ignore = true)
+    @Mapping(target = "staticQrAllowed", ignore = true)
     void apply(EventCreateRequest request, @MappingTarget Event event);
 
     @Mapping(target = "category", ignore = true)
@@ -47,5 +49,6 @@ public interface EventMapper {
     @Mapping(target = "organizerId", ignore = true)
     @Mapping(target = "organizerName", ignore = true)
     @Mapping(target = "eligibleDepartments", ignore = true)
+    @Mapping(target = "staticQrAllowed", ignore = true)
     void apply(EventUpdateRequest request, @MappingTarget Event event);
 }

@@ -16,8 +16,9 @@ The project is **MITPass** (College Event Pass System). The plan is in `PROJECT.
 5. **Check.** For each module you touched, run `./mvnw -pl <module> -am verify`. Then run the full suite with `./mvnw verify`. Run `./mvnw spotless:apply` first if formatting fails. A new or changed endpoint also needs its row in that service's `SecurityMatrixTest` (D7).
 6. **Review** the diff before committing, and fix what the review finds.
 7. **Document** as in *End of Run Behavior*: `README.md` quick start, `PROJECT.md` ticks and status, the phase plan's as-built section, `docs/http/phase-N.http` demo requests, `docs/security-matrix.md`, and `docs/DECISIONS.md`. Finally, the parts to keep in mind section of @AGENTS.md
-8. **Commit** only as *Git & Commits* allows (owner permission for each commit).
-9. **Finish** as in *End of Run Behavior*.
+8. **Review Later** as in `dock/REVIEW-LATER.md` is to be updated with any decisions to be reviewed by owner later.
+9. **Commit** only as *Git & Commits* allows (owner permission for each commit).
+10. **Finish** as in *End of Run Behavior*.
 
 ## Parts to keep in mind
 Rows marked (P3+) and so on describe parts that don't exist yet. They apply once that phase builds them.
@@ -31,9 +32,9 @@ Rows marked (P3+) and so on describe parts that don't exist yet. They apply once
 | Database schema | `services/*/src/main/resources/db/migration` | never edit an applied `V*` migration; add a new one. Demo data lives in repeatable `db/seed/R__*.sql`, which is off in tests |
 | REST APIs | `services/*` controllers and DTOs | D6 conventions (paths, ProblemDetail, `PageResponse`); `@PreAuthorize`; a row in the service's `SecurityMatrixTest` and `docs/security-matrix.md`; the phase's `docs/http/*.http` |
 | Authentication | `services/auth-service`, `libs/common-security` | the security matrix and the forged-token check (`scripts/forge-token.sh`); token claims are a contract with every service |
-| Domain events (P3+) | outbox and consumers, `libs/common-messaging` | add fields only, never rename or remove; consumers stay idempotent; the outbox row commits in the business transaction |
+| Domain events (P3+) | outbox and consumers, `libs/common-messaging` | add fields only, never rename or remove; consumers stay idempotent; the outbox row commits in the business transaction. A new consumer declares its queue with `InboxQueues.inbox(...)` (gets a `.dlq`; D13), handles messages through `IdempotentConsumer`, and copies the `processed_message` reference DDL into a migration |
 | State machines (P3+) | Event, Registration, Pass, Presence | the enum transition table is the only source; an illegal move → 409 with the allowed states; `PROJECT.md` §3 table |
-| QR and signing (P4+) | `services/pass-service` | the JWS claims are a contract with scanners, including the offline PWA (P7); a rotated key stays in the JWKS until old tokens expire |
+| QR and signing (P4+) | `services/pass-service`, `scripts/VerifyPassToken.java` | the JWS claims are a contract with scanners, including the offline PWA (P7) and the verify script; a rotated key stays in the JWKS until old tokens expire (D12) |
 | Web portal (P3+) | `web-portal` | tokens never reach the browser (BFF); D9 slice rules until P6; the UI reference (`PROJECT.md` §2) |
 | Demo accounts | `db/seed` in auth- and event-service | fixed ids shared by both seeds (D8); change them together |
 | Tests | `src/test` in each module | tests for new behaviour; the full suite passes before a commit |

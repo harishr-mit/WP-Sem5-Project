@@ -419,6 +419,18 @@ class PortalPagesTest {
     }
 
     static Registration registration(String status, Integer position, UUID promoted) {
-        return new Registration(REG_ID, 1L, "MINIQUIZ26", "Tech Quiz", START, status, position, false, START, promoted);
+        return new Registration(
+                REG_ID,
+                1L,
+                "MINIQUIZ26",
+                "Tech Quiz",
+                START,
+                status,
+                position,
+                false,
+                START,
+                promoted,
+                "Priya Raman",
+                "priya@student.test");
     }
 }

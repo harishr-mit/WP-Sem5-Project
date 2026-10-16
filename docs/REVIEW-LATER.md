@@ -40,3 +40,35 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 **Built for now.** P3 allows the undo at any time while LIVE (there is no attendance yet). To stop the scheduler from making the event LIVE again at its next run, the organizer must move `startsAt` later; otherwise it goes LIVE again within one scheduler interval.
 
 **Options.** (a) Refuse the undo once any check-in exists (409). (b) Allow it and keep the attendance rows. (c) Allow it only within N minutes of going LIVE.
+
+## RL4: Check the dead-letter handling end to end
+
+*2026-10-16 · OPEN · from: owner, after the Phase 4 plan (Q2: minimal DLQ in P4, completed in P7)*
+
+**Question.** P4 pulls a minimal dead-letter queue forward for pass-service (3 retries, then `pass-service.inbox.dlq`), and P7 is meant to complete it: DLQs for every consumer, inspect/replay tooling, and an alert or health signal when a DLQ isn't empty (PROJECT.md §P4, §P7; `docs/DECISIONS.md` D13). After P8, check with the owner that this really happened.
+
+**Built for now.** P4: pass-service's inbox has a DLQ; dead-lettered messages sit there (visible in the RabbitMQ UI) and are replayed by hand.
+
+**To check.** (a) Every consumer (pass-, checkin-, notification-service) has a DLQ declared with the `common-messaging` helper. (b) A poison message ends up in its DLQ after the retries, not lost and not looping. (c) Dead-lettered messages can be inspected and replayed, and a replay is still idempotent. (d) A non-empty DLQ shows up in health or Grafana. (e) Anything still missing is fixed or consciously accepted.
+
+## RL5: PDF ticket file name: event name + student id
+
+*2026-10-16 · OPEN · from: owner, after trying the Phase 4 portal*
+
+**Request.** Name the downloaded ticket `<event name>-<student id>.pdf` instead of the pass number.
+
+**Built for now.** `GET /api/passes/{id}/ticket.pdf` sends `Content-Disposition: attachment; filename="<pass number>.pdf"` (for example `TECHFEST26-000042-7.pdf`); the portal passes the header through unchanged (`PassMediaController.ticket`, `MyPassesController.ticket`).
+
+**To decide.** (a) Which "event name": the title ("TechFest Hackathon", needs spaces and punctuation made file-safe) or the code (`TECHFEST26`)? (b) Which "student id": the register number from the token's `regNo` claim (Gmail sign-ups have none, so it needs a fallback, for example the email's local part), or the user id (UUID, unreadable)? pass-service doesn't store the register number today, so (b) may need a new column copied from `RegistrationConfirmed` (a new contract field) or the caller's token. (c) Use `filename*` (RFC 6266) for non-ASCII titles.
+
+## RL6: The live QR on the pass page "glitches", apparently after the first 30 seconds
+
+*2026-10-16 · OPEN · from: owner, after trying the Phase 4 portal (not investigated yet)*
+
+**Observed.** On the portal's pass page (`/my/passes/{id}`), the live QR seems to glitch, apparently from the first 30 s refresh on.
+
+**Built for now.** A D9 slice shortcut: a plain `setInterval` assigns a new `src` (`/my/passes/{id}/qr.png?t=…`) to the `<img>` every 30 s; each request mints a new 45 s token and renders a new PNG (400 px, shown at 280 px with `image-rendering: pixelated`).
+
+**Suspected causes (unverified).** (a) Swapping `src` in place blanks or half-paints the image while the next PNG loads (a flicker on every refresh). (b) Downscaling 400 → 280 px with `pixelated` gives uneven module widths, so the pattern looks jagged and changes visibly with each new token. (c) A slow or failed request fires `onerror`, which hides the image. Reproduce first (browser dev tools: network timing, the `img` element).
+
+**Options.** (a) Preload the next image with `new Image()` and swap only on `load`. (b) Render at the display size (or a whole multiple of the module count) and drop `pixelated`. (c) Fold it into P6, which replaces this timer with the pass card and countdown ring (D9), and fix the cause there.

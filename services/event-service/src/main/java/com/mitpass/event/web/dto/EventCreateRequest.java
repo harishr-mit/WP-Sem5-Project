@@ -1,5 +1,6 @@
 package com.mitpass.event.web.dto;
 
+import com.mitpass.event.validation.PassColor;
 import com.mitpass.event.validation.TimeWindow;
 import com.mitpass.event.validation.ValidTimeWindow;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -59,5 +60,14 @@ public record EventCreateRequest(
         Integer minYear,
 
         @Schema(example = "4", description = "Highest year of study allowed; empty = no limit") @Min(1) @Max(5)
-        Integer maxYear)
+        Integer maxYear,
+
+        @Schema(example = "true", description = "Allow a long-lived QR on the PDF ticket; default true (D12)")
+        Boolean staticQrAllowed,
+
+        @Schema(
+                example = "#1D4E89",
+                description = "Pass colour (#RRGGBB, contrast >= 4.5 against white); empty = maroon")
+        @PassColor
+        String passColor)
         implements TimeWindow {}

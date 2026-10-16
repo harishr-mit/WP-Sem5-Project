@@ -69,6 +69,26 @@ class GatewayClientTest {
         server.verify();
     }
 
+    /** Phase 4: QR images and PDFs come back as bytes with their headers; the token rides along server side only. */
+    @Test
+    void passMediaIsReadAsBytesWithItsHeaders() {
+        SecurityContextHolder.getContext().setAuthentication(TestTokens.login(TestTokens.user("STUDENT")));
+        java.util.UUID pass = java.util.UUID.fromString("00000000-0000-4000-8000-0000000000b1");
+        byte[] pdf = "%PDF-1.4 fake".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        server.expect(requestTo("http://gateway.test/api/passes/" + pass + "/ticket.pdf"))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer " + TestTokens.ACCESS))
+                .andExpect(header(HttpHeaders.ACCEPT, MediaType.APPLICATION_PDF_VALUE))
+                .andRespond(withSuccess(pdf, MediaType.APPLICATION_PDF)
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"X26-000001-5.pdf\""));
+
+        ApiModels.Binary binary = client.ticketPdf(pass);
+
+        assertThat(binary.body()).isEqualTo(pdf);
+        assertThat(binary.contentType()).isEqualTo(MediaType.APPLICATION_PDF_VALUE);
+        assertThat(binary.contentDisposition()).contains("X26-000001-5.pdf");
+        server.verify();
+    }
+
     @Test
     void anonymousCallsCarryNoToken() {
         server.expect(requestTo("http://gateway.test/api/categories"))

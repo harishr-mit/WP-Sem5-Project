@@ -14,6 +14,7 @@
     <nav>
         <a th:href="@{/events}">Events</a>
         <a sec:authorize="isAuthenticated()" th:href="@{/my/registrations}">My registrations</a>
+        <a sec:authorize="isAuthenticated()" th:href="@{/my/passes}">My passes</a>
         <a sec:authorize="hasAnyRole('ORGANIZER', 'ADMIN')" th:href="@{/organizer/events}">My events</a>
     </nav>
     <div class="who">

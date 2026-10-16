@@ -35,6 +35,7 @@ mitpass:
     timeouts:
       connect: 2s
       read: 10s
+    qr-refresh: 30s   # the pass page swaps the live QR image this often (tokens last 45 s; D9 shortcut: plain timer)
 
 logging:
   pattern:

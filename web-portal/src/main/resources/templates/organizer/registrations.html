@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Registrations')}"></head>
+<body>
+<header th:replace="~{fragments :: header}"></header>
+<main>
+    <p><a th:href="@{/organizer/events}">&larr; My events</a></p>
+    <h1 th:text="${event.title()}">TechFest Hackathon</h1>
+    <p><code th:text="${event.code()}">TECHFEST26</code> · <span class="status" th:text="${event.status()}">OPEN</span>
+        · <span th:text="${event.seatsTaken() + ' / ' + event.capacity()}">0 / 100</span> seats taken</p>
+    <div th:replace="~{fragments :: flash}"></div>
+    <p class="hint">A confirmed student's pass appears here a moment after confirmation. Reload to update.</p>
+
+    <table th:if="${!rows.isEmpty()}">
+        <thead><tr><th>Student</th><th>Registration</th><th>Pass</th><th>Pass state</th><th></th></tr></thead>
+        <tbody>
+        <tr th:each="row : ${rows}" th:with="r=${row.registration()}, p=${row.pass()}">
+            <td><span th:text="${r.userName()}">Priya Raman</span><br><small th:text="${r.userEmail()}">p@x</small></td>
+            <td><span class="status" th:text="${@fmt.status(r.status(), r.waitlistPosition())}">CONFIRMED</span></td>
+            <td><code class="pass-number" th:if="${p != null}" th:text="${p.passNumber()}">TECHFEST26-000042-7</code>
+                <span th:if="${p == null}">—</span></td>
+            <td><span th:if="${p != null}" class="status" th:text="${p.status()}">ACTIVE</span></td>
+            <td>
+                <form th:if="${p != null and p.isValid()}" th:action="@{/organizer/passes/{id}/revoke(id=${p.id()})}"
+                      method="post" class="inline">
+                    <input type="hidden" name="eventId" th:value="${event.id()}">
+                    <input type="text" name="note" placeholder="Reason (optional)" maxlength="200">
+                    <button type="submit" class="danger">Revoke</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <p th:if="${rows.isEmpty()}">Nobody has registered yet.</p>
+</main>
+</body>
+</html>

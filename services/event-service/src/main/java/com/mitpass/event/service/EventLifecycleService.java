@@ -1,6 +1,7 @@
 package com.mitpass.event.service;
 
 import com.mitpass.common.messaging.OutboxPublisher;
+import com.mitpass.common.messaging.contract.EventRescheduled;
 import com.mitpass.common.messaging.contract.EventStateChanged;
 import com.mitpass.common.web.error.BusinessRuleException;
 import com.mitpass.common.web.error.NotFoundException;
@@ -84,6 +85,27 @@ public class EventLifecycleService {
     public void recordCreated(Event event, String actor) {
         history.save(new EventStateChange(
                 event, null, event.getStatus(), clock.instant(), actor, TransitionTrigger.MANUAL, null));
+    }
+
+    /**
+     * The event's start or end time changed (owner decision 2026-10-16, D13): pass-service moves its unlock and expiry
+     * times. DRAFT events have no registrations or passes, so nothing is published for them.
+     */
+    @Transactional
+    public void recordRescheduled(Event event, String actor) {
+        if (event.getStatus() == EventStatus.DRAFT) {
+            return;
+        }
+        outbox.publish(
+                "Event",
+                String.valueOf(event.getId()),
+                new EventRescheduled(
+                        event.getId(),
+                        event.getCode(),
+                        event.getStartsAt(),
+                        event.getEndsAt(),
+                        clock.instant(),
+                        actor));
     }
 
     public List<StateChangeResponse> history(long id) {

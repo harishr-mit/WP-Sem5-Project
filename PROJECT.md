@@ -139,8 +139,8 @@ flowchart LR
 | Service | Owns (its own database) | Publishes | Consumes |
 |---|---|---|---|
 | `auth-service` | users, roles, refresh tokens, verification tokens | `UserRegistered` | — |
-| `event-service` | venues, events, sessions, registrations, waitlist, state history | `RegistrationConfirmed`, `RegistrationCancelled`, `WaitlistPromoted`, `EventStateChanged` | — |
-| `pass-service` | passes, signing keys, revocations | `PassIssued`, `PassRevoked` | `RegistrationConfirmed`, `RegistrationCancelled`, `EventStateChanged` |
+| `event-service` | venues, events, sessions, registrations, waitlist, state history | `RegistrationConfirmed`, `RegistrationCancelled`, `WaitlistPromoted`, `EventStateChanged`, `EventRescheduled` | — |
+| `pass-service` | passes, signing keys, revocations | `PassIssued`, `PassRevoked` | `RegistrationConfirmed`, `RegistrationCancelled`, `EventStateChanged`, `EventRescheduled` |
 | `checkin-service` | scan log, attendance, presence, device sync batches | `AttendanceMarked` | `PassRevoked`, `EventStateChanged` |
 | `notification-service` | notification log, reminder schedule | — | all of the above |
 | `web-portal` | HTTP sessions only (BFF; tokens never reach the browser) | — | — |
@@ -195,7 +195,7 @@ stateDiagram-v2
 |---|---|---|
 | **Event** | DRAFT → PUBLISHED → REGISTRATION_OPEN → REGISTRATION_CLOSED → LIVE → COMPLETED; CANCELLED from any pre-LIVE state; LIVE → REGISTRATION_CLOSED (undo an accidental early start) | Time-based transitions happen through `@Scheduled`. **LIVE is entered only by the scheduler** (owner decision, 2026-10-15); organizers can open/close registration early, complete, cancel, and undo LIVE. Each transition is written to `event_state_history`. |
 | **Registration** | PENDING → CONFIRMED / WAITLISTED → CANCELLED; WAITLISTED → CONFIRMED (promotion) | Promotion happens in the same transaction as the cancellation that freed the seat. One *active* registration per student per event; after cancelling, a student may register again (new row). |
-| **Pass** | ISSUED → ACTIVE → EXPIRED; ISSUED/ACTIVE → REVOKED | Owned by `pass-service` (is the pass *valid*?). |
+| **Pass** | ISSUED → ACTIVE → EXPIRED; ISSUED → EXPIRED; ISSUED/ACTIVE → REVOKED | Owned by `pass-service` (is the pass *valid*?). **ACTIVE means the live code is unlocked**: 2 h before doors open (configurable), as in the UI mockup's wallet (owner decision, 2026-10-16). Before that only the static QR / PDF exists, if the event allows it. ISSUED → EXPIRED covers a pass whose event ended before it unlocked. |
 | **Presence** | NOT_ARRIVED → IN ⇄ OUT | Owned by `checkin-service` (where is the attendee?). Re-entry is allowed only if the event allows it. |
 
 All transitions go through one `transition(from, to)` method backed by an enum transition table. An illegal move returns `409` with a `ProblemDetail` that lists the allowed next states.
@@ -333,21 +333,24 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 
 ### P4 — Pass Issuance & QR Generation
 
-**Goal:** a confirmed registration automatically becomes a signed, scannable pass.
+**Goal:** a confirmed registration automatically becomes a signed, scannable pass. Plan: `docs/plans/phase-4.md`.
 
-- [ ] `pass-service` consumes `RegistrationConfirmed` as an **idempotent consumer** (`processed_messages` table), so a redelivered message never issues two passes.
-- [ ] Pass state machine (ISSUED → ACTIVE → EXPIRED / REVOKED); human-readable pass number `TECHFEST26-000042-7` (Luhn check digit).
-- [ ] QR payload = compact **JWS (ES256)** `{pid, eid, sub, sid?, iat, exp, jti}` with `kid`; separate signing keys from auth; pass-service publishes its own JWKS for scanners.
-- [ ] **ZXing** QR rendering: PNG and SVG endpoints, error-correction level H, centered college logo, colors themed per event.
-- [ ] **Rotating QR:** `GET /passes/{id}/qr/live` returns a token valid for about 45 s; the static PDF/email QR uses a longer-lived token if the event allows it.
-- [ ] **PDF ticket** (OpenPDF): event banner, attendee name and photo initials, QR, pass number, venue map link.
-- [ ] Revocation: an organizer revokes a pass (→ `PassRevoked`); `GET /revocations?since=` gives scanners a delta feed.
-- [ ] Saga step: `EventStateChanged(CANCELLED)` → revoke all passes for that event.
-- [ ] Tests: JWS sign/verify round trip, a tampered payload fails, consumer idempotency (deliver the same message twice).
-- [ ] **Portal slice** (rules and intended shortcuts: `docs/DECISIONS.md` D9): a "My Passes" page listing each pass with its number, state and QR; a pass page whose live QR image reloads every 30 s; a PDF download link; an organizer registrations list with a revoke button.
+- [x] `pass-service` consumes `RegistrationConfirmed` as an **idempotent consumer** (`processed_message` table, in the same transaction as the pass; one pass per registration is also a unique constraint), so a redelivered message never issues two passes.
+- [x] Pass state machine (ISSUED → ACTIVE → EXPIRED / REVOKED; ACTIVE = the live code unlocks 2 h before doors open); human-readable pass number `TECHFEST26-000042-7` (Luhn check digit: catches every digit typo and about 9 in 10 letter typos, see D12).
+- [x] **Minimal dead-letter queue** for pass-service's inbox (3 retries, then `pass-service.inbox.dlq`), with the helper in `libs/common-messaging` (owner decision, 2026-10-16). **Pulled forward from P7 and completed there** (see §P7).
+- [x] event-service publishes `EventRescheduled` when an event's start or end time changes, so pass unlock and expiry times follow (owner decision, 2026-10-16). Per-event `staticQrAllowed` and `passColor` live in event-service.
+- [x] QR payload = compact **JWS (ES256)** `{pid, eid, sub, sid?, iat, exp, jti}` plus `iss` and `knd` (live/static), with `kid` and `typ: mitpass-pass+jws`; separate signing keys from auth; pass-service publishes its own JWKS for scanners.
+- [x] **ZXing** QR rendering: PNG and SVG endpoints, error-correction level H, centered college logo, colors themed per event.
+- [x] **Rotating QR:** `GET /passes/{id}/qr/live` returns a token valid for about 45 s; the static PDF/email QR uses a longer-lived token if the event allows it.
+- [x] **PDF ticket** (OpenPDF): event banner, attendee name and photo initials, QR, pass number, venue map link.
+- [x] Revocation: an organizer revokes a pass (→ `PassRevoked`); `GET /revocations?since=` gives scanners a delta feed.
+- [x] Saga step: `EventStateChanged(CANCELLED)` → revoke all passes for that event.
+- [x] Tests: JWS sign/verify round trip, a tampered payload fails, consumer idempotency (deliver the same message twice).
+- [x] **Portal slice** (rules and intended shortcuts: `docs/DECISIONS.md` D9): a "My Passes" page listing each pass with its number and state; a pass page (QR, or when the code unlocks) whose live QR image reloads every 30 s; a PDF download link; an organizer registrations list with a revoke button.
 
 **Concepts:** QR generation, digital signatures, event-driven microservices, state management.
 **Exit criteria / demo:** register → the pass exists within about 1 s; decode the QR with any phone app → a JWS that verifies against the public JWKS; edit one character → verification fails. In the portal: register → the pass appears in "My Passes" → the organizer revokes it → it shows REVOKED.
+**Status:** done 2026-10-16. Live exit demo 47/47 checks on the first run (pass in 0.8 s; the decoded QR verified by `scripts/VerifyPassToken.java` with the JDK only; republished message → still one pass; saga; key rotation; portal journey); security matrix 330/330 cells; 378 tests green. As-built notes in `docs/plans/phase-4.md` §20, decisions in `docs/DECISIONS.md` D12/D13, demo requests in `docs/http/phase-4.http`.
 
 ---
 
@@ -396,6 +399,7 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 
 - [ ] **Live attendance dashboard** (UI reference screen 7): checkin-service pushes over **WebSocket/STOMP** (`/topic/events/{id}`): an animated live counter, arrivals per 5 minutes (Chart.js), per-gate throughput, a recent-scans ticker, capacity gauge. Counters live in Redis.
 - [ ] `notification-service`: consumes the domain events → HTML emails (Thymeleaf templates) to Mailpit with an inline QR and an `.ics` attachment; waitlist-promotion and cancellation emails; retry with a **dead-letter queue**.
+- [ ] **Complete the dead-letter handling started in P4** (P4 built only a minimal DLQ for pass-service): DLQs for every consumer (notification-service, checkin-service), a way to inspect and replay dead-lettered messages, and a health/metric signal when a DLQ isn't empty.
 - [ ] Reminders 24 h and 1 h before the event through `@Scheduled`, with **ShedLock** so running several instances never sends duplicates.
 - [ ] **Offline scanner (PWA):** a service worker caches the app shell; the scanner prefetches the pass JWKS, the revocation list and the attendee manifest for its event.
   - [ ] Verifies the ES256 JWS **in the browser using WebCrypto**, checks `exp` and revocations locally.

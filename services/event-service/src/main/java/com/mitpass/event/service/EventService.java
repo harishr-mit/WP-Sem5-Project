@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -86,6 +88,7 @@ public class EventService {
         Event event = new Event();
         mapper.apply(request, event);
         event.setEligibleDepartments(request.eligibleDepartments());
+        event.setStaticQrAllowed(!Boolean.FALSE.equals(request.staticQrAllowed()));
         event.assignOrganizer(organizer.id(), organizer.name() != null ? organizer.name() : organizer.email());
         assignCategoryAndVenue(event, request.categoryId(), request.venueId());
 
@@ -125,13 +128,21 @@ public class EventService {
             throw new BusinessRuleException(
                     "Capacity %d is too low: %d seats are already taken".formatted(request.capacity(), seatsTaken));
         }
+        Instant oldStart = event.getStartsAt();
+        Instant oldEnd = event.getEndsAt();
         mapper.apply(request, event);
         event.setEligibleDepartments(request.eligibleDepartments());
+        if (request.staticQrAllowed() != null) {
+            event.setStaticQrAllowed(request.staticQrAllowed());
+        }
         assignCategoryAndVenue(event, request.categoryId(), request.venueId());
         for (EventSession session : event.getSessions()) {
             CatalogRules.requireInsideEvent(event, session.getTitle(), session.getStartsAt(), session.getEndsAt());
         }
         Event saved = events.saveAndFlush(event);
+        if (!saved.getStartsAt().equals(oldStart) || !saved.getEndsAt().equals(oldEnd)) {
+            lifecycle.recordRescheduled(saved, currentActor());
+        }
 
         // New seats go to the waitlist first, in this transaction. The UPDATE above holds the event row lock.
         int added = saved.getCapacity() - oldCapacity;
@@ -139,6 +150,12 @@ public class EventService {
             entityManager.refresh(saved); // the seat counter changed underneath the managed entity
         }
         return mapper.toDetail(saved);
+    }
+
+    /** The caller's user id for history and events; {@code system} outside a request. */
+    private static String currentActor() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null ? authentication.getName() : "system";
     }
 
     @Transactional

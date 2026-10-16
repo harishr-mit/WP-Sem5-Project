@@ -244,6 +244,8 @@ class EventControllerTest {
                 null,
                 List.of(EventStatus.PUBLISHED),
                 0,
-                100);
+                100,
+                true,
+                null);
     }
 }

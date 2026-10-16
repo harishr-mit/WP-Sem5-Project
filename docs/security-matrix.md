@@ -1,7 +1,7 @@
 # Security matrix
 
 Who may call what, as measured by the tests. Each cell is one real request through the real filter chain and method
-security (`SecurityMatrixTest` in auth-service and event-service; tokens from the services' own keys or the test key).
+security (`SecurityMatrixTest` in auth-service, event-service and pass-service; tokens from the services' own keys or the test key).
 Regenerate with `./mvnw verify`; the tables land in `services/*/target/security-matrix/*.md`. A new endpoint belongs in
 its service's matrix test.
 
@@ -14,7 +14,10 @@ endpoint get 401, logged-in callers without the right role get 403.
 The gateway in front of both adds its own pre-check (no token or a bad token → 401 at the edge, public paths pass):
 see `platform/api-gateway/.../EdgeSecurityTest`.
 
-Last generated: 2026-10-16 (Phase 3), 253 / 253 cells as expected (auth-service 85, event-service 168).
+Last generated: 2026-10-16 (Phase 4), 330 / 330 cells as expected (auth-service 85, event-service 168, pass-service 77).
+
+pass-service separates the holder from other students: QR codes, tokens and the PDF are for the holder only (D12), so
+even the event's organizer and admins get 403 there.
 
 ### auth-service
 
@@ -74,3 +77,21 @@ Last generated: 2026-10-16 (Phase 3), 253 / 253 cells as expected (auth-service 
 | `POST /api/registrations/{id}/cancel` | student, organizer (owner), admin | ✅ 401 | ✅ 409 | ✅ 403 | ✅ 409 | ✅ 403 | ✅ 409 |
 
 168 / 168 cells as expected.
+
+### pass-service
+
+| Endpoint | Rule | anonymous | student (holder) | student (other) | volunteer | organizer (owner) | organizer (other) | admin |
+|---|---|---|---|---|---|---|---|---|
+| `GET /api/passes/me` | any logged-in user | ✅ 401 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `GET /api/passes?eventId=` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
+| `GET /api/passes/{id}` | student (holder), organizer (owner), admin | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
+| `GET /api/passes/{id}/history` | student (holder), organizer (owner), admin | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
+| `GET /api/passes/{id}/qr/live` | student (holder) | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 |
+| `GET /api/passes/{id}/qr/static` | student (holder) | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 |
+| `GET /api/passes/{id}/ticket.pdf` | student (holder) | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 |
+| `POST /api/passes/{id}/revoke` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
+| `GET /api/revocations` | volunteer, organizer (owner), organizer (other), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `GET /.well-known/pass-jwks.json` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `POST /api/passes/keys/rotate` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 |
+
+77 / 77 cells as expected.

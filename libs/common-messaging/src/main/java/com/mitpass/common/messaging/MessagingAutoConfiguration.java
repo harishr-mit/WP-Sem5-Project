@@ -64,6 +64,30 @@ public class MessagingAutoConfiguration {
                 clock.getIfAvailable(Clock::systemUTC));
     }
 
+    @Bean
+    @ConditionalOnMissingBean
+    EnvelopeReader envelopeReader(ObjectProvider<JsonMapper> json) {
+        return new EnvelopeReader(json.getIfAvailable(() -> JsonMapper.builder().build()));
+    }
+
+    /** Needs the {@code processed_message} table (reference DDL {@code mitpass/messaging/processed-message-…sql}). */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(DataSource.class)
+    IdempotentConsumer idempotentConsumer(
+            DataSource dataSource,
+            PlatformTransactionManager transactionManager,
+            EnvelopeReader envelopeReader,
+            MessagingProperties properties,
+            ObjectProvider<Clock> clock) {
+        return new IdempotentConsumer(
+                JdbcClient.create(dataSource),
+                new TransactionTemplate(transactionManager),
+                envelopeReader,
+                clock.getIfAvailable(Clock::systemUTC),
+                properties.consumer().retention());
+    }
+
     /** Declared on the broker when the first connection opens (RabbitAdmin), so it exists before any consumer. */
     @Bean
     TopicExchange mitpassEventsExchange(MessagingProperties properties) {

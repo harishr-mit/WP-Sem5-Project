@@ -10,12 +10,14 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param exchange the topic exchange every MITPass domain event goes to
  * @param relay the outbox → RabbitMQ poller
  * @param tapQueue a dev-only queue bound to every event, so messages are visible before any consumer exists
+ * @param consumer the consuming side: processed-message retention and the dead-letter exchange (D13)
  */
 @ConfigurationProperties("mitpass.messaging")
 public record MessagingProperties(
         @DefaultValue("mitpass.events") String exchange,
         @DefaultValue Relay relay,
-        @DefaultValue TapQueue tapQueue) {
+        @DefaultValue TapQueue tapQueue,
+        @DefaultValue Consumer consumer) {
 
     /**
      * @param enabled create the relay at all (tests that don't test messaging switch it off)
@@ -37,4 +39,12 @@ public record MessagingProperties(
             @DefaultValue("false") boolean enabled,
             @DefaultValue("mitpass.events.tap") String name,
             @DefaultValue("1000") int maxLength) {}
+
+    /**
+     * @param retention processed-message rows older than this are deleted (a redelivery after that is not expected)
+     * @param deadLetterExchange where rejected messages go; each inbox has its own {@code .dlq} bound to it
+     */
+    public record Consumer(
+            @DefaultValue("30d") Duration retention,
+            @DefaultValue("mitpass.events.dlx") String deadLetterExchange) {}
 }
