@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-16 (Claude Opus 5.5) — **Phase 4 done (T06)** on branch `phase4` (uncommitted; the post-phase commit is the owner's call). New `pass-service` (:8083): passes issued from `RegistrationConfirmed` exactly once (idempotent consumer + unique registration), ES256 JWS QR tokens (live 45 s, unlocks 2 h before doors open; static until end + 2 h), own JWK set + rotation, ZXing PNG/SVG, OpenPDF ticket, revocation + cursor feed, cancellation saga, scheduler, minimal DLQ (**P7 completes it**). event-service: V7 pass settings + `EventRescheduled`. Portal: My passes, pass page, organizer revoke. 378 tests green; security matrix 330/330; live exit demo 47/47. Next: post-phase commit (owner), then Phase 5 (T07): write `docs/plans/phase-5.md` first. Parked questions for after P8: `docs/REVIEW-LATER.md` (RL1–RL4). Since 2026-10-15 (T21) P3–P5 each also include a thin `web-portal` slice (PROJECT.md §5). The shortcuts are intended, and P6 replaces them (`docs/DECISIONS.md` D9).
+* **Last updated:** 2026-10-16 (Claude Opus 5.5) — **Phase 4 done (T06)** on branch `phase4` (uncommitted; the post-phase commit is the owner's call). New `pass-service` (:8083): passes issued from `RegistrationConfirmed` exactly once (idempotent consumer + unique registration), ES256 JWS QR tokens (live 45 s, unlocks 2 h before doors open; static until end + 2 h), own JWK set + rotation, ZXing PNG/SVG, OpenPDF ticket, revocation + cursor feed, cancellation saga, scheduler, minimal DLQ (**P7 completes it**). event-service: V7 pass settings + `EventRescheduled`. Portal: My passes, pass page, organizer revoke. 378 tests green; security matrix 330/330; live exit demo 47/47. Next: post-phase commit (owner), then Phase 5 (T07): write `docs/plans/phase-5.md` first. Parked questions for after P8: `docs/REVIEW-LATER.md` (RL1–RL6). Since 2026-10-15 (T21) P3–P5 each also include a thin `web-portal` slice (PROJECT.md §5). The shortcuts are intended, and P6 replaces them (`docs/DECISIONS.md` D9).
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
@@ -125,6 +125,9 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T27: Plan Phase 4 → `docs/plans/phase-4.md` + T06 sub-tasks (no code)
 * [x] T28: `docs/REVIEW-LATER.md` RL4: check the dead-letter handling end to end after P8 (owner request)
 
+* [x] T29: Start MITPass for the owner and set up a live-code demo event (left running on request; stopped in T30)
+* [x] T30: `docs/REVIEW-LATER.md` RL5 (PDF name = event name + student id), RL6 (live QR glitch after ~30 s); shut everything down
+
 *Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
 
@@ -141,6 +144,22 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-16 — Claude (Opus 5.5) — T30: RL5/RL6 parked, everything shut down
+
+* **Task:** T30 — owner asked to park two portal findings for later and shut everything down
+* **Status:** DONE
+* **Files:** `docs/REVIEW-LATER.md` (new RL5: ticket file name `<event name>-<student id>.pdf`, with the open points: title vs code, register number vs fallback; new RL6: the live QR "glitches" after ~30 s on the pass page, not investigated, suspected causes and options listed), `log.md`
+* **Details:** Stopped the 6 JVMs started in T29 (all on the project JDK; ports 8761/8080-8083/8090 free, no project java.exe left), `docker compose down` (volume kept), 0 containers running. Docker Desktop left running as found.
+* **Notes / Errors:** RL6 is a real user-visible issue in the D9 slice; P6 replaces that page anyway, but the cause should be found first (see the item).
+
+### 2026-10-16 — Claude (Opus 5.5) — T29: MITPass started with a live-code demo event
+
+* **Task:** T29 — owner asked to start the app and create an event starting within 2 h so a live QR shows
+* **Status:** DONE (left running on request)
+* **Files:** `log.md` only (no code changes)
+* **Details:** `docker compose up` (volume kept); six jars started with `nohup` on the project JDK (logs in the session scratchpad `run2/`): discovery :8761, auth :8081, event :8082, pass :8083, gateway :8080, portal :8090. Through the gateway, organizer A created event 34 `LIVEDEMO0042` "Live Code Demo" (starts 2026-10-16T02:42Z = 08:12 IST, capacity 50, colour #1D4E89, static QR on), opened registration, and registered Priya (`2026509001@student.annauniv.edu`): pass `LIVEDEMO0042-000001-2` ACTIVE; its live token verified with `VerifyPassToken.java`; the portal pass page serves the rotating QR.
+* **Notes / Errors:** **Still running.** To stop: kill the 6 java.exe processes on ports 8761/8080-8083/8090 (they were started with nohup, so closing a terminal doesn't stop them), then `docker compose -f infra/docker-compose.yml down`. The event goes LIVE by itself 30 min before its start and COMPLETED at its end; the pass expires 2 h after the end.
 
 ### 2026-10-16 — Claude (Opus 5.5) — T06.13: portal slice, exit demo, docs; Phase 4 done
 
