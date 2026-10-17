@@ -82,7 +82,7 @@ How to use it:
 - **Follow it for the flow and the feel:** the order of screens, what each screen shows, and the visual direction (maroon "passport cover" header, blue-grey background, condensed display font for headings, monospace for pass numbers, green/amber/red gate results).
 - **Don't treat it as a pixel spec.** Change layout, spacing or wording wherever that makes the build simpler or the screen clearer. Record notable deviations in `log.md`.
 - **This document wins on behaviour and data.** If the mockup shows something this plan doesn't support, or the reverse, follow this plan, or update both if the change is worth it.
-- **Don't copy its markup.** It is a bundled export of a design canvas, not reusable HTML. Rebuild the screens in `web-portal` with Thymeleaf + Tailwind.
+- **Don't copy its markup.** It is a bundled export of a design canvas, not reusable HTML. Rebuild the screens in `web-portal` with Thymeleaf + hand-written CSS (design tokens taken from the mockup; owner decision, 2026-10-17, D15).
 - **Placeholders are placeholders.** Names, pass numbers, counts and times in it are sample data.
 - **Screens it doesn't cover** (organizer event form, volunteer assignment, admin, stamps/attendance history, error pages) follow the same visual language.
 
@@ -211,7 +211,7 @@ All transitions go through one `transition(from, to)` method backed by an enum t
 | Language | **Java 21 (LTS)** | Records, sealed types, pattern matching, virtual threads |
 | Framework | **Spring Boot 4.1** (Spring Framework 7, Jakarta EE 11, Jackson 3, Hibernate 7) + **Spring Cloud 2025.1 (Oakwood)** | A supported pair, pinned in the root `pom.xml` (exact versions and reasons: `docs/DECISIONS.md` D1) |
 | Build | Maven multi-module through the committed wrapper (`./mvnw`, Maven 3.9); a project-local JDK in `.tools/jdk-21` | One parent POM for all services; nothing installed globally (`scripts/setup-jdk.ps1`) |
-| Web (server-rendered) | **Spring MVC + Thymeleaf + HTMX**, Tailwind CSS | Shows classic MVC; HTMX gives an SPA feel without a JS framework |
+| Web (server-rendered) | **Spring MVC + Thymeleaf + HTMX**, hand-written CSS with design tokens; JS libraries as WebJars | Shows classic MVC; HTMX gives an SPA feel without a JS framework. No Node build step (owner decision, 2026-10-17: Tailwind dropped as more setup than it saves for a portal this size; D15) |
 | REST | Spring Web, Bean Validation, `ProblemDetail`, **springdoc-openapi** | Swagger UI combined at the gateway |
 | Persistence | **Spring Data JPA / Hibernate**, **PostgreSQL 16**, **Flyway** | Database per service; migrations under version control |
 | Mapping | MapStruct | Keeps entities out of API responses |
@@ -256,7 +256,7 @@ mitpass/
 │   ├── docker-compose.yml
 │   ├── postgres/init.sql        # one database per service
 │   ├── prometheus/ grafana/     # provisioned dashboards
-│   └── certs/                   # mkcert dev certs (phone camera needs HTTPS)
+│   └── certs/                   # self-signed dev cert from scripts/make-dev-cert (phone camera needs HTTPS; gitignored)
 └── docs/                        # API.md, DEMO_SCRIPT.md, DECISIONS.md, plans/ (one plan per phase)
 ```
 
@@ -381,17 +381,17 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 
 ### P6 — Web Portal (Spring MVC)
 
-**Goal:** turn the thin slices from P3–P5 into a polished, server-rendered UI for all four roles, built with Spring MVC.
+**Goal:** turn the thin slices from P3–P5 into a polished, server-rendered UI for all four roles, built with Spring MVC. Plan: `docs/plans/phase-6.md`.
 
-- [ ] Restyle and complete the slice pages from the [UI reference](#ui-reference) (screens 1–7) for flow and look. It's a guide, not a spec; adapt it where Thymeleaf/HTMX makes something simpler.
+- [ ] Restyle and complete the slice pages from the [UI reference](#ui-reference) (screens 1–7) for flow and look. It's a guide, not a spec; adapt it where Thymeleaf/HTMX makes something simpler. Styling is hand-written CSS with design tokens (owner decision, 2026-10-17; D15).
 - [ ] Replace every slice shortcut in `docs/DECISIONS.md` D9. P6 isn't done while any of them is left.
 - [ ] `web-portal` as a **BFF**: form login against `auth-service`; tokens are kept in the server-side session and never reach the browser; RestClient calls through the gateway with automatic token refresh.
-- [ ] MVC fundamentals done properly: `@Controller` + `Model`, `@ModelAttribute` form objects, `BindingResult` errors shown inline, **Post/Redirect/Get**, flash messages, CSRF, a `HandlerInterceptor` for the current user, custom 403/404/500 pages, i18n message bundles.
+- [ ] MVC fundamentals done properly: `@Controller` + `Model`, `@ModelAttribute` form objects, `BindingResult` errors shown inline, **Post/Redirect/Get**, flash messages, CSRF, a `HandlerInterceptor` for the current user, custom 403/404/500 pages, i18n message bundles in **English and Tamil** with a language switch (owner decision, 2026-10-17).
 - [ ] Student: event catalogue with HTMX live search and filters, event detail, register/cancel, waitlist position; **"My Passes" wallet** with glassmorphism pass cards, a rotating QR with a countdown ring, PDF download.
 - [ ] Organizer: event create/edit form (sessions as a dynamic sub-form), lifecycle buttons that show only the allowed transitions, registrations table, revoke pass, volunteer assignment.
 - [ ] Volunteer: **full-screen camera scanner** (`html5-qrcode`) with a gate selector, a large green/red flash, sound and vibration, the attendee's name on success, and a manual-entry tab.
-- [ ] Admin: user and role management, and a system health overview (each service's status from its actuator health endpoint).
-- [ ] Dark mode, responsive (the scanner is phone-first); HTTPS dev cert (mkcert) so phone cameras work over the LAN.
+- [ ] Admin: user and role management, and a system health overview (each service's status from its actuator health endpoint, collected by the gateway's ADMIN-only `GET /api/admin/health` from the Eureka registry, so the portal still calls only the gateway; owner decision, 2026-10-17).
+- [ ] Dark mode, responsive (the scanner is phone-first); a self-signed HTTPS dev cert made with the project JDK's `keytool` (portal `lan` profile on :8443) so phone cameras work over the LAN. No mkcert: it would change the system trust store (owner decision, 2026-10-17).
 
 **Concepts:** Spring MVC (the main showcase), authentication and session handling, authorization in views (`sec:authorize`).
 **Exit criteria / demo:** the full journey works in a browser: sign up → register → open the pass on a phone → scan it with a second phone → green flash.

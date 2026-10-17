@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-16 (Claude Opus 5.5) — **Phase 5 done (T07)** on branch `phase5` (uncommitted; the post-phase commit is the owner's call). New `checkin-service` (:8084): scan pipeline (15 result codes), race-safe check-in (20 simultaneous scans → 1 ACCEPTED), presence IN/OUT, sessions, manual entry, reports/CSV/certificates; pass data is a reconciled copy (D14: owners re-read automatically, service tokens from auth-service, D7). RL6 fixed (T07.0); RL7 built (pass-service event copy reconciler). New `libs/common-pass`. 470 tests green; security matrix 410/410; live exit demo passed, including both gaps and RL7 closing on their own. Nothing running. Next: post-phase commit (owner), then Phase 6 (T08): write `docs/plans/phase-6.md` first. Parked for after P8: `docs/REVIEW-LATER.md` (RL1–RL4, RL10, RL12 open; RL5–RL9, RL11 resolved).
+* **Last updated:** 2026-10-17 (Claude Opus 5.5) — **Phase 6 planned (T33)** on branch `phase6`: `docs/plans/phase-6.md` (9 exit criteria, steps T08.1–T08.13). Owner answers Q1–Q4 recorded (T08.1): hand-written CSS with design tokens (Tailwind dropped), self-signed keytool cert for the portal `lan` profile (:8443), gateway `GET /api/admin/health` for the admin health page, English + Tamil bundles. Q5–Q10 are defaults the owner may still change (plan §17). Phase 5 is merged to `main` (PR #5). Nothing running, no Phase 6 code yet. Next: the owner commits the plan docs, then **waits for the owner's go before T08.2** (owner: "wait for my command"). The owner sets up the firewall rule (README) and reviews the Tamil text (T34). Parked for after P8: `docs/REVIEW-LATER.md` (RL1–RL4, RL10, RL12 open; RL5–RL9, RL11 resolved).
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
@@ -114,7 +114,20 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T07.12: Portal slice (scan, confirm, result, attendance page, CSV proxy, wallet line)
   * [x] T07.16: RL7 (owner, mid-phase): pass-service EventCopyReconciler for its own event copy
   * [x] T07.13: Exit demo + docs
-* [ ] T08: **Phase 6** — Web portal, Spring MVC (PROJECT.md §P6)
+* [ ] T08: **Phase 6** — Web portal, Spring MVC (PROJECT.md §P6; plan and "done when" checks: `docs/plans/phase-6.md` §15). Plan written 2026-10-17; Q1–Q4 answered (hand-written CSS, keytool cert, gateway health, English + Tamil); Q5–Q10 are defaults. Waiting for the owner's pre-phase commit
+  * [x] T08.1: Owner decisions recorded (PROJECT.md §2/§4/§P6, DECISIONS D9 rows + new D15) before code
+  * [ ] T08.2: Foundation: WebJars, layout, design tokens + components, fonts, dark mode, interceptor, locale resolver, error pages
+  * [ ] T08.3: Session and account: TokenRefresher (per-session lock) + 401 retry, verify-email portal page, auth-service verify-link default
+  * [ ] T08.4: Student catalogue and registration: HTMX live search, event detail, "You're in" with pass poll, my registrations
+  * [ ] T08.5: Wallet: pass cards, pass page with countdown ring, Stamps, Profile
+  * [ ] T08.6: Organizer events: allowedTransitions on the list (event-service), EventForm + sessions sub-form, HTMX confirmation dialogs
+  * [ ] T08.7: Organizer staffing and reports: registrations + revoke, gates + volunteer assignment, attendance page (screen 7)
+  * [ ] T08.8: Scanner: camera (html5-qrcode), result fragment + HX-Trigger, flash/sound/vibration, manual tab
+  * [ ] T08.9: HTTPS for phones: scripts/make-dev-cert, portal `lan` profile (:8443)
+  * [ ] T08.10: Admin: gateway GET /api/admin/health, users/roles/unlock/sessions, health page, key rotation
+  * [ ] T08.11: i18n: English bundle complete, Tamil bundle, language switch (then ask the owner to review the Tamil: T34)
+  * [ ] T08.12: Polish sweep: D9 checklist, dark mode + 360 px, accessibility, no tokens in pages
+  * [ ] T08.13: Exit demo (two phones) + docs
 * [ ] T09: **Phase 7** — Real-time dashboard, notifications & offline scanning (PROJECT.md §P7)
 * [ ] T10: **Phase 8** — Hardening, observability & showcase (PROJECT.md §P8)
 * [x] T11: UI mockup of the end app (visual only, no code) — https://claude.ai/artifact/WyLQJ9nh1AcMkVossG6WaH
@@ -146,6 +159,10 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T30: `docs/REVIEW-LATER.md` RL5 (PDF name = event name + student id), RL6 (live QR glitch after ~30 s); shut everything down
 * [x] T31: Fix RL6 (live QR reloaded every 30 ms: Thymeleaf inlining dropped `* 1000`) with a regression test (owner: counts as Phase 5 work, T07.0)
 * [x] T32: Check Phase 4 is complete; plan Phase 5 → `docs/plans/phase-5.md` + T07 sub-tasks (no Phase 5 code)
+* [x] T33: Plan Phase 6 → `docs/plans/phase-6.md` + T08 sub-tasks; record the owner's four answers (CSS, HTTPS, health, i18n) in PROJECT.md / DECISIONS before any code (no Phase 6 code)
+* [x] T35: README quick start: Windows Firewall rule for the phone demo (TCP 8443), for anyone cloning the repo (owner request; the owner sets up their own laptop)
+
+* [ ] T34: **Owner:** review the Tamil text (`messages_ta.properties`) once T08.11 drafts it, or earlier whenever the agent asks. Owner agreed 2026-10-17
 
 *Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -163,6 +180,21 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-17 — Claude (Opus 5.5) — T35: README firewall step; Tamil review marked (T34)
+
+* **Task:** owner: sets up the firewall on their own laptop; for anyone cloning, the README quick start should have the step. Owner will check the Tamil text once it's drafted or whenever asked. Owner commits once the docs are done; no Phase 6 code until the owner says so
+* **Status:** DONE
+* **Files:** `README.md` (step 1 table row + *Phone demo* paragraph: `New-NetFirewallRule … -LocalPort 8443 -Profile Private`, undo command, Private network profile, campus Wi-Fi client isolation, Linux/macOS notes, certificate warning; phase-6.md in the plans list), `docs/plans/phase-6.md` (§12 points to the README, T08.11 done-when includes the owner's Tamil review, §17 Q4), `log.md` (T34, T35, status)
+* **Details:** The README notes that the cert script and `lan` profile arrive in Phase 6. Nothing committed by the agent (owner commits). Nothing running.
+
+### 2026-10-17 — Claude (Opus 5.5) — T33: Phase 6 planned, owner answers recorded
+
+* **Task:** T33 — owner asked to plan and prepare Phase 6 on the new branch `phase6`, commit the plan, then implement
+* **Status:** DONE (waiting for the owner's pre-phase commit; no code written)
+* **Files:** created `docs/plans/phase-6.md`; edited `PROJECT.md` (§2 UI reference: plain CSS; §4 tech stack row and `infra/certs` comment; §P6 goal links the plan, bullets name the CSS, Tamil, gateway health and keytool decisions), `docs/DECISIONS.md` (D9 rows: no Tailwind, keytool instead of mkcert; new D15), `log.md` (status, T08.1–T08.13, T33)
+* **Details:** Oriented on log, PROJECT.md, D1–D14, REVIEW-LATER, the portal code (62 tests) and every backend mapping: the backend already serves P6 except three small changes (event list `allowedTransitions`, auth-service verify-link default, gateway admin health). The UI mockup was decoded in the session scratchpad (`mock/`): fonts Big Shoulders Display / Hanken Grotesk / IBM Plex Mono, palette maroon #7A1F3D, gold #E9CF8B, navy #13203A, teal #17606B, dark scanner #0D1424; student nav Explore · My passes · Stamps · Profile; organizer nav Events · Registrations · Volunteers · Reports. Versions checked on Maven Central / npm on 2026-10-17: htmx.org WebJar 2.0.11 (npm `latest`; 4.0.0 is `next`), html5-qrcode 2.3.8 (last release 2023), webjars-locator-lite 1.1.5. Owner answers: Q1 asked which is faster and less work; answered hand-written CSS (no build tooling, mockup CSS maps to tokens, small portal), owner chose it. Q2 keytool self-signed, Q3 gateway aggregates, Q4 English + Tamil.
+* **Notes / Errors:** The LAN phone demo needs an inbound Windows Firewall rule for TCP 8443. That is a system setting the owner runs (plan §12); the agent won't. Nothing started, nothing running.
 
 ### 2026-10-16 — Claude (Opus 5.5) — RL11 built: organizers are volunteers too
 

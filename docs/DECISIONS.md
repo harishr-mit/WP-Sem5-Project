@@ -139,11 +139,11 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 | Slice shortcut | From | P6 replaces it with |
 |---|---|---|
 | User logs in again when the 15 min access token expires | P3 | Automatic refresh with the refresh token held in the session |
-| Minimal styling, plain search form, full page reloads | P3 | UI reference visual language (Tailwind), HTMX live search and filters, dark mode, responsive layout |
+| Minimal styling, plain search form, full page reloads | P3 | UI reference visual language (hand-written CSS with design tokens, D15), HTMX live search and filters, dark mode, responsive layout |
 | Email verification link opens the auth-service API (`mitpass.auth.verify-link`) | P3 | Link to a portal page |
 | Spring's default error page | P3 | Custom 403/404/500 pages, i18n message bundles |
 | Live QR is an `<img>` reloaded by a plain 30 s timer | P4 | Pass card with a countdown ring (screens 3–4) |
-| Scan page takes a typed pass number or pasted token; plain result page | P5 | `html5-qrcode` camera scanner over HTTPS (mkcert), manual-entry tab, green/red flash, sound, vibration |
+| Scan page takes a typed pass number or pasted token; plain result page | P5 | `html5-qrcode` camera scanner over HTTPS (self-signed keytool cert, D15), manual-entry tab, green/red flash, sound, vibration |
 | Attendance page updates on reload | P5 | Styled page in P6; live WebSocket updates in P7 |
 | Registration status and waitlist position update on reload (*My registrations*, event page) | P3 | HTMX refresh in P6; push updates with the P7 notifications |
 | Organizer "My events" loads each event's detail for its buttons (one call per event) | P3 | A list endpoint that carries `allowedTransitions`, or HTMX per row |
@@ -244,3 +244,18 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 **As built.** checkin-service: a pipeline of nine step beans in `@Order` (scanner, signature or typed number, expiry, event match, LIVE, session, pass known, not revoked), then one transaction (presence row created if missing and locked `FOR UPDATE`, `UNIQUE (pass_id, session_id)` attendance, presence history, scan log, `AttendanceMarked` outbox row). 20 simultaneous scans gave 1 ACCEPTED three runs in a row, and only one also without the lock. Copies: `pass_ref` (REVOKED is sticky; a revocation for an unseen pass leaves a bare REVOKED row), `event_ref` (newest `changedAt` wins). `PassCopyReconciler`: revocation feed from a stored cursor every 60 s; window sync every 5 min, at startup and right after LIVE; an unknown but genuine token fetches its pass during the scan; a typed-number miss re-syncs its event at most every 30 s; jobs take a PostgreSQL advisory lock. Verified live: a pass issued before the queue existed reached the copy about 20 s after startup with no scan; a revocation whose message was purged was caught by the feed after a restart; a cancellation purged from pass-service's queue still revoked the pass within 30 s of its restart.
 
 **Consequences.** A new service that copies another's data adds that copy to the owner table in PROJECT.md §3, says how it is rebuilt, and gets a reconciler: owners are re-read on a timer, nobody presses a button.
+
+---
+
+## D15: The finished portal (Phase 6)
+
+*2026-10-17 · accepted (owner answers to `docs/plans/phase-6.md` §17 Q1–Q4). To be built in Phase 6*
+
+**Decision.**
+- **Styling (owner, Q1).** Hand-written CSS with design tokens (CSS custom properties taken from the UI mockup), redefined for dark mode. No Tailwind and no Node build step. The owner asked which option was faster and less work. The answer was plain CSS: no plugin, Node download, lock file or CI change; the mockup's CSS turns straight into tokens; and the portal is small (about 25 templates, 20 components). JS libraries (`htmx.org`, `html5-qrcode`) are WebJars pinned in the root POM (D1). Fonts are self-hosted woff2 files (OFL).
+- **HTTPS for phone cameras (owner, Q2).** A self-signed PKCS#12 certificate made by `scripts/make-dev-cert` with the project JDK's `keytool` (SANs for localhost and the laptop's LAN IPs). The portal serves it under the `lan` profile on :8443; each phone accepts the warning once. No mkcert, because `mkcert -install` changes the system trust store. Only the portal faces the phone, so only the portal gets HTTPS.
+- **Health overview (owner, Q3).** api-gateway serves `GET /api/admin/health` (ADMIN). It reads the instances from Eureka (`ReactiveDiscoveryClient`) and each one's `/actuator/health` with a 2 s timeout (status and component names only; `show-components: always`, details hidden). The gateway authorizes this endpoint itself, because here it is the service (D7). The portal still calls only the gateway (D9).
+- **i18n (owner, Q4).** English and Tamil bundles (`messages.properties`, `messages_ta.properties`) with a cookie locale resolver and a language switch. The Tamil text is drafted by the agent and checked by the owner. Lifecycle labels (RL8) and result-code messages come from the bundles; the APIs keep their codes.
+- **Token refresh.** The portal refreshes the access token 60 s before it expires, under a per-session lock with a re-read after the lock is taken, so parallel requests never reuse a refresh token (that would trigger D7's reuse detection and end the session). A 401 triggers one refresh and one retry.
+
+**Consequences.** PROJECT.md §4 no longer lists Tailwind, and §P6 names keytool instead of mkcert. A new LAN needs the certificate made again (the IP is in the SANs). Pages are plain MVC endpoints that also answer HTMX requests with fragments, so every page still works without JavaScript.
