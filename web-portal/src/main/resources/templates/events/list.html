@@ -1,45 +1,106 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Events')}"></head>
-<body>
-<header th:replace="~{fragments :: header}"></header>
-<main>
-    <h1>Events</h1>
-    <div th:replace="~{fragments :: flash}"></div>
+<!--/* Explore (the catalogue). The filter form works as a plain GET; with HTMX, typing searches as you go and only
+     #results is swapped (EventPagesController answers "events/list :: results" to HTMX). The URL follows the search
+     (hx-push-url), so a search can be bookmarked or shared. */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{events.title}, content=~{::main})}">
+<main id="main" class="page">
+    <div class="pagehead">
+        <p class="eyebrow" th:text="#{app.tagline}">Campus events · one pass</p>
+        <h1 th:text="#{events.title}">Explore events</h1>
+        <p class="lead" th:text="#{events.lead}">Fests, workshops and talks on campus.</p>
+    </div>
+    <div th:replace="~{layout :: flash}"></div>
 
-    <form th:action="@{/events}" method="get" class="row">
-        <input type="search" name="q" th:value="${q}" placeholder="Search title or description">
-        <select name="category">
-            <option value="">All categories</option>
-            <option th:each="c : ${categories}" th:value="${c.code()}" th:text="${c.name()}"
-                    th:selected="${c.code() == category}">Technical</option>
-        </select>
-        <button type="submit">Search</button>
+    <form id="filters" class="filters" role="search" th:action="@{/events}" method="get"
+          th:attr="hx-get=@{/events},hx-trigger=|input delay:${searchDelayMillis}ms, submit|"
+          hx-target="#results" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace"
+          hx-indicator="#search-spinner">
+        <div class="field search">
+            <label for="q" th:text="#{events.search}">Search</label>
+            <input id="q" type="search" name="q" th:value="${query.q()}" th:placeholder="#{events.search.placeholder}"
+                   autocomplete="off">
+            <span id="search-spinner" class="spinner htmx-indicator" aria-hidden="true"></span>
+        </div>
+        <div class="field">
+            <label for="category" th:text="#{events.category}">Category</label>
+            <select id="category" name="category">
+                <option value="" th:text="#{events.category.all}">All categories</option>
+                <option th:each="c : ${categories}" th:value="${c.code()}" th:text="${c.name()}"
+                        th:selected="${c.code() == query.category()}">Technical</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="department" th:text="#{events.department}">Department</label>
+            <select id="department" name="department">
+                <option value="" th:text="#{events.department.all}">All departments</option>
+                <option th:each="d : ${departments}" th:value="${d.code()}" th:text="${d.code()}"
+                        th:title="${d.name()}" th:selected="${d.code() == query.department()}">CSE</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="from" th:text="#{events.from}">From</label>
+            <input id="from" type="date" name="from" th:value="${query.from()}">
+        </div>
+        <div class="field">
+            <label for="to" th:text="#{events.to}">To</label>
+            <input id="to" type="date" name="to" th:value="${query.to()}">
+        </div>
+        <label class="filters__past">
+            <input type="checkbox" name="past" value="true" th:checked="${query.past()}">
+            <span th:text="#{events.past}">Include past events</span>
+        </label>
+        <noscript><button type="submit" th:text="#{events.search}">Search</button></noscript>
     </form>
 
-    <table th:if="${!events.content().isEmpty()}">
-        <thead>
-        <tr><th>Event</th><th>Category</th><th>Venue</th><th>Starts</th><th>Status</th><th>Seats left</th></tr>
-        </thead>
-        <tbody>
-        <tr th:each="e : ${events.content()}">
-            <td><a th:href="@{/events/{id}(id=${e.id()})}" th:text="${e.title()}">TechFest Hackathon</a>
-                <br><code th:text="${e.code()}">TECHFEST26</code></td>
-            <td th:text="${e.categoryName()}">Technical</td>
-            <td th:text="${e.venueName()}">Innovation Centre Lab</td>
-            <td th:text="${@fmt.when(e.startsAt())}">Sat 14 Nov 2026, 09:00</td>
-            <td><span class="status" th:text="${e.status()}">REGISTRATION_OPEN</span></td>
-            <td th:text="${e.seatsLeft() + ' / ' + e.capacity()}">12 / 100</td>
-        </tr>
-        </tbody>
-    </table>
-    <p th:if="${events.content().isEmpty()}">No events match.</p>
-
-    <p class="row">
-        <a th:if="${events.hasPrevious()}" th:href="@{/events(q=${q}, category=${category}, page=${events.page() - 1})}">← Previous</a>
-        <span th:text="${'Page ' + (events.page() + 1) + ' of ' + (events.totalPages() == 0 ? 1 : events.totalPages())}">Page 1 of 1</span>
-        <a th:if="${events.hasNext()}" th:href="@{/events(q=${q}, category=${category}, page=${events.page() + 1})}">Next →</a>
-    </p>
+    <section id="results" th:fragment="results" aria-live="polite">
+        <p class="hint" th:if="${!events.content().isEmpty()}"
+           th:text="#{events.count(${events.totalElements()})}">12 events</p>
+        <div class="grid grid--3" th:if="${!events.content().isEmpty()}">
+            <a class="event-card" th:each="e : ${events.content()}" th:href="@{/events/{id}(id=${e.id()})}">
+                <div class="event-card__band">
+                    <div class="datechip">
+                        <b th:text="${@fmt.day(e.startsAt())}">17</b><span th:text="${@fmt.month(e.startsAt())}">OCT</span>
+                    </div>
+                    <div>
+                        <div class="event-card__code" th:text="${e.code()}">TECHFEST26</div>
+                        <div class="event-card__title" th:text="${e.title()}">HackNight 26</div>
+                    </div>
+                </div>
+                <div class="event-card__body">
+                    <div class="row">
+                        <span th:replace="~{layout :: badge(${e.status()})}"></span>
+                        <span class="badge" th:if="${e.categoryName() != null}" th:text="${e.categoryName()}">Technical</span>
+                    </div>
+                    <p class="event-card__meta mb-0">
+                        <span th:text="${@fmt.shortWhen(e.startsAt())}">Sat 17 Oct, 09:00</span>
+                        <th:block th:if="${e.venueName() != null}">· <span th:text="${e.venueName()}">Main Auditorium</span></th:block>
+                    </p>
+                    <div class="seats">
+                        <div class="seats__bar" role="presentation">
+                            <div class="seats__fill" th:style="|width:${e.fillPercent()}%|"
+                                 th:classappend="${e.seatsLeft() == 0} ? 'is-full' : (${e.fillPercent() >= 90} ? 'is-low')"></div>
+                        </div>
+                        <div class="seats__text">
+                            <span th:text="${e.seatsLeft() == 0} ? #{event.seats.full} : #{event.seats.left(${e.seatsLeft()})}">12 seats left</span>
+                            <span th:text="#{common.seats(${e.seatsTaken()}, ${e.capacity()})}">588 / 600</span>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="empty card" th:if="${events.content().isEmpty()}">
+            <strong th:text="#{events.empty}">No events match.</strong>
+            <span th:text="${query.isEmpty()} ? #{events.empty.none} : #{events.empty.filters}">Try fewer filters.</span>
+        </div>
+        <nav class="pager" th:if="${events.totalPages() > 1}" th:aria-label="#{events.pages}">
+            <a class="btn btn--ghost btn--small" th:if="${prevUrl != null}" th:href="@{${prevUrl}}"
+               th:attr="hx-get=@{${prevUrl}}" hx-target="#results" hx-swap="outerHTML" hx-push-url="true"
+               th:text="#{common.previous}">← Previous</a>
+            <span class="hint" th:text="#{common.pageOf(${events.page() + 1}, ${events.totalPages()})}">Page 1 of 3</span>
+            <a class="btn btn--ghost btn--small" th:if="${nextUrl != null}" th:href="@{${nextUrl}}"
+               th:attr="hx-get=@{${nextUrl}}" hx-target="#results" hx-swap="outerHTML" hx-push-url="true"
+               th:text="#{common.next}">Next →</a>
+        </nav>
+    </section>
 </main>
-</body>
 </html>

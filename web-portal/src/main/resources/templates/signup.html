@@ -1,51 +1,62 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Create account')}"></head>
-<body>
-<header th:replace="~{fragments :: header}"></header>
-<main class="narrow">
-    <h1>Create account</h1>
-    <div th:replace="~{fragments :: flash}"></div>
-    <p class="hint">Use your <code>register-number@student.annauniv.edu</code> address or a Gmail address.</p>
+<!--/* Screen 1: create an account. th:object binds SignupForm; the portal's own checks and auth-service's 400 field
+     errors (allowed email domains, password policy) appear next to the same fields. Success → /check-email (PRG). */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{signup.title}, content=~{::main})}">
+<main id="main" class="page page--narrow">
+    <div class="pagehead">
+        <p class="eyebrow" th:text="#{app.tagline}">Campus events · one pass</p>
+        <h1 th:text="#{signup.title}">Create your account</h1>
+        <p class="lead" th:text="#{signup.lead}">Use your college email. We'll send a link to verify it.</p>
+    </div>
+    <div th:replace="~{layout :: flash}"></div>
 
-    <form th:action="@{/signup}" th:object="${form}" method="post" class="stack" novalidate>
-        <div class="flash err" th:if="${#fields.hasGlobalErrors()}">
+    <form th:action="@{/signup}" th:object="${form}" method="post" class="card form" novalidate>
+        <div class="flash flash--err" th:if="${#fields.hasGlobalErrors()}" role="alert">
             <p th:each="e : ${#fields.globalErrors()}" th:text="${e}">Error</p>
         </div>
-
-        <label>Full name
-            <input type="text" th:field="*{fullName}" required>
+        <div class="field" th:classappend="${#fields.hasErrors('fullName')} ? 'field--error'">
+            <label for="fullName" th:text="#{signup.fullName}">Full name</label>
+            <input th:field="*{fullName}" autocomplete="name" required>
             <span class="field-error" th:if="${#fields.hasErrors('fullName')}" th:errors="*{fullName}">error</span>
-        </label>
-        <label>College email
-            <input type="email" th:field="*{email}" required>
+        </div>
+        <div class="field" th:classappend="${#fields.hasErrors('email')} ? 'field--error'">
+            <label for="email" th:text="#{login.email}">College email</label>
+            <input type="email" th:field="*{email}" autocomplete="email" required>
+            <span class="field__hint" th:text="#{signup.email.hint}">register-number@student.annauniv.edu, or Gmail</span>
             <span class="field-error" th:if="${#fields.hasErrors('email')}" th:errors="*{email}">error</span>
-        </label>
-        <label>Department
-            <select th:field="*{department}" required>
-                <option value="">Choose…</option>
-                <option th:each="d : ${departments}" th:value="${d.code()}" th:text="${d.name()}">CSE</option>
-            </select>
-            <span class="field-error" th:if="${#fields.hasErrors('department')}" th:errors="*{department}">error</span>
-        </label>
-        <label>Year of study
-            <select th:field="*{year}">
-                <option value="">—</option>
-                <option th:each="y : ${#numbers.sequence(1, 5)}" th:value="${y}" th:text="${y}">1</option>
-            </select>
-            <span class="field-error" th:if="${#fields.hasErrors('year')}" th:errors="*{year}">error</span>
-        </label>
-        <label>Register number <small>(optional for Gmail)</small>
-            <input type="text" th:field="*{registerNumber}" inputmode="numeric">
+        </div>
+        <div class="form__row form__row--2">
+            <div class="field" th:classappend="${#fields.hasErrors('department')} ? 'field--error'">
+                <label for="department" th:text="#{events.department}">Department</label>
+                <select th:field="*{department}" required>
+                    <option value="" th:text="#{eventForm.choose}">Choose…</option>
+                    <option th:each="d : ${departments}" th:value="${d.code()}" th:text="${d.code()} + ' · ' + ${d.name()}">CSE</option>
+                </select>
+                <span class="field-error" th:if="${#fields.hasErrors('department')}" th:errors="*{department}">error</span>
+            </div>
+            <div class="field" th:classappend="${#fields.hasErrors('year')} ? 'field--error'">
+                <label for="year" th:text="#{profile.year}">Year</label>
+                <select th:field="*{year}">
+                    <option value="">—</option>
+                    <option th:each="y : ${#numbers.sequence(1, 5)}" th:value="${y}" th:text="#{common.year(${y})}">Year 1</option>
+                </select>
+                <span class="field-error" th:if="${#fields.hasErrors('year')}" th:errors="*{year}">error</span>
+            </div>
+        </div>
+        <div class="field" th:classappend="${#fields.hasErrors('registerNumber')} ? 'field--error'">
+            <label for="registerNumber" th:text="#{profile.regNo}">Register no.</label>
+            <input th:field="*{registerNumber}" inputmode="numeric" class="mono">
+            <span class="field__hint" th:text="#{signup.regNo.hint}">Optional for Gmail addresses.</span>
             <span class="field-error" th:if="${#fields.hasErrors('registerNumber')}" th:errors="*{registerNumber}">error</span>
-        </label>
-        <label>Password
-            <input type="password" th:field="*{password}" required>
+        </div>
+        <div class="field" th:classappend="${#fields.hasErrors('password')} ? 'field--error'">
+            <label for="password" th:text="#{login.password}">Password</label>
+            <input type="password" th:field="*{password}" autocomplete="new-password" required>
+            <span class="field__hint" th:text="#{signup.password.hint}">At least 8 characters.</span>
             <span class="field-error" th:if="${#fields.hasErrors('password')}" th:errors="*{password}">error</span>
-        </label>
-        <button type="submit">Create account</button>
+        </div>
+        <button type="submit" class="btn--block" th:text="#{signup.submit}">Create account</button>
     </form>
-    <p>Already have an account? <a th:href="@{/login}">Log in</a>.</p>
+    <p class="center mt-5" th:inline="text">[[#{signup.haveAccount}]] <a th:href="@{/login}" th:text="#{nav.login}">Log in</a></p>
 </main>
-</body>
 </html>

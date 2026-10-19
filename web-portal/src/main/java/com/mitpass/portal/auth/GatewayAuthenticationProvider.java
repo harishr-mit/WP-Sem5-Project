@@ -97,7 +97,8 @@ public class GatewayAuthenticationProvider implements AuthenticationProvider {
                     year instanceof Number n ? n.intValue() : null,
                     tokens.accessToken(),
                     tokens.refreshToken(),
-                    expiresAt);
+                    expiresAt,
+                    claims.getIssueTime() != null ? claims.getIssueTime().toInstant() : null);
         } catch (ParseException | IllegalArgumentException ex) {
             throw new AuthenticationServiceException("auth-service returned an unreadable token", ex);
         }

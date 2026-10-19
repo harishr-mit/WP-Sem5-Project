@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<!--/* Signing keys (ADMIN): rotate auth-service's token key or pass-service's pass key. Each asks first (dialog;
+     without JavaScript the server refuses a rotation without confirmed=true and says so). */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{nav.keys}, content=~{::main})}">
+<main id="main" class="page page--medium">
+    <div class="pagehead">
+        <p class="eyebrow" th:text="#{nav.admin}">Admin</p>
+        <h1 th:text="#{admin.keys.title}">Signing keys</h1>
+        <p class="lead" th:text="#{admin.keys.lead}">Rotating makes a new key for new tokens. Old ones stay valid until they expire.</p>
+    </div>
+    <div th:replace="~{layout :: flash}"></div>
+
+    <div class="grid grid--2">
+        <section class="card" th:each="k : ${ {'auth', 'pass'} }">
+            <h3 th:text="#{'admin.keys.' + ${k}}">Login tokens</h3>
+            <p class="hint" th:text="#{'admin.keys.' + ${k} + '.text'}">Signs access tokens.</p>
+            <form th:action="@{/admin/keys/{k}/rotate(k=${k})}" method="post">
+                <button type="submit" class="btn--secondary" th:attr="data-open-dialog=|rotate-${k}|" th:text="#{admin.keys.rotate}">Rotate</button>
+            </form>
+            <dialog class="confirm" th:id="|rotate-${k}|" th:aria-labelledby="|rotate-${k}-title|">
+                <form th:action="@{/admin/keys/{k}/rotate(k=${k})}" method="post">
+                    <input type="hidden" name="confirmed" value="true">
+                    <div class="confirm__body">
+                        <h2 th:id="|rotate-${k}-title|" th:text="#{admin.keys.confirm(#{'admin.keys.' + ${k}})}">Rotate the key?</h2>
+                        <p class="mb-0" th:text="#{admin.keys.lead}">Old tokens stay valid until they expire.</p>
+                    </div>
+                    <div class="confirm__foot">
+                        <button type="button" class="btn--ghost" data-close-dialog th:text="#{common.goBack}">Go back</button>
+                        <button type="submit" class="btn--danger" th:text="#{admin.keys.rotate}">Rotate</button>
+                    </div>
+                </form>
+            </dialog>
+        </section>
+    </div>
+</main>
+</html>

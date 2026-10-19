@@ -1,70 +1,97 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Pass')}"></head>
-<body>
-<header th:replace="~{fragments :: header}"></header>
-<main>
-    <p><a th:href="@{/my/passes}">&larr; My passes</a></p>
-    <div th:replace="~{fragments :: flash}"></div>
+<!--/* Screen 4: the pass card. An ACTIVE pass shows the live code, swapped every data-refresh-ms by pass-card.js with
+     a countdown ring. RL6: the interval is a rendered attribute, not inlined JavaScript (Thymeleaf's JS inlining
+     dropped "* 1000" once and made the image reload every 30 ms). The token stays inside the image (BFF). */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=${pass.eventTitle()}, content=~{::main})}">
+<main id="main" class="page page--narrow">
+    <a class="back" th:href="@{/my/passes}" th:text="'← ' + #{nav.myPasses}">← My passes</a>
+    <div th:replace="~{layout :: flash}"></div>
 
-    <section class="pass-card" th:classappend="${!pass.isValid()} ? 'void'">
-        <p class="pass-event" th:text="${pass.eventTitle()}">TechFest Hackathon</p>
-        <p th:text="${@fmt.when(pass.startsAt())}">Sat 14 Nov 2026, 09:00</p>
-        <p class="pass-label">HOLDER</p>
-        <p class="pass-holder" th:text="${pass.holderName()}">Priya Raman</p>
-        <p class="pass-label">PASS NO.</p>
-        <p><code class="pass-number" th:text="${pass.passNumber()}">TECHFEST26-000042-7</code></p>
-        <p>State: <span class="status" th:text="${pass.status()}">ACTIVE</span></p>
-        <p th:if="${pass.checkedInAt() != null}" class="ok-text">
-            Checked in <span th:text="${@fmt.when(pass.checkedInAt())}">Sat 14 Nov, 09:02</span><span
-                th:if="${pass.usedAt() != null}"> (single entry: used)</span>.
-        </p>
-
-        <div th:if="${pass.isActive()}" class="qr">
-            <img id="live-qr" alt="Live pass code" width="280" height="280"
-                 th:src="@{/my/passes/{id}/qr.png(id=${pass.id()})}">
-            <p class="hint">Live code: it changes every <span th:text="${refreshSeconds}">30</span> seconds, so a
-                screenshot stops working. Show this screen at the gate.</p>
-            <p id="qr-gone" class="flash err" hidden>The code is no longer available. Reload the page.</p>
+    <article class="pass" th:classappend="${!pass.isValid()} ? 'pass--void'"
+             th:style="${event != null and event.passColor() != null} ? |--pass-color:${event.passColor()}|">
+        <div class="pass__head">
+            <span class="pass__brand">MITPASS</span>
+            <span class="pass__chip" th:text="${@fmt.state(pass.status())}">Active</span>
         </div>
-        <p th:if="${pass.status() == 'ISSUED'}" class="locked">
-            Code unlocks <strong th:text="${@fmt.when(pass.codeUnlocksAt())}">Fri 23 Oct, 16:30</strong>.
-            The scannable code appears 2 hours before doors open, so it can't be passed around early.
-        </p>
-        <p th:if="${pass.status() == 'REVOKED'}" class="flash err">
-            This pass was revoked<span th:if="${pass.revokeNote() != null}" th:text="': ' + ${pass.revokeNote()}"></span>.
-            It won't get you in.
-        </p>
-        <p th:if="${pass.status() == 'EXPIRED'}" class="flash err">This pass has expired.</p>
+        <div class="pass__event">
+            <p class="pass__title" th:text="${pass.eventTitle()}">HackNight 26</p>
+            <p class="pass__when">
+                <span th:text="${@fmt.when(pass.startsAt())}">Sat 17 Oct 2026, 09:00</span>
+                <th:block th:if="${event != null and event.venue() != null}"> · <span th:text="${event.venue().name()}">Main Auditorium</span></th:block>
+            </p>
+        </div>
 
-        <p th:if="${pass.isValid()}">
-            <a th:href="@{/my/passes/{id}/ticket.pdf(id=${pass.id()})}">Download PDF ticket</a>
-        </p>
-    </section>
+        <div class="pass__qr" th:if="${pass.isActive()}">
+            <!--/* Tap for full screen (pass-card.js): at card size the scanning phone has to come too close to focus. */-->
+            <div class="qrframe" id="pass-code" th:data-refresh-ms="${refreshMillis}"
+                 th:data-src="@{/my/passes/{id}/qr.svg(id=${pass.id()})}">
+                <button type="button" class="qrframe__zoom" data-qr-zoom aria-pressed="false"
+                        th:aria-label="#{pass.live.enlarge}">
+                    <img id="live-qr" width="300" height="300" th:alt="#{pass.live.alt}"
+                         th:src="@{/my/passes/{id}/qr.svg(id=${pass.id()})}">
+                </button>
+            </div>
+            <p class="hint center mb-0" th:text="#{pass.live.enlargeHint}">Tap the code to make it bigger for the scanner.</p>
+            <p class="pass__live" aria-live="off">
+                <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
+                    <circle class="ring__track" cx="50" cy="50" r="40"></circle>
+                    <circle class="ring__left" cx="50" cy="50" r="40" pathLength="100" stroke-dasharray="100" stroke-dashoffset="0"></circle>
+                </svg>
+                <span th:inline="text">[[#{pass.live.next}]] <b id="qr-left" th:text="${refreshSeconds}">30</b> s</span>
+                <span class="badge badge--info badge--live" th:text="#{pass.live}">Live code</span>
+            </p>
+            <p id="qr-gone" class="flash flash--err mb-0" hidden th:text="#{pass.live.gone}">The code is no longer available. Reload the page.</p>
+        </div>
 
-    <!-- D9 shortcut: a plain timer swaps the image (P6: pass card with a countdown ring).
-         RL6: the inlined value must stand alone. Thymeleaf drops the text after an inlined expression, so
-         "/*[[${refreshSeconds}]]*/ 30 * 1000" rendered as 30 (ms). The next image is loaded off-screen and swapped
-         in only once it has arrived, so the code never blanks or half-paints. -->
-    <script th:if="${pass.isActive()}" th:inline="javascript">
-        (function () {
-            const refreshMillis = /*[[${refreshMillis}]]*/ 30000;
-            const img = document.getElementById('live-qr');
-            const base = img.src.split('?')[0];
-            function gone() {
-                clearInterval(timer);
-                img.hidden = true;
-                document.getElementById('qr-gone').hidden = false;
-            }
-            img.onerror = gone;
-            const timer = setInterval(function () {
-                const next = new Image();
-                next.onload = function () { img.src = next.src; };
-                next.onerror = gone;
-                next.src = base + '?t=' + Date.now();
-            }, refreshMillis);
-        })();
-    </script>
+        <div class="pass__qr" th:if="${pass.status() == 'ISSUED'}">
+            <div class="pass__locked">
+                <b th:text="#{pass.locked(${@fmt.shortWhen(pass.codeUnlocksAt())})}">Code unlocks Fri 23 Oct, 16:30</b>
+                <p class="mb-0" th:text="#{pass.locked.why}">The scannable code appears 2 hours before doors open.</p>
+            </div>
+        </div>
+        <div class="pass__qr" th:if="${pass.status() == 'REVOKED'}">
+            <div class="pass__locked">
+                <b th:text="#{pass.revoked}">Revoked</b>
+                <p class="mb-0" th:text="${pass.revokeNote() != null} ? #{pass.revoked.note(${pass.revokeNote()})} : #{pass.revoked.text}">This pass was revoked. It won't get you in.</p>
+            </div>
+        </div>
+        <div class="pass__qr" th:if="${pass.status() == 'EXPIRED'}">
+            <div class="pass__locked"><b th:text="#{pass.expired}">Expired</b>
+                <p class="mb-0" th:text="#{pass.expired.text}">This pass has expired.</p></div>
+        </div>
+
+        <div class="pass__fields">
+            <div>
+                <p class="pass__label" th:text="#{pass.holder}">HOLDER</p>
+                <p class="pass__value" th:text="${pass.holderName()}">Priya Raman</p>
+            </div>
+            <div class="right">
+                <p class="pass__label" th:text="#{pass.number}">PASS NO.</p>
+                <p class="pass__value pass-number" th:text="${pass.passNumber()}">TECHFEST26-000042-7</p>
+            </div>
+        </div>
+        <p class="pass__mrz" aria-hidden="true">
+            <th:block th:each="line : ${@fmt.mrz(pass)}"><span th:text="${line}">MP&lt;TECHFEST26</span><br></th:block>
+        </p>
+    </article>
+
+    <!--/* The full-screen view of the live code (pass-card.js). Outside the card on purpose: the card's backdrop-filter
+         would make a position:fixed child fill the card, not the screen. */-->
+    <button type="button" class="qrzoom" id="qr-zoom-view" hidden th:if="${pass.isActive()}"
+            th:aria-label="#{pass.live.close}">
+        <img id="live-qr-zoom" alt="" width="600" height="600">
+    </button>
+
+    <p class="ok-text center mt-4" th:if="${pass.checkedInAt() != null}">
+        <span th:text="#{pass.checkedIn(${@fmt.shortWhen(pass.checkedInAt())})}">Checked in Sat 17 Oct, 09:02</span><span
+            th:if="${pass.usedAt() != null}" th:text="' ' + #{pass.singleEntryUsed}"> (single entry: used)</span>
+    </p>
+
+    <div class="pass__foot" th:if="${pass.isValid()}">
+        <a class="btn btn--secondary" th:href="@{/my/passes/{id}/ticket.pdf(id=${pass.id()})}" th:text="#{pass.pdf}">PDF ticket</a>
+    </div>
+    <p class="hint center mt-4" th:if="${pass.isActive()}" th:text="#{pass.live.hint}">Show this screen at the gate.</p>
+
+    <script th:if="${pass.isActive()}" th:src="@{/js/pass-card.js}" defer></script>
 </main>
-</body>
 </html>

@@ -52,6 +52,9 @@ management:
     web:
       exposure:
         include: health,info
+  endpoint:
+    health:
+      show-components: always   # names and status for the admin health page (D15); details stay hidden
 
 springdoc:
   swagger-ui:
@@ -95,8 +98,11 @@ mitpass:
       size: 400
       margin: 2
       logo: ""                           # empty = a drawn MIT badge; or a PNG resource such as classpath:logo.png
-      logo-ratio: 0.2
+      logo-ratio: 0.15                   # badge width / code width (D12: was 0.2 with level H)
       default-color: "#7A1F2B"
+      error-correction: M                # D12, 2026-10-19: H made a 113-module code phones couldn't read off a screen
+      min-contrast: 7.0                  # event colour used for the modules only from this WCAG contrast on white
+      dark-color: "#111111"              # the modules' colour when the event colour is lighter than that
 
 logging:
   pattern:

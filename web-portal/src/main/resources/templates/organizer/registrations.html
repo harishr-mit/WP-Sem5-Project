@@ -1,37 +1,88 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Registrations')}"></head>
-<body>
-<header th:replace="~{fragments :: header}"></header>
-<main>
-    <p><a th:href="@{/organizer/events}">&larr; My events</a></p>
-    <h1 th:text="${event.title()}">TechFest Hackathon</h1>
-    <p><code th:text="${event.code()}">TECHFEST26</code> · <span class="status" th:text="${event.status()}">OPEN</span>
-        · <span th:text="${event.seatsTaken() + ' / ' + event.capacity()}">0 / 100</span> seats taken</p>
-    <div th:replace="~{fragments :: flash}"></div>
-    <p class="hint">A confirmed student's pass appears here a moment after confirmation. Reload to update.</p>
+<!--/* An event's registrations with their passes. The filter works as a plain GET; with HTMX only #registration-rows is
+     swapped while typing. Revoking asks in a dialog (RL9); without JavaScript the button goes to the confirmation page. */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{org.tab.registrations} + ' · ' + ${event.title()}, content=~{::main})}">
+<main id="main" class="page">
+    <div th:replace="~{organizer/nav :: eventHead(${event}, 'registrations')}"></div>
+    <div th:replace="~{layout :: flash}"></div>
 
-    <table th:if="${!rows.isEmpty()}">
-        <thead><tr><th>Student</th><th>Registration</th><th>Pass</th><th>Pass state</th><th></th></tr></thead>
-        <tbody>
-        <tr th:each="row : ${rows}" th:with="r=${row.registration()}, p=${row.pass()}">
-            <td><span th:text="${r.userName()}">Priya Raman</span><br><small th:text="${r.userEmail()}">p@x</small></td>
-            <td><span class="status" th:text="${@fmt.status(r.status(), r.waitlistPosition())}">CONFIRMED</span></td>
-            <td><code class="pass-number" th:if="${p != null}" th:text="${p.passNumber()}">TECHFEST26-000042-7</code>
-                <span th:if="${p == null}">—</span></td>
-            <td><span th:if="${p != null}" class="status" th:text="${p.status()}">ACTIVE</span></td>
-            <td>
-                <form th:if="${p != null and p.isValid()}" th:action="@{/organizer/passes/{id}/revoke(id=${p.id()})}"
-                      method="post" class="inline">
-                    <input type="hidden" name="eventId" th:value="${event.id()}">
-                    <input type="text" name="note" placeholder="Reason (optional)" maxlength="200">
-                    <button type="submit" class="danger">Revoke</button>
-                </form>
-            </td>
-        </tr>
-        </tbody>
-    </table>
-    <p th:if="${rows.isEmpty()}">Nobody has registered yet.</p>
+    <div class="grid grid--4">
+        <div class="stat"><p class="stat__label" th:text="#{state.CONFIRMED}">Confirmed</p>
+            <p class="stat__value" th:text="${counts.confirmed}">600</p></div>
+        <div class="stat"><p class="stat__label" th:text="#{state.WAITLISTED}">On the waitlist</p>
+            <p class="stat__value" th:text="${counts.waitlisted}">47</p></div>
+        <div class="stat"><p class="stat__label" th:text="#{state.CANCELLED}">Cancelled</p>
+            <p class="stat__value" th:text="${counts.cancelled}">12</p></div>
+        <div class="stat"><p class="stat__label" th:text="#{regs.revoked}">Passes revoked</p>
+            <p class="stat__value" th:text="${counts.revoked}">3</p></div>
+    </div>
+    <p class="hint mt-4" th:text="#{regs.promotionNote}">When someone cancels, the first person on the waitlist gets the seat and a pass straight away.</p>
+
+    <form class="field search mt-4" role="search" method="get"
+          th:action="@{/organizer/events/{id}/registrations(id=${event.id()})}"
+          th:attr="hx-get=@{/organizer/events/{id}/registrations(id=${event.id()})}"
+          hx-trigger="input delay:300ms, submit" hx-target="#registration-rows" hx-swap="outerHTML" hx-push-url="true">
+        <label for="q" th:text="#{regs.filter}">Find a person</label>
+        <input id="q" type="search" name="q" th:value="${q}" th:placeholder="#{regs.filter.placeholder}" autocomplete="off">
+    </form>
+
+    <div id="registration-rows" th:fragment="rows" class="mt-4">
+        <div class="table-wrap" th:if="${!rows.isEmpty()}">
+            <table class="stacked">
+                <thead><tr>
+                    <th th:text="#{regs.student}">Student</th>
+                    <th th:text="#{registrations.status}">Registration</th>
+                    <th th:text="#{pass.number}">Pass</th>
+                    <th><span class="visually-hidden" th:text="#{registrations.actions}">Actions</span></th>
+                </tr></thead>
+                <tbody>
+                <tr th:each="row : ${rows}" th:with="r=${row.registration()}, p=${row.pass()}">
+                    <td th:data-label="#{regs.student}"><strong th:text="${r.userName()}">Priya Raman</strong><br>
+                        <small th:text="${r.userEmail()}">p@x</small></td>
+                    <td th:data-label="#{registrations.status}">
+                        <span class="badge" th:classappend="${@fmt.badgeClass(r.status())}"
+                              th:text="${@fmt.status(r.status(), r.waitlistPosition())}">Confirmed</span></td>
+                    <td th:data-label="#{pass.number}">
+                        <th:block th:if="${p != null}"><span class="pass-number" th:text="${p.passNumber()}">TECHFEST26-000042-7</span><br>
+                            <span th:replace="~{layout :: badge(${p.status()})}"></span></th:block>
+                        <span class="hint" th:if="${p == null}">—</span>
+                    </td>
+                    <td data-label="" class="right">
+                        <th:block th:if="${p != null and p.isValid()}">
+                            <form th:action="@{/organizer/passes/{id}/revoke(id=${p.id()})}" method="post" class="inline">
+                                <input type="hidden" name="eventId" th:value="${event.id()}">
+                                <button type="submit" class="btn--danger btn--small" th:attr="data-open-dialog=|revoke-${p.id()}|"
+                                        th:text="#{regs.revoke}">Revoke</button>
+                            </form>
+                            <dialog class="confirm" th:id="|revoke-${p.id()}|" th:aria-labelledby="|revoke-${p.id()}-title|">
+                                <form th:action="@{/organizer/passes/{id}/revoke(id=${p.id()})}" method="post">
+                                    <input type="hidden" name="eventId" th:value="${event.id()}">
+                                    <input type="hidden" name="confirmed" value="true">
+                                    <div class="confirm__body" style="text-align:left">
+                                        <h2 th:id="|revoke-${p.id()}-title|" th:text="#{revoke.title}">Revoke this pass?</h2>
+                                        <p><strong th:text="${p.holderName()}">Priya Raman</strong> ·
+                                            <span class="pass-number" th:text="${p.passNumber()}">TECHFEST26-000042-7</span></p>
+                                        <p th:text="#{revoke.consequence}">The pass stops working at once.</p>
+                                        <div class="field">
+                                            <label th:for="|note-${p.id()}|" th:text="#{revoke.reason}">Reason (optional)</label>
+                                            <input th:id="|note-${p.id()}|" type="text" name="note" maxlength="200">
+                                        </div>
+                                    </div>
+                                    <div class="confirm__foot">
+                                        <button type="button" class="btn--ghost" data-close-dialog th:text="#{common.goBack}">Go back</button>
+                                        <button type="submit" class="btn--danger" th:text="#{revoke.button}">Revoke pass</button>
+                                    </div>
+                                </form>
+                            </dialog>
+                        </th:block>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="empty card" th:if="${rows.isEmpty()}">
+            <strong th:text="${q != null and !#strings.isEmpty(q)} ? #{regs.noMatch} : #{regs.empty}">Nobody has registered yet</strong>
+        </div>
+    </div>
 </main>
-</body>
 </html>

@@ -34,7 +34,7 @@ class CheckinSettingsTests {
     void defaultsAreNoReentryAndAllSessionsForACertificate() throws Exception {
         long id = create(null, null);
 
-        mvc.perform(get("/api/events/{id}", id))
+        mvc.perform(as(OWNER, get("/api/events/{id}", id)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reentryAllowed").value(false))
                 .andExpect(jsonPath("$.certificateMinSessions").doesNotExist());
@@ -44,7 +44,7 @@ class CheckinSettingsTests {
     void bothSettingsAreStoredAndReturned() throws Exception {
         long id = create("true", "2");
 
-        mvc.perform(get("/api/events/{id}", id))
+        mvc.perform(as(OWNER, get("/api/events/{id}", id)))
                 .andExpect(jsonPath("$.reentryAllowed").value(true))
                 .andExpect(jsonPath("$.certificateMinSessions").value(2));
     }
@@ -80,7 +80,7 @@ class CheckinSettingsTests {
     }
 
     private String code(long id) throws Exception {
-        String response = mvc.perform(get("/api/events/{id}", id))
+        String response = mvc.perform(as(OWNER, get("/api/events/{id}", id)))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();

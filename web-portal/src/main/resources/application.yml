@@ -11,7 +11,23 @@ spring:
   application:
     name: web-portal
   thymeleaf:
-    cache: false             # a slice: pages change often; P6 decides on caching
+    cache: true              # P6: on; the dev profile below turns it off while editing templates
+  messages:
+    basename: messages       # messages.properties (English) + messages_ta.properties (Tamil), D15
+    encoding: UTF-8
+    fallback-to-system-locale: false
+    always-use-message-format: true   # so an apostrophe is always written '' (see the top of messages.properties)
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          max-age: 365d      # safe: the URLs below carry a content hash, so a changed file gets a new URL
+          cache-public: true
+      chain:
+        strategy:
+          content:
+            enabled: true
+            paths: /css/**,/js/**,/fonts/**,/favicon*.svg   # patterns must also match the hashed name
 
 eureka:
   client:
@@ -25,6 +41,9 @@ management:
     web:
       exposure:
         include: health,info
+  endpoint:
+    health:
+      show-components: always   # names and status for the admin health page (D15); details stay hidden
 
 mitpass:
   portal:
@@ -35,8 +54,54 @@ mitpass:
     timeouts:
       connect: 2s
       read: 10s
-    qr-refresh: 30s   # the pass page swaps the live QR image this often (tokens last 45 s; D9 shortcut: plain timer)
+    qr-refresh: 30s   # the pass page swaps the live QR image this often (tokens last 45 s)
+    refresh-ahead: 60s          # refresh the access token this long before it expires, at most 1/4 of its lifetime (phase-6 plan §7)
+    search-delay: 300ms         # live search debounce
+    poll-interval: 2s           # "You're in" page and waitlisted registrations ask again this often
+    poll-timeout: 30s           # then the "You're in" page points to My passes instead
+    health-refresh: 10s         # admin health page
+    waitlist-refresh: 15s       # a waitlisted registration asks this often whether it moved up
+    scan-repeat-ignore: 3s      # the scanner ignores the same QR text this long
+    supported-locales: en,ta    # the first is the default
 
 logging:
   pattern:
     level: "%5p [%X{correlationId:-}]"
+
+---
+# Editing templates or CSS locally: --spring.profiles.active=dev (no template cache, no long-lived static caching).
+spring:
+  config:
+    activate:
+      on-profile: dev
+  thymeleaf:
+    cache: false
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          max-age: 0
+
+---
+# Phone demos (D15): HTTPS on :8443 with the self-signed certificate from scripts/make-dev-cert (run from the repo
+# root, or point MITPASS_PORTAL_CERT at the file). Phones accept the certificate warning once.
+spring:
+  config:
+    activate:
+      on-profile: lan
+  ssl:
+    bundle:
+      jks:
+        portal-dev:
+          keystore:
+            location: file:${MITPASS_PORTAL_CERT:infra/certs/portal-dev.p12}
+            password: ${MITPASS_PORTAL_CERT_PASSWORD:dev-only-changeit}
+            type: PKCS12
+server:
+  port: 8443
+  ssl:
+    bundle: portal-dev
+  servlet:
+    session:
+      cookie:
+        secure: true         # the session cookie only travels over HTTPS

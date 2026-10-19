@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<!--/* Shared body of every error page. Shows a reference (the correlation id) and never a stack trace. */-->
+<html xmlns:th="http://www.thymeleaf.org">
+<main th:fragment="body(code, heading, text)" id="main" class="page page--narrow errorpage">
+    <p class="errorpage__code" th:text="${code}">404</p>
+    <h1 th:text="${heading}">Not found</h1>
+    <p class="lead" th:text="${text}">There's nothing here.</p>
+    <p th:if="${detail != null}" class="callout" th:text="${detail}">The service's message.</p>
+    <div class="actions" style="justify-content:center">
+        <a class="btn" th:href="@{/events}" th:text="#{error.home}">Back to events</a>
+        <a class="btn btn--secondary" th:if="${currentUser == null}" th:href="@{/login}" th:text="#{error.login}">Log in</a>
+    </div>
+    <p class="mono mt-5" th:if="${correlationId != null}" th:text="#{error.ref(${correlationId})}">Reference: portal-…</p>
+</main>
+</html>

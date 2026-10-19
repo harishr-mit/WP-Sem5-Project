@@ -1,6 +1,7 @@
 package com.mitpass.gateway.security;
 
 import com.mitpass.common.security.MitpassSecurityProperties;
+import com.mitpass.common.security.Roles;
 import com.mitpass.common.security.jwt.MitpassJwtAuthenticationConverter;
 import com.mitpass.common.security.jwt.MitpassJwtValidators;
 import java.util.List;
@@ -26,7 +27,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 /**
  * The edge pre-check (docs/plans/phase-2.md §9): public paths pass, everything else needs a valid access token, checked
  * against auth-service's JWK set (fetched through Eureka). Role rules are left to the services, which verify the token
- * again. CORS lives here too, so even a 401 from the edge carries the CORS headers a browser needs to read it.
+ * again; the only exception is the gateway's own {@code /api/admin/**} (ADMIN, D15). CORS lives here too, so even a 401 from the edge carries the CORS headers a browser needs to read it.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableWebFluxSecurity
@@ -60,12 +61,16 @@ public class EdgeSecurityConfig {
                             exchanges.pathMatchers(parts[0]).permitAll();
                         }
                     }
+                    // The gateway's own admin endpoints (D15): here the gateway is the service, so it owns the role
+                    // rule.
+                    exchanges.pathMatchers("/api/admin/**").hasRole(Roles.ADMIN);
                     exchanges.anyExchange().authenticated();
                 })
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(
                                 new ReactiveJwtAuthenticationConverterAdapter(new MitpassJwtAuthenticationConverter())))
                         .authenticationEntryPoint(entryPoint))
-                .exceptionHandling(errors -> errors.authenticationEntryPoint(entryPoint));
+                .exceptionHandling(errors -> errors.authenticationEntryPoint(entryPoint)
+                        .accessDeniedHandler(new ProblemServerAccessDeniedHandler()));
         return http.build();
     }
 

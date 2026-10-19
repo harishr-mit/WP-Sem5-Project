@@ -1,0 +1,12 @@
+{
+  "name": "mitpass-ui-checks",
+  "private": true,
+  "description": "Browser checks of the web portal with Playwright (AGENTS.md: web UI checks). Not part of ./mvnw verify.",
+  "type": "module",
+  "scripts": {
+    "student": "node student.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

@@ -2,6 +2,7 @@ package com.mitpass.event.web.dto;
 
 import com.mitpass.event.domain.EventStatus;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /** One row of a search result: no description, no sessions (they are not fetched for lists). */
@@ -21,4 +22,6 @@ public record EventSummaryResponse(
         UUID organizerId,
         String organizerName,
         int seatsTaken,
-        int seatsLeft) {}
+        int seatsLeft,
+        /** Phase 6 (D9 row): the moves allowed now, as on the detail, so the organizer's list needs one call. */
+        List<EventStatus> allowedTransitions) {}

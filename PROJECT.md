@@ -82,7 +82,7 @@ How to use it:
 - **Follow it for the flow and the feel:** the order of screens, what each screen shows, and the visual direction (maroon "passport cover" header, blue-grey background, condensed display font for headings, monospace for pass numbers, green/amber/red gate results).
 - **Don't treat it as a pixel spec.** Change layout, spacing or wording wherever that makes the build simpler or the screen clearer. Record notable deviations in `log.md`.
 - **This document wins on behaviour and data.** If the mockup shows something this plan doesn't support, or the reverse, follow this plan, or update both if the change is worth it.
-- **Don't copy its markup.** It is a bundled export of a design canvas, not reusable HTML. Rebuild the screens in `web-portal` with Thymeleaf + Tailwind.
+- **Don't copy its markup.** It is a bundled export of a design canvas, not reusable HTML. Rebuild the screens in `web-portal` with Thymeleaf + hand-written CSS (design tokens taken from the mockup; owner decision, 2026-10-17, D15).
 - **Placeholders are placeholders.** Names, pass numbers, counts and times in it are sample data.
 - **Screens it doesn't cover** (organizer event form, volunteer assignment, admin, stamps/attendance history, error pages) follow the same visual language.
 
@@ -211,7 +211,7 @@ All transitions go through one `transition(from, to)` method backed by an enum t
 | Language | **Java 21 (LTS)** | Records, sealed types, pattern matching, virtual threads |
 | Framework | **Spring Boot 4.1** (Spring Framework 7, Jakarta EE 11, Jackson 3, Hibernate 7) + **Spring Cloud 2025.1 (Oakwood)** | A supported pair, pinned in the root `pom.xml` (exact versions and reasons: `docs/DECISIONS.md` D1) |
 | Build | Maven multi-module through the committed wrapper (`./mvnw`, Maven 3.9); a project-local JDK in `.tools/jdk-21` | One parent POM for all services; nothing installed globally (`scripts/setup-jdk.ps1`) |
-| Web (server-rendered) | **Spring MVC + Thymeleaf + HTMX**, Tailwind CSS | Shows classic MVC; HTMX gives an SPA feel without a JS framework |
+| Web (server-rendered) | **Spring MVC + Thymeleaf + HTMX**, hand-written CSS with design tokens; JS libraries as WebJars | Shows classic MVC; HTMX gives an SPA feel without a JS framework. No Node build step (owner decision, 2026-10-17: Tailwind dropped as more setup than it saves for a portal this size; D15) |
 | REST | Spring Web, Bean Validation, `ProblemDetail`, **springdoc-openapi** | Swagger UI combined at the gateway |
 | Persistence | **Spring Data JPA / Hibernate**, **PostgreSQL 16**, **Flyway** | Database per service; migrations under version control |
 | Mapping | MapStruct | Keeps entities out of API responses |
@@ -256,7 +256,7 @@ mitpass/
 │   ├── docker-compose.yml
 │   ├── postgres/init.sql        # one database per service
 │   ├── prometheus/ grafana/     # provisioned dashboards
-│   └── certs/                   # mkcert dev certs (phone camera needs HTTPS)
+│   └── certs/                   # self-signed dev cert from scripts/make-dev-cert (phone camera needs HTTPS; gitignored)
 └── docs/                        # API.md, DEMO_SCRIPT.md, DECISIONS.md, plans/ (one plan per phase)
 ```
 
@@ -342,7 +342,7 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 - [x] **Minimal dead-letter queue** for pass-service's inbox (3 retries, then `pass-service.inbox.dlq`), with the helper in `libs/common-messaging` (owner decision, 2026-10-16). **Pulled forward from P7 and completed there** (see §P7).
 - [x] event-service publishes `EventRescheduled` when an event's start or end time changes, so pass unlock and expiry times follow (owner decision, 2026-10-16). Per-event `staticQrAllowed` and `passColor` live in event-service.
 - [x] QR payload = compact **JWS (ES256)** `{pid, eid, sub, sid?, iat, exp, jti}` plus `iss` and `knd` (live/static), with `kid` and `typ: mitpass-pass+jws`; separate signing keys from auth; pass-service publishes its own JWKS for scanners.
-- [x] **ZXing** QR rendering: PNG and SVG endpoints, error-correction level H, centered college logo, colors themed per event.
+- [x] **ZXing** QR rendering: PNG and SVG endpoints, error-correction level M, centered college logo, colors themed per event (a colour too light to scan reliably falls back to near-black). *Level H until 2026-10-19: with a 467-character token it made a 113×113-module code that phone cameras couldn't read off a screen in the two-phone demo; M gives 85×85 (owner decision, D12).*
 - [x] **Rotating QR:** `GET /passes/{id}/qr/live` returns a token valid for about 45 s; the static PDF/email QR uses a longer-lived token if the event allows it.
 - [x] **PDF ticket** (OpenPDF): event banner, attendee name and photo initials, QR, pass number, venue map link.
 - [x] Revocation: an organizer revokes a pass (→ `PassRevoked`); `GET /revocations?since=` gives scanners a delta feed.
@@ -381,20 +381,21 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 
 ### P6 — Web Portal (Spring MVC)
 
-**Goal:** turn the thin slices from P3–P5 into a polished, server-rendered UI for all four roles, built with Spring MVC.
+**Goal:** turn the thin slices from P3–P5 into a polished, server-rendered UI for all four roles, built with Spring MVC. Plan: `docs/plans/phase-6.md`.
 
-- [ ] Restyle and complete the slice pages from the [UI reference](#ui-reference) (screens 1–7) for flow and look. It's a guide, not a spec; adapt it where Thymeleaf/HTMX makes something simpler.
-- [ ] Replace every slice shortcut in `docs/DECISIONS.md` D9. P6 isn't done while any of them is left.
-- [ ] `web-portal` as a **BFF**: form login against `auth-service`; tokens are kept in the server-side session and never reach the browser; RestClient calls through the gateway with automatic token refresh.
-- [ ] MVC fundamentals done properly: `@Controller` + `Model`, `@ModelAttribute` form objects, `BindingResult` errors shown inline, **Post/Redirect/Get**, flash messages, CSRF, a `HandlerInterceptor` for the current user, custom 403/404/500 pages, i18n message bundles.
-- [ ] Student: event catalogue with HTMX live search and filters, event detail, register/cancel, waitlist position; **"My Passes" wallet** with glassmorphism pass cards, a rotating QR with a countdown ring, PDF download.
-- [ ] Organizer: event create/edit form (sessions as a dynamic sub-form), lifecycle buttons that show only the allowed transitions, registrations table, revoke pass, volunteer assignment.
-- [ ] Volunteer: **full-screen camera scanner** (`html5-qrcode`) with a gate selector, a large green/red flash, sound and vibration, the attendee's name on success, and a manual-entry tab.
-- [ ] Admin: user and role management, and a system health overview (each service's status from its actuator health endpoint).
-- [ ] Dark mode, responsive (the scanner is phone-first); HTTPS dev cert (mkcert) so phone cameras work over the LAN.
+- [x] Restyle and complete the slice pages from the [UI reference](#ui-reference) (screens 1–7) for flow and look. It's a guide, not a spec; adapt it where Thymeleaf/HTMX makes something simpler. Styling is hand-written CSS with design tokens (owner decision, 2026-10-17; D15).
+- [x] Replace every slice shortcut in `docs/DECISIONS.md` D9. P6 isn't done while any of them is left.
+- [x] `web-portal` as a **BFF**: form login against `auth-service`; tokens are kept in the server-side session and never reach the browser; RestClient calls through the gateway with automatic token refresh.
+- [x] MVC fundamentals done properly: `@Controller` + `Model`, `@ModelAttribute` form objects, `BindingResult` errors shown inline, **Post/Redirect/Get**, flash messages, CSRF, a `HandlerInterceptor` for the current user, custom 403/404/500 pages, i18n message bundles in **English and Tamil** with a language switch (owner decision, 2026-10-17).
+- [x] Student: event catalogue with HTMX live search and filters, event detail, register/cancel, waitlist position; **"My Passes" wallet** with glassmorphism pass cards, a rotating QR with a countdown ring, PDF download.
+- [x] Organizer: event create/edit form (sessions as a dynamic sub-form), lifecycle buttons that show only the allowed transitions, registrations table, revoke pass, volunteer assignment. A **DRAFT** event is visible only to its own organizer and admins; for everyone else it is a 404, in the catalogue, on its page and its sessions (owner decision, 2026-10-17: found while building the catalogue, where drafts were public).
+- [x] Volunteer: **full-screen camera scanner** (`html5-qrcode`) with a gate selector, a large green/red flash, sound and vibration, the attendee's name on success, and a manual-entry tab.
+- [x] Admin: user and role management, and a system health overview (each service's status from its actuator health endpoint, collected by the gateway's ADMIN-only `GET /api/admin/health` from the Eureka registry, so the portal still calls only the gateway; owner decision, 2026-10-17).
+- [x] Dark mode, responsive (the scanner is phone-first); a self-signed HTTPS dev cert made with the project JDK's `keytool` (portal `lan` profile on :8443) so phone cameras work over the LAN. No mkcert: it would change the system trust store (owner decision, 2026-10-17).
 
 **Concepts:** Spring MVC (the main showcase), authentication and session handling, authorization in views (`sec:authorize`).
 **Exit criteria / demo:** the full journey works in a browser: sign up → register → open the pass on a phone → scan it with a second phone → green flash.
+**Status:** done 2026-10-19. Two-phone exit demo by the owner: phone B's camera scanned phone A's live pass over the laptop's hotspot (getting there: `archive/2026-10-19_phone-demo_network-diagnosis.md`; QR level H → M and scanner fixes, D12). Tamil reviewed by the owner. Built 2026-10-18; Checked in a real browser (Playwright, Edge; AGENTS.md): sign-up → the Mailpit link opens the portal → log in; the student journey to a live pass card; the scanner reading a real live QR through a fake camera (green, then amber); organizer, admin, Tamil and a dark-mode/360 px/accessibility sweep over every role's pages; the `lan` profile over HTTPS (secure context, `Secure` cookie). With 1-minute access tokens a user worked for 5 minutes without being sent to log in (6 rotations, none reused) (a bug found there was fixed: the refresh window is now at most a quarter of the token's lifetime). Health overview: stopping pass-service showed it DOWN on the next refresh. Every D9 shortcut is replaced (D9 table). 593 tests green (2026-10-19). As-built notes in `docs/plans/phase-6.md` §18, decisions in `docs/DECISIONS.md` D15, demo requests in `docs/http/phase-6.http`.
 
 ---
 

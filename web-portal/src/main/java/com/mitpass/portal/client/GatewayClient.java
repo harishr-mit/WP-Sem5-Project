@@ -1,6 +1,5 @@
 package com.mitpass.portal.client;
 
-import com.mitpass.portal.auth.PortalUser;
 import com.mitpass.portal.client.ApiModels.Assignment;
 import com.mitpass.portal.client.ApiModels.AttendanceSummary;
 import com.mitpass.portal.client.ApiModels.AttendeeRow;
@@ -10,10 +9,14 @@ import com.mitpass.portal.client.ApiModels.CertificateRow;
 import com.mitpass.portal.client.ApiModels.Department;
 import com.mitpass.portal.client.ApiModels.Eligibility;
 import com.mitpass.portal.client.ApiModels.EventDetail;
+import com.mitpass.portal.client.ApiModels.EventQuery;
 import com.mitpass.portal.client.ApiModels.EventSummary;
 import com.mitpass.portal.client.ApiModels.FieldError;
 import com.mitpass.portal.client.ApiModels.Gate;
+import com.mitpass.portal.client.ApiModels.InstanceHealth;
+import com.mitpass.portal.client.ApiModels.KeyRotation;
 import com.mitpass.portal.client.ApiModels.LookupAnswer;
+import com.mitpass.portal.client.ApiModels.MyAttendance;
 import com.mitpass.portal.client.ApiModels.Page;
 import com.mitpass.portal.client.ApiModels.Pass;
 import com.mitpass.portal.client.ApiModels.PassLookup;
@@ -22,6 +25,9 @@ import com.mitpass.portal.client.ApiModels.Registration;
 import com.mitpass.portal.client.ApiModels.ScanAnswer;
 import com.mitpass.portal.client.ApiModels.SyncResult;
 import com.mitpass.portal.client.ApiModels.TokenResponse;
+import com.mitpass.portal.client.ApiModels.UserProfile;
+import com.mitpass.portal.client.ApiModels.Venue;
+import com.mitpass.portal.client.ApiModels.Volunteer;
 import com.mitpass.portal.config.PortalProperties;
 import java.io.IOException;
 import java.util.HashMap;
@@ -39,8 +45,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.ClientHttpRequestExecution;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriBuilder;
@@ -60,18 +64,25 @@ public class GatewayClient {
 
     private final RestClient http;
     private final JsonMapper json;
+    private final AccessTokenSource tokens;
 
     @Autowired
-    public GatewayClient(RestClient.Builder builder, PortalProperties properties, JsonMapper json) {
-        this(builder.requestFactory(timeouts(properties)), properties.gatewayUrl(), json);
+    public GatewayClient(
+            RestClient.Builder builder, PortalProperties properties, JsonMapper json, AccessTokenSource tokens) {
+        this(builder.clone().requestFactory(timeouts(properties)), properties.gatewayUrl(), json, tokens);
     }
 
-    /** For tests: a builder already bound to a mock server keeps its request factory. */
+    /** For tests: a builder already bound to a mock server keeps its request factory; tokens are never refreshed. */
     GatewayClient(RestClient.Builder configured, String gatewayUrl, JsonMapper json) {
+        this(configured, gatewayUrl, json, AccessTokenSource.fromSecurityContext());
+    }
+
+    GatewayClient(RestClient.Builder configured, String gatewayUrl, JsonMapper json, AccessTokenSource tokens) {
         this.json = json;
+        this.tokens = tokens;
         this.http = configured
                 .baseUrl(gatewayUrl)
-                .requestInterceptor(GatewayClient::addTokenAndCorrelationId)
+                .requestInterceptor(this::addTokenAndCorrelationId)
                 .defaultStatusHandler(HttpStatusCode::isError, this::raise)
                 .build();
     }
@@ -120,17 +131,41 @@ public class GatewayClient {
                 .toBodilessEntity();
     }
 
+    /** Confirms the address with the token from the email link (D9 row: the link opens the portal, not the API). */
+    public void verifyEmail(String token) {
+        http.post()
+                .uri("/api/auth/verify-email")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("token", token))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    /** Asks auth-service to send a new verification link; it answers the same whether or not the address exists. */
+    public void resendVerification(String email) {
+        http.post()
+                .uri("/api/auth/verify-email/resend")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("email", email))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
     public List<Department> departments() {
         return http.get().uri("/api/departments").retrieve().body(new ParameterizedTypeReference<>() {});
     }
 
     // ---- event-service: catalogue and lifecycle ------------------------------------------------------------------
 
+    /**
+     * Events for the organizer's list and the scanner's gate picker: up to 100 (the API's page limit), so an organizer
+     * with more than a screenful still sees all of them (found in the Phase 6 sweep: it stopped at 20).
+     */
     public Page<EventSummary> events(String q, String category, UUID organizerId, int page) {
         return http.get()
                 .uri(uri -> {
                     UriBuilder b =
-                            uri.path("/api/events").queryParam("page", page).queryParam("size", 20);
+                            uri.path("/api/events").queryParam("page", page).queryParam("size", 100);
                     if (q != null && !q.isBlank()) {
                         b.queryParam("q", q);
                     }
@@ -146,8 +181,89 @@ public class GatewayClient {
                 .body(new ParameterizedTypeReference<>() {});
     }
 
+    /** The student catalogue: text, category, department and a date range, 12 events a page. */
+    public Page<EventSummary> search(EventQuery query) {
+        return http.get()
+                .uri(uri -> {
+                    UriBuilder b = uri.path("/api/events")
+                            .queryParam("page", Math.max(0, query.page()))
+                            .queryParam("size", 12)
+                            .queryParam("sort", "startsAt");
+                    if (query.q() != null && !query.q().isBlank()) {
+                        b.queryParam("q", query.q().strip());
+                    }
+                    if (query.category() != null && !query.category().isBlank()) {
+                        b.queryParam("category", query.category());
+                    }
+                    if (query.department() != null && !query.department().isBlank()) {
+                        b.queryParam("department", query.department());
+                    }
+                    if (query.from() != null) {
+                        b.queryParam("from", query.from());
+                    }
+                    if (query.to() != null) {
+                        b.queryParam("to", query.to());
+                    }
+                    return b.build();
+                })
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+    }
+
     public EventDetail event(long id) {
         return http.get().uri("/api/events/{id}", id).retrieve().body(EventDetail.class);
+    }
+
+    /** Venues for the event form (event-service; a short list, one page). */
+    public List<Venue> venues() {
+        Page<Venue> page =
+                http.get().uri("/api/venues?size=100&sort=name").retrieve().body(new ParameterizedTypeReference<>() {});
+        return page == null ? List.of() : page.content();
+    }
+
+    /** {@code POST /api/events} with its first sessions, in one transaction; the event starts as DRAFT. */
+    public EventDetail createEvent(Map<String, Object> body) {
+        return http.post()
+                .uri("/api/events")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(EventDetail.class);
+    }
+
+    /** {@code PUT /api/events/{id}} with the version read before editing (409 if someone changed it meanwhile). */
+    public EventDetail updateEvent(long id, Map<String, Object> body) {
+        return http.put()
+                .uri("/api/events/{id}", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(EventDetail.class);
+    }
+
+    public void addSession(long eventId, Map<String, Object> body) {
+        http.post()
+                .uri("/api/events/{id}/sessions", eventId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    public void updateSession(long eventId, long sessionId, Map<String, Object> body) {
+        http.put()
+                .uri("/api/events/{id}/sessions/{sid}", eventId, sessionId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    public void deleteSession(long eventId, long sessionId) {
+        http.delete()
+                .uri("/api/events/{id}/sessions/{sid}", eventId, sessionId)
+                .retrieve()
+                .toBodilessEntity();
     }
 
     public List<Category> categories() {
@@ -228,6 +344,11 @@ public class GatewayClient {
         return binary("/api/passes/{id}/qr/live", passId, MediaType.IMAGE_PNG);
     }
 
+    /** The same live QR as SVG: crisp at any size on the pass card (RL6 cause b). */
+    public Binary liveQrSvg(UUID passId) {
+        return binary("/api/passes/{id}/qr/live?format=svg", passId, MediaType.parseMediaType("image/svg+xml"));
+    }
+
     public Binary ticketPdf(UUID passId) {
         return binary("/api/passes/{id}/ticket.pdf", passId, MediaType.APPLICATION_PDF);
     }
@@ -245,6 +366,52 @@ public class GatewayClient {
 
     public List<Assignment> myAssignments() {
         return http.get().uri("/api/volunteers/me/assignments").retrieve().body(new ParameterizedTypeReference<>() {});
+    }
+
+    public Gate addGate(long eventId, String code, String name) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", code);
+        body.put("name", name == null || name.isBlank() ? null : name.strip());
+        return http.post()
+                .uri("/api/events/{id}/gates", eventId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(Gate.class);
+    }
+
+    public void removeGate(long eventId, long gateId) {
+        http.delete()
+                .uri("/api/events/{id}/gates/{gid}", eventId, gateId)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    public List<Volunteer> eventVolunteers(long eventId) {
+        return http.get()
+                .uri("/api/events/{id}/volunteers", eventId)
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+    }
+
+    /** Assigns a volunteer by email to one gate, or to every gate of the event ({@code gateId} null). */
+    public Volunteer assignVolunteer(long eventId, String email, Long gateId) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("email", email);
+        body.put("gateId", gateId);
+        return http.post()
+                .uri("/api/events/{id}/volunteers", eventId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(Volunteer.class);
+    }
+
+    public void unassignVolunteer(long eventId, UUID volunteerId) {
+        http.delete()
+                .uri("/api/events/{id}/volunteers/{vid}", eventId, volunteerId)
+                .retrieve()
+                .toBodilessEntity();
     }
 
     public List<Gate> gates(long eventId) {
@@ -311,6 +478,76 @@ public class GatewayClient {
         return binary("/api/attendance/events/{id}/export.csv", eventId, MediaType.parseMediaType("text/csv"));
     }
 
+    /** The student's own attendance record and certificate progress ("Stamps"). */
+    public List<MyAttendance> myAttendance() {
+        return http.get().uri("/api/attendance/me").retrieve().body(new ParameterizedTypeReference<>() {});
+    }
+
+    public UserProfile me() {
+        return http.get().uri("/api/users/me").retrieve().body(UserProfile.class);
+    }
+
+    /** Ends every login of this user (all refresh-token families, D7); issued access tokens run out within 15 min. */
+    public void logoutEverywhere() {
+        http.delete().uri("/api/users/me/sessions").retrieve().toBodilessEntity();
+    }
+
+    // ---- admin (Phase 6) ----------------------------------------------------------------------------------------
+
+    /** auth-service's user search (ADMIN): {@code q} matches email, name or register number. */
+    public Page<UserProfile> users(String q, String role, int page) {
+        return http.get()
+                .uri(uri -> {
+                    UriBuilder b = uri.path("/api/users")
+                            .queryParam("page", Math.max(0, page))
+                            .queryParam("size", 20);
+                    if (q != null && !q.isBlank()) {
+                        b.queryParam("q", q.strip());
+                    }
+                    if (role != null && !role.isBlank()) {
+                        b.queryParam("role", role);
+                    }
+                    return b.build();
+                })
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+    }
+
+    public UserProfile user(UUID id) {
+        return http.get().uri("/api/users/{id}", id).retrieve().body(UserProfile.class);
+    }
+
+    /** Replaces the roles (ORGANIZER brings VOLUNTEER, RL11); auth-service also ends the user's sessions. */
+    public UserProfile setRoles(UUID id, java.util.Collection<String> roles) {
+        return http.put()
+                .uri("/api/users/{id}/roles", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("roles", roles))
+                .retrieve()
+                .body(UserProfile.class);
+    }
+
+    public void unlock(UUID id) {
+        http.post().uri("/api/users/{id}/unlock", id).retrieve().toBodilessEntity();
+    }
+
+    public void endSessions(UUID id) {
+        http.delete().uri("/api/users/{id}/sessions", id).retrieve().toBodilessEntity();
+    }
+
+    public KeyRotation rotateAuthKey() {
+        return http.post().uri("/api/auth/keys/rotate").retrieve().body(KeyRotation.class);
+    }
+
+    public KeyRotation rotatePassKey() {
+        return http.post().uri("/api/passes/keys/rotate").retrieve().body(KeyRotation.class);
+    }
+
+    /** The gateway's own health overview (D15): every registered instance. */
+    public List<InstanceHealth> adminHealth() {
+        return http.get().uri("/api/admin/health").retrieve().body(new ParameterizedTypeReference<>() {});
+    }
+
     public SyncResult syncAttendance(long eventId) {
         return http.post()
                 .uri("/api/attendance/events/{id}/sync", eventId)
@@ -343,17 +580,31 @@ public class GatewayClient {
 
     // ---- plumbing --------------------------------------------------------------------------------------------------
 
-    private static ClientHttpResponse addTokenAndCorrelationId(
+    /**
+     * Adds the session's access token (refreshed first when it is about to expire, docs/plans/phase-6.md §7) and the
+     * correlation id. A 401 to a token we sent gets one refresh and one retry; a second 401 means the session is over
+     * ({@link #raise}).
+     */
+    private ClientHttpResponse addTokenAndCorrelationId(
             HttpRequest request, byte[] body, ClientHttpRequestExecution execution) throws IOException {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof PortalUser user) {
-            request.getHeaders().setBearerAuth(user.accessToken());
+        String token = tokens.current();
+        if (token != null) {
+            request.getHeaders().setBearerAuth(token);
         }
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
         if (correlationId != null) {
             request.getHeaders().set(CORRELATION_HEADER, correlationId);
         }
-        return execution.execute(request, body);
+        ClientHttpResponse response = execution.execute(request, body);
+        if (token != null && response.getStatusCode().value() == 401) {
+            String fresh = tokens.afterRejection(token);
+            if (fresh != null && !fresh.equals(token)) {
+                response.close();
+                request.getHeaders().setBearerAuth(fresh);
+                return execution.execute(request, body);
+            }
+        }
+        return response;
     }
 
     record Problem(

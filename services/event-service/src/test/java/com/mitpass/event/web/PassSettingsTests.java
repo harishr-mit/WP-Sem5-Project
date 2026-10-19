@@ -41,7 +41,7 @@ class PassSettingsTests {
     void defaultsAreStaticQrOnAndNoColour() throws Exception {
         long id = create(null, null);
 
-        mvc.perform(get("/api/events/{id}", id))
+        mvc.perform(as(OWNER, get("/api/events/{id}", id)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.staticQrAllowed").value(true))
                 .andExpect(jsonPath("$.passColor").doesNotExist());
@@ -51,7 +51,7 @@ class PassSettingsTests {
     void colourIsStoredUpperCaseAndStaticQrCanBeSwitchedOff() throws Exception {
         long id = create("\"#1d4e89\"", "false");
 
-        mvc.perform(get("/api/events/{id}", id))
+        mvc.perform(as(OWNER, get("/api/events/{id}", id)))
                 .andExpect(jsonPath("$.staticQrAllowed").value(false))
                 .andExpect(jsonPath("$.passColor").value("#1D4E89"));
     }
@@ -135,7 +135,7 @@ class PassSettingsTests {
     }
 
     private String code(long id) throws Exception {
-        String response = mvc.perform(get("/api/events/{id}", id))
+        String response = mvc.perform(as(OWNER, get("/api/events/{id}", id)))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();

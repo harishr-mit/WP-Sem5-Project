@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<!--/* One user (ADMIN): roles, unlock, end sessions. Granting ADMIN shows a confirmation first (pendingRoles). */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=${user.fullName()}, content=~{::main})}">
+<main id="main" class="page page--medium">
+    <a class="back" th:href="@{/admin/users}" th:text="'← ' + #{nav.users}">← Users</a>
+    <div class="pagehead row">
+        <span class="avatar" style="width:3.5rem;height:3.5rem;font-size:1.2rem" th:text="${@fmt.initials(user.fullName())}">PR</span>
+        <div>
+            <h1 class="mb-0" th:text="${user.fullName()}">Priya Raman</h1>
+            <p class="hint mb-0" th:text="${user.email()}">p@x</p>
+        </div>
+    </div>
+    <div th:replace="~{layout :: flash}"></div>
+
+    <!--/* Granting ADMIN: confirm before anything changes. */-->
+    <section class="card card--warn" th:if="${pendingRoles != null}">
+        <h2 class="mt-0" th:text="#{admin.grantAdmin.title(${user.fullName()})}">Make Priya an admin?</h2>
+        <p th:text="#{admin.grantAdmin.text}">Admins can change anyone's roles and every event.</p>
+        <form th:action="@{/admin/users/{id}/roles(id=${user.id()})}" method="post" class="actions">
+            <input type="hidden" name="roles" th:each="r : ${pendingRoles}" th:value="${r}">
+            <input type="hidden" name="confirmed" value="true">
+            <button type="submit" class="btn--danger" th:text="#{admin.grantAdmin.yes}">Yes, make admin</button>
+            <a class="btn btn--ghost" th:href="@{/admin/users/{id}(id=${user.id()})}" th:text="#{common.goBack}">Go back</a>
+        </form>
+    </section>
+
+    <section class="card">
+        <dl class="facts">
+            <dt th:text="#{profile.department}">Department</dt><dd th:text="${user.department()}">CSE</dd>
+            <dt th:text="#{profile.year}">Year</dt><dd th:text="${user.year() != null} ? ${user.year()} : '—'">3</dd>
+            <dt th:text="#{profile.regNo}">Register no.</dt><dd class="mono" th:text="${user.registerNumber() != null} ? ${user.registerNumber()} : '—'">2026509001</dd>
+            <dt th:text="#{registrations.status}">Status</dt>
+            <dd><span class="badge badge--err" th:if="${user.locked()}" th:text="#{admin.locked}">Locked</span>
+                <span class="badge badge--warn" th:if="${!user.emailVerified()}" th:text="#{admin.unverified}">Unverified</span>
+                <span class="badge badge--ok" th:if="${!user.locked() and user.emailVerified()}" th:text="#{admin.active}">Active</span></dd>
+            <dt th:text="#{profile.since}">Member since</dt><dd th:text="${@fmt.when(user.createdAt())}">Fri 9 Oct</dd>
+            <dt th:text="#{admin.lastLogin}">Last login</dt><dd th:text="${user.lastLoginAt() != null} ? ${@fmt.when(user.lastLoginAt())} : '—'">—</dd>
+        </dl>
+    </section>
+
+    <form class="card form" th:action="@{/admin/users/{id}/roles(id=${user.id()})}" method="post">
+        <h3 class="mb-0" th:text="#{profile.roles}">Roles</h3>
+        <div class="checks">
+            <label th:each="r : ${roles}">
+                <input type="checkbox" name="roles" th:value="${r}" th:checked="${user.roles().contains(r)}">
+                <span th:text="#{'role.' + ${r}}">Student</span>
+            </label>
+        </div>
+        <p class="hint mb-0" th:text="#{admin.roles.hint}">Organizers are always volunteers too. Changing roles logs the user out.</p>
+        <div><button type="submit" th:text="#{common.save}">Save</button></div>
+    </form>
+
+    <section class="card actions">
+        <form th:if="${user.locked()}" th:action="@{/admin/users/{id}/unlock(id=${user.id()})}" method="post" class="inline">
+            <button type="submit" class="btn--secondary" th:text="#{admin.unlock}">Unlock</button>
+        </form>
+        <form th:action="@{/admin/users/{id}/sessions/end(id=${user.id()})}" method="post" class="inline">
+            <button type="submit" class="btn--secondary" data-open-dialog="end-sessions" th:text="#{admin.endSessions}">End all sessions</button>
+        </form>
+        <dialog class="confirm" id="end-sessions" aria-labelledby="end-sessions-title">
+            <form th:action="@{/admin/users/{id}/sessions/end(id=${user.id()})}" method="post">
+                <input type="hidden" name="confirmed" value="true">
+                <div class="confirm__body">
+                    <h2 id="end-sessions-title" th:text="#{admin.endSessions.title(${user.fullName()})}">End every session?</h2>
+                    <p class="mb-0" th:text="#{admin.endSessions.text}">They have to log in again everywhere.</p>
+                </div>
+                <div class="confirm__foot">
+                    <button type="button" class="btn--ghost" data-close-dialog th:text="#{common.goBack}">Go back</button>
+                    <button type="submit" class="btn--danger" th:text="#{admin.endSessions}">End all sessions</button>
+                </div>
+            </form>
+        </dialog>
+    </section>
+</main>
+</html>

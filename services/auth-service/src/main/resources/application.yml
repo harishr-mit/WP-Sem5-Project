@@ -48,6 +48,9 @@ management:
     web:
       exposure:
         include: health,info
+  endpoint:
+    health:
+      show-components: always   # names and status for the admin health page (D15); details stay hidden
   health:
     mail:
       enabled: false   # Mailpit being down must not mark the service DOWN; sending is best-effort (after commit)
@@ -82,8 +85,8 @@ mitpass:
     lockout:
       max-attempts: 5
       duration: 15m
-    # P6 points this at a web-portal page instead.
-    verify-link: ${MITPASS_VERIFY_LINK:http://localhost:8080/api/auth/verify-email?token={token}}
+    # The email opens the portal's page, which confirms with POST /api/auth/verify-email (Phase 6, D9 row).
+    verify-link: ${MITPASS_VERIFY_LINK:http://localhost:8090/verify-email?token={token}}
     mail-from: "MITPass <no-reply@mitpass.test>"
     # Service tokens for background jobs (docs/plans/phase-5.md §4b). Dev secrets only: set the variables anywhere real.
     service:

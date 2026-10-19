@@ -35,6 +35,7 @@ import com.mitpass.portal.client.ApiModels.PassLookup;
 import com.mitpass.portal.client.ApiModels.ScanAnswer;
 import com.mitpass.portal.client.ApiModels.SessionCount;
 import com.mitpass.portal.client.ApiModels.SyncResult;
+import com.mitpass.portal.client.ApiProblemException;
 import com.mitpass.portal.client.GatewayClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -98,7 +99,7 @@ class ScanPagesTest {
         given(gateway.events(null, null, organizerOnly.id(), 0))
                 .willReturn(new Page<>(
                         List.of(new com.mitpass.portal.client.ApiModels.EventSummary(
-                                7L, "RANG26", "Rangoli", null, null, null, null, null, null, null, null)),
+                                7L, "RANG26", "Rangoli", null, null, null, null, null, null, null, null, null)),
                         0,
                         20,
                         1,
@@ -137,8 +138,9 @@ class ScanPagesTest {
         mvc.perform(get("/scan")
                         .with(authentication(TestTokens.login(volunteer)))
                         .flashAttr("result", accepted))
-                .andExpect(content().string(containsString("scan-result green")))
-                .andExpect(content().string(containsString("Welcome, Priya Raman.")))
+                .andExpect(content().string(containsString("result result--green")))
+                .andExpect(content().string(containsString("Admitted")))
+                .andExpect(content().string(containsString("Priya Raman")))
                 .andExpect(content().string(not(containsString(TOKEN))))
                 .andExpect(content().string(not(containsString(TestTokens.ACCESS))));
     }
@@ -150,8 +152,154 @@ class ScanPagesTest {
         mvc.perform(get("/scan")
                         .with(authentication(TestTokens.login(volunteer)))
                         .flashAttr("result", refused))
-                .andExpect(content().string(containsString("scan-result amber")))
-                .andExpect(content().string(containsString("ALREADY_CHECKED_IN")));
+                .andExpect(content().string(containsString("result result--amber")))
+                .andExpect(content().string(containsString("ALREADY_CHECKED_IN")))
+                .andExpect(content().string(containsString("Already in")));
+    }
+
+    // ---- P6: the camera page's HTMX endpoints (docs/plans/phase-6.md §8) -----------------------------------------
+
+    @Test
+    void theScannerPageHasTheCameraAndStillWorksWithoutJavaScript() throws Exception {
+        mvc.perform(get("/scan").with(authentication(TestTokens.login(volunteer))))
+                .andExpect(content().string(containsString("id=\"reader\"")))
+                .andExpect(content().string(containsString("html5-qrcode")))
+                .andExpect(content().string(containsString("/js/scanner")))
+                .andExpect(content().string(containsString("data-repeat-ignore-ms=\"3000\"")))
+                // the manual form posts to /scan when JavaScript is off
+                .andExpect(content().string(containsString("action=\"/scan\"")))
+                // fragment definitions are not rendered on the page itself
+                .andExpect(content().string(not(containsString("Couldn&#39;t check"))));
+    }
+
+    /**
+     * Found in the two-phone demo (2026-10-19): the camera couldn't read a dense code off another phone's screen. The
+     * scanner asks for a sharp image (high resolution, continuous focus), uses the browser's own detector where there
+     * is one, and offers zoom so the phone can stay far enough away to focus.
+     */
+    @Test
+    void theCameraAsksForASharpImageAndOffersZoom() throws Exception {
+        mvc.perform(get("/scan").with(authentication(TestTokens.login(volunteer))))
+                .andExpect(content().string(containsString("id=\"camera-zoom\"")))
+                .andExpect(content().string(containsString(">Zoom<")))
+                .andExpect(content().string(containsString("20–30 cm")));
+        mvc.perform(get("/js/scanner.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("useBarCodeDetectorIfSupported: true")))
+                .andExpect(content().string(containsString("focusMode")))
+                .andExpect(content().string(containsString("aspectRatio: { ideal: 1 }")))
+                // html5-qrcode shrinks each frame to the box's on-screen size; the native detector reads the full video
+                .andExpect(content().string(containsString("detector.detect(video)")))
+                .andExpect(content().string(containsString("Html5QrcodeSupportedFormats.QR_CODE")));
+    }
+
+    @Test
+    void aCameraReadAnswersTheCardAndTheFlashColour() throws Exception {
+        ScanAnswer accepted = answer("ACCEPTED", "GREEN", "Welcome, Priya Raman.");
+        given(gateway.scan(eq(TOKEN), isNull(), eq(11L), eq("web-0a1b2c3d"), eq("IN")))
+                .willReturn(accepted);
+
+        mvc.perform(post("/scan/submit")
+                        .with(authentication(TestTokens.login(volunteer)))
+                        .with(csrf())
+                        .header("HX-Request", "true")
+                        .param("token", TOKEN)
+                        .param("gateId", "11")
+                        .param("mode", "IN")
+                        .param("deviceId", "web-0a1b2c3d"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("HX-Trigger", containsString("\"color\":\"green\"")))
+                .andExpect(content().string(containsString("Admitted")))
+                .andExpect(content().string(containsString("Scan next")))
+                .andExpect(content().string(not(containsString("<html"))))
+                .andExpect(content().string(not(containsString(TOKEN))));
+    }
+
+    @Test
+    void aDeviceIdThatIsNotPlainIsReplacedByTheSessionOne() throws Exception {
+        given(gateway.scan(eq(TOKEN), isNull(), eq(11L), anyString(), eq("IN")))
+                .willReturn(answer("ACCEPTED", "GREEN", "ok"));
+
+        mvc.perform(post("/scan/submit")
+                        .with(authentication(TestTokens.login(volunteer)))
+                        .with(csrf())
+                        .param("token", TOKEN)
+                        .param("gateId", "11")
+                        .param("deviceId", "<script>"))
+                .andExpect(status().isOk());
+        verify(gateway)
+                .scan(eq(TOKEN), isNull(), eq(11L), org.mockito.ArgumentMatchers.startsWith("portal-"), eq("IN"));
+    }
+
+    @Test
+    void aRefusalIsARedFlashNotAnError() throws Exception {
+        given(gateway.scan(eq(TOKEN), isNull(), eq(11L), anyString(), eq("IN")))
+                .willReturn(answer("REVOKED", "RED", "This pass was revoked."));
+
+        mvc.perform(post("/scan/submit")
+                        .with(authentication(TestTokens.login(volunteer)))
+                        .with(csrf())
+                        .param("token", TOKEN)
+                        .param("gateId", "11"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("HX-Trigger", containsString("\"color\":\"red\"")))
+                .andExpect(content().string(containsString("result result--red")))
+                .andExpect(content().string(containsString("Send them to the help desk")));
+    }
+
+    @Test
+    void anApiProblemBecomesARedCardWithItsMessage() throws Exception {
+        given(gateway.scan(eq(TOKEN), isNull(), eq(11L), anyString(), eq("IN")))
+                .willThrow(new ApiProblemException(
+                        400, "urn:mitpass:problem:validation", "gateId is unknown", null, null));
+
+        mvc.perform(post("/scan/submit")
+                        .with(authentication(TestTokens.login(volunteer)))
+                        .with(csrf())
+                        .param("token", TOKEN)
+                        .param("gateId", "11"))
+                .andExpect(header().string("HX-Trigger", containsString("ERROR")))
+                .andExpect(content().string(containsString("gateId is unknown")));
+    }
+
+    @Test
+    void theManualTabLooksANumberUpAndScansAPastedToken() throws Exception {
+        PassLookup found =
+                new PassLookup(NUMBER, "Priya Raman", "VALID", "NOT_ARRIVED", "TECHFEST26", "MAIN", 0L, null);
+        given(gateway.lookup(eq(NUMBER), eq(11L), anyString())).willReturn(new LookupAnswer(found, null));
+        given(gateway.scan(eq(TOKEN), isNull(), eq(11L), anyString(), eq("OUT")))
+                .willReturn(answer("CHECKED_OUT", "GREEN", "Bye"));
+
+        mvc.perform(post("/scan/check")
+                        .with(authentication(TestTokens.login(volunteer)))
+                        .with(csrf())
+                        .param("code", " " + NUMBER + " ")
+                        .param("gateId", "11"))
+                .andExpect(content().string(containsString("Is this the person?")))
+                .andExpect(content().string(containsString("Confirm check-in")))
+                .andExpect(content().string(containsString("value=\"" + NUMBER + "\"")));
+        mvc.perform(post("/scan/check")
+                        .with(authentication(TestTokens.login(volunteer)))
+                        .with(csrf())
+                        .param("code", TOKEN)
+                        .param("gateId", "11")
+                        .param("mode", "OUT"))
+                .andExpect(content().string(containsString("Checked out")));
+    }
+
+    @Test
+    void theScanEndpointsNeedCsrfAndAScannerRole() throws Exception {
+        mvc.perform(post("/scan/submit")
+                        .with(authentication(TestTokens.login(volunteer)))
+                        .param("token", TOKEN)
+                        .param("gateId", "11"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/scan/submit")
+                        .with(authentication(TestTokens.login(TestTokens.user("STUDENT"))))
+                        .with(csrf())
+                        .param("token", TOKEN)
+                        .param("gateId", "11"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -249,6 +397,7 @@ class ScanPagesTest {
                         1,
                         1));
         given(gateway.certificates(1L)).willReturn(List.of());
+        given(gateway.event(1L)).willReturn(PortalPagesTest.detail(1, List.of(), "LIVE", List.of()));
         given(gateway.attendanceCsv(1L))
                 .willReturn(new Binary(
                         "\"passNumber\"\r\n".getBytes(StandardCharsets.UTF_8),
@@ -257,9 +406,20 @@ class ScanPagesTest {
 
         mvc.perform(get("/organizer/events/1/attendance").with(authentication(TestTokens.login(organizer))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("66.7")))
+                .andExpect(content().string(containsString("67% of valid passes")))
                 .andExpect(content().string(containsString(NUMBER)))
-                .andExpect(content().string(containsString("Export CSV")));
+                .andExpect(content().string(containsString("Export attendance CSV")))
+                // the manual sync is an admin tool only (D14)
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("Sync passes now"))));
+        mvc.perform(get("/organizer/events/1/attendance")
+                        .with(authentication(TestTokens.login(TestTokens.user("ADMIN")))))
+                .andExpect(content().string(containsString("Sync passes now")));
+        // Refresh (HTMX) gets only the board
+        mvc.perform(get("/organizer/events/1/attendance")
+                        .with(authentication(TestTokens.login(organizer)))
+                        .header("HX-Request", "true"))
+                .andExpect(content().string(containsString("id=\"attendance\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("<html"))));
         mvc.perform(get("/organizer/events/1/attendance.csv").with(authentication(TestTokens.login(organizer))))
                 .andExpect(status().isOk())
                 .andExpect(header().string(

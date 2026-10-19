@@ -25,6 +25,7 @@ public interface EventMapper {
     @Mapping(target = "categoryName", source = "category.name")
     @Mapping(target = "venueId", source = "venue.id")
     @Mapping(target = "venueName", source = "venue.name")
+    @Mapping(target = "allowedTransitions", expression = "java(java.util.List.copyOf(event.getStatus().manualNext()))")
     EventSummaryResponse toSummary(Event event);
 
     @Mapping(target = "allowedTransitions", expression = "java(java.util.List.copyOf(event.getStatus().manualNext()))")

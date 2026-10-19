@@ -25,7 +25,10 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        MDC.put(MDC_KEY, "portal-" + UUID.randomUUID());
+        String correlationId = "portal-" + UUID.randomUUID();
+        MDC.put(MDC_KEY, correlationId);
+        // Error pages render in a later ERROR dispatch, after the MDC is cleared: they read it from the request.
+        request.setAttribute(MDC_KEY, correlationId);
         try {
             chain.doFilter(request, response);
         } finally {

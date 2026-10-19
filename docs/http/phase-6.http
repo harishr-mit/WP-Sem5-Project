@@ -1,0 +1,111 @@
+# Phase 6 demo requests (docs/plans/phase-6.md). Most of Phase 6 is the web portal: open http://localhost:8090
+# (or https://<laptop-ip>:8443 with the lan profile, README "Phone demo"). These are the API changes behind it.
+# Run with the VS Code REST Client or IntelliJ's HTTP client, top to bottom.
+
+@gw = http://localhost:8080
+
+### --- log in ------------------------------------------------------------------------------------------------------
+
+# @name organizer
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "organizer.a@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name organizerB
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "organizer.b@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name admin
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "admin@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name priya
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "2026509001@student.annauniv.edu", "password": "Passw0rd!"}
+
+### --- 1. Automatic refresh: what the portal does when the access token is about to expire -------------------------
+
+### 200 New access + refresh token; the old refresh token is spent (rotation, D7)
+# @name refreshed
+POST {{gw}}/api/auth/refresh
+Content-Type: application/json
+
+{"refreshToken": "{{priya.response.body.refreshToken}}"}
+
+### 401 refresh-token-reused: the same old token again ends the whole login. The portal's per-session lock
+### (docs/plans/phase-6.md §7) makes sure parallel page requests never do this.
+POST {{gw}}/api/auth/refresh
+Content-Type: application/json
+
+{"refreshToken": "{{priya.response.body.refreshToken}}"}
+
+### --- 2. Draft events are private to their organizer and admins (owner decision Q12, D15) ------------------------
+
+### 201 A new event starts as DRAFT
+# @name draft
+POST {{gw}}/api/events
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"code": "DRAFTDEMO1", "title": "Draft demo", "categoryId": 1, "venueId": 1, "capacity": 10,
+ "startsAt": "2099-12-14T03:30:00Z", "endsAt": "2099-12-14T09:30:00Z",
+ "registrationOpensAt": "2099-11-01T03:30:00Z", "registrationClosesAt": "2099-12-13T12:30:00Z",
+ "eligibleDepartments": [], "minYear": null, "maxYear": null}
+
+### 404 for anyone else (no token)
+GET {{gw}}/api/events/{{draft.response.body.id}}
+
+### 404 for another organizer
+GET {{gw}}/api/events/{{draft.response.body.id}}
+Authorization: Bearer {{organizerB.response.body.accessToken}}
+
+### 200 for its organizer; the catalogue lists it only for them and admins
+GET {{gw}}/api/events/{{draft.response.body.id}}
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### 200 The organizer's list carries allowedTransitions per event (one call for "My events", D9 row)
+GET {{gw}}/api/events?organizerId=00000000-0000-4000-8000-000000000002&size=100
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### --- 3. The verification link now opens the portal ------------------------------------------------------------
+
+### Sign up, then open Mailpit (http://localhost:8025): the link is http://localhost:8090/verify-email?token=…
+### The portal page shows a button; pressing it sends this (the GET alone spends nothing):
+POST {{gw}}/api/auth/verify-email
+Content-Type: application/json
+
+{"token": "paste-the-token-from-the-email"}
+
+### --- 4. Admin: system health through the gateway (owner decision Q3, D15) ---------------------------------------
+
+### 200 Every registered instance with status and component names; one that doesn't answer in 2 s is DOWN
+GET {{gw}}/api/admin/health
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+### 403 problem forbidden: ADMIN only (the gateway owns this one rule)
+GET {{gw}}/api/admin/health
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### 401 without a token
+GET {{gw}}/api/admin/health
+
+### --- 5. The pass card's QR as SVG (endpoint from Phase 4; the portal now passes it through, crisp at any size) ---
+
+### 200 image/svg+xml (or 409 code-locked before the code unlocks 2 h before doors open)
+# @name passes
+GET {{gw}}/api/passes/me
+Authorization: Bearer {{priya.response.body.accessToken}}
+
+###
+GET {{gw}}/api/passes/{{passes.response.body.content[0].id}}/qr/live?format=svg
+Authorization: Bearer {{priya.response.body.accessToken}}

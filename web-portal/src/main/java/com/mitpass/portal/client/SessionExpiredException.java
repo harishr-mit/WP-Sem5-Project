@@ -1,8 +1,8 @@
 package com.mitpass.portal.client;
 
 /**
- * The gateway rejected the session's access token (401). In the P3 slice the user logs in again; P6 refreshes the
- * token automatically (docs/DECISIONS.md D9).
+ * The session can't go on: the gateway rejected the access token even after a refresh, or auth-service refused the
+ * refresh token (expired, revoked, reused). The user logs in again (docs/plans/phase-6.md §7).
  */
 public class SessionExpiredException extends RuntimeException {
 

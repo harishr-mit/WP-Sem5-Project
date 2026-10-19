@@ -14,7 +14,9 @@ endpoint get 401, logged-in callers without the right role get 403.
 The gateway in front of both adds its own pre-check (no token or a bad token → 401 at the edge, public paths pass):
 see `platform/api-gateway/.../EdgeSecurityTest`.
 
-Last generated: 2026-10-16 (Phase 5), 410 / 410 cells as expected (auth-service 90, event-service 168, pass-service 88, checkin-service 64). Since Phase 5 a 5xx in any cell fails the matrix (it would hide whether security let the call through).
+Last generated: 2026-10-18 (Phase 6), 410 / 410 cells as expected (auth-service 90, event-service 168, pass-service 88, checkin-service 64), plus the gateway's own admin endpoint below. Since Phase 5 a 5xx in any cell fails the matrix (it would hide whether security let the call through).
+
+**Draft events (Phase 6, owner decision Q12, D15):** the event in event-service's matrix is a DRAFT, so `GET /api/events/{id}` and `/sessions` answer 404 to everyone except its organizer (the owner column) and admins. 404 is the business answer "no such event" (a 403 would confirm that the draft exists), so those cells count as allowed.
 
 pass-service separates the holder from other students: QR codes, tokens and the PDF are for the holder only (D12), so
 even the event's organizer and admins get 403 there.
@@ -56,11 +58,11 @@ pipeline's first step (`403 scan/unauthorized-scanner`, a business answer), so t
 | Endpoint | Rule | anonymous | student | volunteer | organizer (owner) | organizer (other) | admin |
 |---|---|---|---|---|---|---|---|
 | `GET /api/events` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
-| `GET /api/events/{id}` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `GET /api/events/{id}` | public | ✅ 404 | ✅ 404 | ✅ 404 | ✅ 200 | ✅ 404 | ✅ 200 |
 | `POST /api/events` | organizer (owner), organizer (other), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 201 | ✅ 201 |
 | `PUT /api/events/{id}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
 | `DELETE /api/events/{id}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 409 | ✅ 403 | ✅ 409 |
-| `GET /api/events/{id}/sessions` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `GET /api/events/{id}/sessions` | public | ✅ 404 | ✅ 404 | ✅ 404 | ✅ 200 | ✅ 404 | ✅ 200 |
 | `POST /api/events/{id}/sessions` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 403 | ✅ 201 |
 | `PUT /api/events/{id}/sessions/{sid}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
 | `DELETE /api/events/{id}/sessions/{sid}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 204 | ✅ 403 | ✅ 204 |
@@ -118,3 +120,12 @@ pipeline's first step (`403 scan/unauthorized-scanner`, a business answer), so t
 | `GET /api/attendance/me` | any logged-in user | ✅ 401 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
 
 64 / 64 cells as expected.
+
+### api-gateway (its own endpoints)
+
+The gateway only pre-checks tokens for everything it routes (see above). Phase 6 gave it one endpoint of its own, the admin
+health overview (D15), so here the gateway owns the role rule. Measured by `AdminHealthTest` and `EdgeSecurityTest`.
+
+| Endpoint | Rule | anonymous | student | organizer | admin |
+|---|---|---|---|---|---|
+| `GET /api/admin/health` | ADMIN | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 |

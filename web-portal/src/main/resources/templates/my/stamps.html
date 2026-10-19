@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<!--/* Stamps (mockup screen 4, lower half): a stamp per event the student was admitted to, and certificate progress
+     for multi-session events (checkin-service GET /api/attendance/me). */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{nav.stamps}, content=~{::main})}">
+<main id="main" class="page page--medium">
+    <div class="pagehead">
+        <p class="eyebrow" th:text="#{stamps.eyebrow}">Attendance record</p>
+        <h1 th:text="#{stamps.title(${stamped.size()})}">6 stamps</h1>
+        <p class="lead" th:text="#{stamps.lead}">A stamp is added the moment a volunteer scans your pass at the gate.</p>
+    </div>
+
+    <div class="stamps" th:if="${!stamped.isEmpty()}">
+        <div class="stamp" th:each="a : ${stamped}">
+            <div class="stamp__word" th:text="#{stamps.admitted}">ADMITTED</div>
+            <p class="stamp__event" th:text="${a.eventTitle()}">HackNight 26</p>
+            <div class="stamp__when" th:text="${@fmt.shortWhen(a.firstCheckIn())}">Sat 17 Oct, 09:02</div>
+        </div>
+    </div>
+    <div class="empty card" th:if="${stamped.isEmpty()}">
+        <strong th:text="#{stamps.empty}">No stamps yet</strong>
+        <span th:text="#{stamps.empty.text}">Your first one appears when you're scanned in at an event.</span>
+    </div>
+
+    <th:block th:if="${!certificates.isEmpty()}">
+        <h2 th:text="#{stamps.certificates}">Certificates</h2>
+        <div class="grid grid--2">
+            <section class="card" th:each="c : ${certificates}">
+                <div class="spread">
+                    <strong th:text="${c.eventTitle()}">Dev Skills</strong>
+                    <span class="badge" th:classappend="${c.certificateEligible()} ? 'badge--ok' : 'badge--warn'"
+                          th:text="${c.certificateEligible()} ? #{stamps.cert.earned} : #{stamps.cert.progress(${c.sessionsAttended()}, ${c.sessionsRequired()})}">2 / 3</span>
+                </div>
+                <div class="progress mt-4" role="progressbar" th:aria-valuenow="${c.sessionsAttended()}"
+                     aria-valuemin="0" th:aria-valuemax="${c.sessionsRequired()}">
+                    <span th:style="|width:${c.progressPercent()}%|"></span>
+                </div>
+                <p class="hint mb-0 mt-4" th:text="${c.certificateEligible()} ? #{stamps.cert.done} : #{stamps.cert.todo(${c.sessionsRequired() - c.sessionsAttended()})}">Attend 1 more session to earn it.</p>
+            </section>
+        </div>
+    </th:block>
+</main>
+</html>

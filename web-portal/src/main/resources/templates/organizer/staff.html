@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<!--/* Gates and volunteers of one event: two form objects on one page (gateForm, assignForm), each with its own errors. */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{org.tab.staff} + ' · ' + ${event.title()}, content=~{::main})}">
+<main id="main" class="page">
+    <div th:replace="~{organizer/nav :: eventHead(${event}, 'staff')}"></div>
+    <div th:replace="~{layout :: flash}"></div>
+
+    <div class="grid grid--2">
+        <section class="card">
+            <h2 class="mt-0" th:text="#{staff.gates}">Gates</h2>
+            <ul class="stack" style="list-style:none;padding:0;margin:0" th:if="${!gates.isEmpty()}">
+                <li class="spread" th:each="g : ${gates}">
+                    <span><strong class="mono" th:text="${g.code()}">MAIN</strong>
+                        <span class="hint" th:if="${g.name() != null}" th:text="' · ' + ${g.name()}">· Main Gate</span></span>
+                    <form th:action="@{/organizer/events/{id}/gates/{gid}/delete(id=${event.id()},gid=${g.id()})}" method="post" class="inline">
+                        <button type="submit" class="btn--ghost btn--small" th:text="#{staff.remove}">Remove</button>
+                    </form>
+                </li>
+            </ul>
+            <p class="hint" th:if="${gates.isEmpty()}" th:text="#{staff.noGates}">No gates yet. Add the first one below.</p>
+
+            <form th:action="@{/organizer/events/{id}/gates(id=${event.id()})}" th:object="${gateForm}" method="post"
+                  class="form mt-5" novalidate>
+                <h3 class="mb-0" th:text="#{staff.addGate}">Add a gate</h3>
+                <div class="flash flash--err" th:if="${#fields.hasGlobalErrors()}" role="alert">
+                    <p th:each="e : ${#fields.globalErrors()}" th:text="${e}">Error</p>
+                </div>
+                <div class="form__row form__row--2">
+                    <div class="field" th:classappend="${#fields.hasErrors('code')} ? 'field--error'">
+                        <label for="gate-code" th:text="#{staff.gateCode}">Code</label>
+                        <input id="gate-code" th:field="*{code}" class="mono" maxlength="16" placeholder="MAIN">
+                        <span class="field-error" th:if="${#fields.hasErrors('code')}" th:errors="*{code}">error</span>
+                    </div>
+                    <div class="field" th:classappend="${#fields.hasErrors('name')} ? 'field--error'">
+                        <label for="gate-name" th:text="#{staff.gateName}">Name</label>
+                        <input id="gate-name" th:field="*{name}" maxlength="80" th:placeholder="#{staff.gateName.example}">
+                        <span class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}">error</span>
+                    </div>
+                </div>
+                <button type="submit" class="btn--secondary" th:text="#{staff.addGate}">Add a gate</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2 class="mt-0" th:text="#{org.tab.staff}">Volunteers</h2>
+            <ul class="stack" style="list-style:none;padding:0;margin:0" th:if="${!volunteers.isEmpty()}">
+                <li class="spread" th:each="v : ${volunteers}">
+                    <span class="row">
+                        <span class="avatar" th:text="${@fmt.initials(v.volunteerName())}">KS</span>
+                        <span><strong th:text="${v.volunteerName()}">Karthik Selvam</strong><br>
+                            <small class="hint" th:text="${v.volunteerEmail()}">volunteer@mitpass.test</small><br>
+                            <span class="badge badge--info" th:text="${v.gate() != null} ? ${v.gate().code()} : #{staff.anyGate}">MAIN</span></span>
+                    </span>
+                    <form th:action="@{/organizer/events/{id}/volunteers/{vid}/delete(id=${event.id()},vid=${v.volunteerId()})}" method="post" class="inline">
+                        <button type="submit" class="btn--ghost btn--small" th:text="#{staff.remove}">Remove</button>
+                    </form>
+                </li>
+            </ul>
+            <p class="hint" th:if="${volunteers.isEmpty()}" th:text="#{staff.noVolunteers}">Nobody assigned yet.</p>
+
+            <form th:action="@{/organizer/events/{id}/volunteers(id=${event.id()})}" th:object="${assignForm}" method="post"
+                  class="form mt-5" novalidate>
+                <h3 class="mb-0" th:text="#{staff.assign}">Assign a volunteer</h3>
+                <div class="flash flash--err" th:if="${#fields.hasGlobalErrors()}" role="alert">
+                    <p th:each="e : ${#fields.globalErrors()}" th:text="${e}">Error</p>
+                </div>
+                <div class="field" th:classappend="${#fields.hasErrors('email')} ? 'field--error'">
+                    <label for="assign-email" th:text="#{staff.email}">Their email</label>
+                    <input id="assign-email" type="email" th:field="*{email}" autocomplete="off">
+                    <span class="field__hint" th:text="#{staff.email.hint}">The account must have the volunteer role.</span>
+                    <span class="field-error" th:if="${#fields.hasErrors('email')}" th:errors="*{email}">error</span>
+                </div>
+                <div class="field">
+                    <label for="assign-gate" th:text="#{staff.gate}">Gate</label>
+                    <select id="assign-gate" th:field="*{gateId}">
+                        <option value="" th:text="#{staff.anyGate}">Any gate</option>
+                        <option th:each="g : ${gates}" th:value="${g.id()}" th:text="${g.code()}">MAIN</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn--secondary" th:text="#{staff.assign}">Assign</button>
+            </form>
+        </section>
+    </div>
+</main>
+</html>

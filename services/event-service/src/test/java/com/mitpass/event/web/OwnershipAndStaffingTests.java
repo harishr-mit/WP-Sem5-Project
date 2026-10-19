@@ -84,6 +84,9 @@ class OwnershipAndStaffingTests {
 
     @Test
     void readingTheCatalogueNeedsNoToken() throws Exception {
+        // A draft is only for its organizer (DraftVisibilityTests); once published anyone may read it.
+        mvc.perform(as(A, post("/api/events/{id}/transitions", eventId)).content("{\"to\":\"PUBLISHED\"}"))
+                .andExpect(status().isOk());
         mvc.perform(get("/api/events/{id}", eventId)).andExpect(status().isOk());
         mvc.perform(get("/api/events").param("organizerId", ORGANIZER_A.toString()))
                 .andExpect(status().isOk())

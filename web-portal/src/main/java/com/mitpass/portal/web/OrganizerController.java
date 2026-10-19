@@ -1,17 +1,18 @@
 package com.mitpass.portal.web;
 
-import com.mitpass.portal.auth.PortalUser;
 import com.mitpass.portal.client.ApiModels.EventDetail;
-import com.mitpass.portal.client.ApiModels.EventSummary;
 import com.mitpass.portal.client.ApiModels.Pass;
 import com.mitpass.portal.client.ApiModels.Registration;
 import com.mitpass.portal.client.ApiProblemException;
 import com.mitpass.portal.client.GatewayClient;
+import com.mitpass.portal.web.support.Htmx;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,46 +22,75 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
- * The organizer's "My events" with one button per allowed lifecycle move. The buttons come straight from the event's
- * {@code allowedTransitions}, so the page can't offer an illegal move (and never LIVE: only the scheduler starts an
- * event, D10).
+ * An organizer's actions on one event: lifecycle moves (only those in the event's {@code allowedTransitions}, so never
+ * LIVE: only the scheduler starts an event, D10; critical ones confirmed first, RL9), and the registrations with their
+ * passes and the revoke action. The list and the event form are in {@link OrganizerEventsController}.
  */
 @Controller
 public class OrganizerController {
 
     private final GatewayClient gateway;
     private final LifecycleActions actions;
+    private final DisplayFormat fmt;
+    private final MessageSource messages;
 
-    public OrganizerController(GatewayClient gateway, LifecycleActions actions) {
+    public OrganizerController(
+            GatewayClient gateway, LifecycleActions actions, DisplayFormat fmt, MessageSource messages) {
         this.gateway = gateway;
         this.actions = actions;
+        this.fmt = fmt;
+        this.messages = messages;
     }
 
-    @GetMapping("/organizer/events")
-    public String myEvents(@AuthenticationPrincipal PortalUser user, Model model) {
-        List<EventSummary> mine = gateway.events(null, null, user.id(), 0).content();
-        // One detail call per event for its allowed moves: fine for a slice (a page holds at most 20 events).
-        List<EventDetail> details =
-                mine.stream().map(e -> gateway.event(e.id())).toList();
-        model.addAttribute("events", details);
-        return "organizer/events";
+    private String msg(String key, Object... args) {
+        return messages.getMessage(key, args, LocaleContextHolder.getLocale());
     }
 
     /**
-     * The event's registrations with each one's pass and a revoke button (docs/plans/phase-4.md §10). Registrations
-     * come from event-service and passes from pass-service, joined here by registration id.
+     * The event's registrations with each one's pass and a revoke action (docs/plans/phase-4.md §10, restyled in P6).
+     * Registrations come from event-service and passes from pass-service, joined here by registration id. {@code q}
+     * filters by name, email or pass number; HTMX gets only the rows.
      */
     @GetMapping("/organizer/events/{id}/registrations")
-    public String registrations(@PathVariable long id, Model model) {
-        EventDetail event = gateway.event(id);
+    public String registrations(
+            @PathVariable long id, @RequestParam(required = false) String q, HttpServletRequest request, Model model) {
         Map<UUID, Pass> passes = gateway.eventPasses(id).content().stream()
                 .collect(Collectors.toMap(Pass::registrationId, pass -> pass, (a, b) -> a));
-        List<Row> rows = gateway.eventRegistrations(id).content().stream()
+        List<Row> all = gateway.eventRegistrations(id).content().stream()
                 .map(registration -> new Row(registration, passes.get(registration.id())))
                 .toList();
-        model.addAttribute("event", event);
+        String needle = q == null ? "" : q.strip().toLowerCase(java.util.Locale.ROOT);
+        List<Row> rows = needle.isEmpty()
+                ? all
+                : all.stream().filter(r -> r.matches(needle)).toList();
         model.addAttribute("rows", rows);
+        model.addAttribute("q", q);
+        if (Htmx.isPartial(request)) {
+            return "organizer/registrations :: rows";
+        }
+        model.addAttribute("event", gateway.event(id));
+        model.addAttribute("counts", Counts.of(all));
         return "organizer/registrations";
+    }
+
+    /** The four tiles above the table (UI reference screen 7, "Registrations" panel). */
+    public record Counts(long confirmed, long waitlisted, long cancelled, long revoked) {
+        static Counts of(List<Row> rows) {
+            return new Counts(
+                    rows.stream()
+                            .filter(r -> "CONFIRMED".equals(r.registration().status()))
+                            .count(),
+                    rows.stream()
+                            .filter(r -> "WAITLISTED".equals(r.registration().status()))
+                            .count(),
+                    rows.stream()
+                            .filter(r -> "CANCELLED".equals(r.registration().status()))
+                            .count(),
+                    rows.stream()
+                            .filter(r -> r.pass() != null
+                                    && "REVOKED".equals(r.pass().status()))
+                            .count());
+        }
     }
 
     /** RL9: revoking can't be undone, so the first click only asks (PRG to the confirmation page). */
@@ -80,7 +110,7 @@ public class OrganizerController {
         }
         try {
             Pass pass = gateway.revokePass(passId, note);
-            redirect.addFlashAttribute("message", "Pass %s is now %s.".formatted(pass.passNumber(), pass.status()));
+            redirect.addFlashAttribute("message", msg("revoke.done", pass.passNumber(), fmt.state(pass.status())));
         } catch (ApiProblemException ex) {
             redirect.addFlashAttribute("error", ex.getMessage());
         }
@@ -100,7 +130,18 @@ public class OrganizerController {
     }
 
     /** One line of the registrations table; {@code pass} is null until pass-service has issued it (or never). */
-    public record Row(Registration registration, Pass pass) {}
+    public record Row(Registration registration, Pass pass) {
+
+        boolean matches(String needle) {
+            return contains(registration.userName(), needle)
+                    || contains(registration.userEmail(), needle)
+                    || (pass != null && contains(pass.passNumber(), needle));
+        }
+
+        private static boolean contains(String value, String needle) {
+            return value != null && value.toLowerCase(java.util.Locale.ROOT).contains(needle);
+        }
+    }
 
     /**
      * A lifecycle move. Critical ones (cancel, end, undo start: RL9) first go to a confirmation page; cancelling also
@@ -120,14 +161,13 @@ public class OrganizerController {
                 return confirmPage;
             }
             if (actions.needsCode(to) && (code == null || !code.strip().equalsIgnoreCase(current.code()))) {
-                redirect.addFlashAttribute(
-                        "error", "Type the event code %s exactly to cancel the event.".formatted(current.code()));
+                redirect.addFlashAttribute("error", msg("lifecycle.typeCode", current.code()));
                 return confirmPage;
             }
         }
         try {
             EventDetail event = gateway.transition(id, to);
-            redirect.addFlashAttribute("message", "%s is now %s.".formatted(event.title(), event.status()));
+            redirect.addFlashAttribute("message", msg("lifecycle.done", event.title(), fmt.state(event.status())));
         } catch (ApiProblemException ex) {
             redirect.addFlashAttribute("error", ex.getMessage());
         }

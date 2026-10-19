@@ -3,6 +3,7 @@ package com.mitpass.portal.config;
 import com.mitpass.portal.auth.GatewayAuthenticationProvider;
 import com.mitpass.portal.auth.PortalUser;
 import com.mitpass.portal.auth.SessionExpiryFilter;
+import com.mitpass.portal.auth.TokenRefresher;
 import com.mitpass.portal.client.GatewayClient;
 import java.time.Clock;
 import org.slf4j.Logger;
@@ -31,14 +32,29 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain portalSecurity(
-            HttpSecurity http, GatewayAuthenticationProvider provider, GatewayClient gateway, Clock clock)
+            HttpSecurity http, GatewayAuthenticationProvider provider, GatewayClient gateway, TokenRefresher refresher)
             throws Exception {
         http.authenticationProvider(provider)
                 .authorizeHttpRequests(auth -> auth.requestMatchers(
-                                "/", "/events", "/events/*", "/signup", "/login", "/css/**", "/error")
+                                "/",
+                                "/events",
+                                "/events/*",
+                                "/signup",
+                                "/login",
+                                "/check-email",
+                                "/verify-email",
+                                "/verify-email/resend",
+                                "/preferences/**",
+                                "/error",
+                                "/error/**")
+                        .permitAll()
+                        .requestMatchers(
+                                "/css/**", "/js/**", "/fonts/**", "/webjars/**", "/favicon*.svg", "/favicon.ico")
                         .permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
                         .permitAll()
+                        .requestMatchers("/admin/**")
+                        .hasRole("ADMIN")
                         .requestMatchers("/organizer/**")
                         .hasAnyRole("ORGANIZER", "ADMIN")
                         .requestMatchers("/scan", "/scan/**")
@@ -53,7 +69,12 @@ public class SecurityConfig {
                 .logout(logout -> logout.logoutUrl("/logout")
                         .addLogoutHandler(revokeRefreshToken(gateway))
                         .logoutSuccessUrl("/login?loggedOut"))
-                .addFilterAfter(new SessionExpiryFilter(clock), SecurityContextHolderFilter.class);
+                // HTMX requests to a protected URL get HX-Redirect to the login page instead of a 302 (an XHR would
+                // follow it and swap the login page into the middle of the current page).
+                .exceptionHandling(errors -> errors.defaultAuthenticationEntryPointFor(
+                        (request, response, ex) -> SessionExpiryFilter.redirect(request, response, "/login"),
+                        request -> "true".equals(request.getHeader(SessionExpiryFilter.HX_REQUEST))))
+                .addFilterAfter(new SessionExpiryFilter(refresher), SecurityContextHolderFilter.class);
         return http.build();
     }
 

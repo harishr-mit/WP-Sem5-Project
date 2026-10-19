@@ -1,0 +1,131 @@
+/*
+ * MITPass design tokens (docs/DECISIONS.md D15), taken from the UI reference "MITPass App Screens.html".
+ * Components (portal.css) use only these names, so dark mode is just a second set of values.
+ * Theme: <html data-theme="light|dark"> when the user chose one (cookie), otherwise the OS setting decides.
+ */
+
+@font-face { font-family: "Big Shoulders Display"; font-style: normal; font-weight: 700; font-display: swap;
+    src: url("../fonts/big-shoulders-display-700.woff2") format("woff2"); }
+@font-face { font-family: "Big Shoulders Display"; font-style: normal; font-weight: 800; font-display: swap;
+    src: url("../fonts/big-shoulders-display-800.woff2") format("woff2"); }
+@font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 400; font-display: swap;
+    src: url("../fonts/hanken-grotesk-400.woff2") format("woff2"); }
+@font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 500; font-display: swap;
+    src: url("../fonts/hanken-grotesk-500.woff2") format("woff2"); }
+@font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 600; font-display: swap;
+    src: url("../fonts/hanken-grotesk-600.woff2") format("woff2"); }
+@font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 700; font-display: swap;
+    src: url("../fonts/hanken-grotesk-700.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap;
+    src: url("../fonts/ibm-plex-mono-400.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 600; font-display: swap;
+    src: url("../fonts/ibm-plex-mono-600.woff2") format("woff2"); }
+
+:root {
+    /* Brand (fixed in both themes: the passport cover stays maroon) */
+    --maroon: #7A1F3D;
+    --maroon-deep: #3A0F1E;
+    --gold: #E9CF8B;
+    --night: #0D1424;
+    --night-raised: #18233A;
+    --night-line: #2B3954;
+    --scan-cyan: #8FD3DC;
+    --scan-text: #E8EDF6;
+    --scan-muted: #9AA8C2;
+
+    /* Surfaces and text (light) */
+    --ground: #F3F5F9;
+    --ground-deep: #E6EAF1;
+    --card: #FFFFFF;
+    --card-soft: #EEF1F6;
+    --ink: #13203A;
+    --slate: #4A5872;
+    --muted: #6B7890;
+    --line: #D5DBE6;
+    --teal: #17606B;
+    --teal-deep: #0F4750;
+    --link: #17606B;
+    --focus: #17606B;
+
+    /* Outcomes */
+    --ok: #1E7A46;
+    --ok-bright: #3FB97A;
+    --ok-soft: #D4F0DF;
+    --warn: #A65F00;
+    --warn-soft: #FBEBD2;
+    --err: #B3261E;
+    --err-soft: #F8D7D4;
+    --info-soft: #E7EEF1;
+    --maroon-soft: #F6E3EA;
+
+    /* Type */
+    --font-display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif;
+    --font-body: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", "Noto Sans Tamil", "Latha", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+
+    /* Scale */
+    --space-1: .25rem; --space-2: .5rem; --space-3: .75rem; --space-4: 1rem;
+    --space-5: 1.5rem; --space-6: 2rem; --space-7: 3rem;
+    --radius-s: 6px; --radius: 10px; --radius-l: 16px; --radius-xl: 22px;
+    --shadow: 0 1px 2px rgba(19, 32, 58, .08), 0 2px 8px rgba(19, 32, 58, .06);
+    --shadow-l: 0 8px 28px rgba(19, 32, 58, .14);
+    --glass: rgba(255, 255, 255, .14);
+    --glass-line: rgba(255, 255, 255, .28);
+
+    color-scheme: light;
+}
+
+/* Dark values: chosen explicitly, or the OS prefers dark and the user didn't pick light. */
+:root[data-theme="dark"] {
+    --ground: #0D1424;
+    --ground-deep: #111A2E;
+    --card: #18233A;
+    --card-soft: #1F2A40;
+    --ink: #E8EDF6;
+    --slate: #B4C0D6;
+    --muted: #9AA8C2;
+    --line: #2B3954;
+    --teal: #8FD3DC;
+    --teal-deep: #B9E6EC;
+    --link: #8FD3DC;
+    --focus: #8FD3DC;
+    --ok: #3FB97A;
+    --ok-soft: #173A2A;
+    --warn: #F0B45A;
+    --warn-soft: #3A2A12;
+    --err: #F28B82;
+    --err-soft: #3E1C1C;
+    --info-soft: #1F2A40;
+    --maroon-soft: #3A1A27;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-l: 0 8px 28px rgba(0, 0, 0, .5);
+    color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --ground: #0D1424;
+        --ground-deep: #111A2E;
+        --card: #18233A;
+        --card-soft: #1F2A40;
+        --ink: #E8EDF6;
+        --slate: #B4C0D6;
+        --muted: #9AA8C2;
+        --line: #2B3954;
+        --teal: #8FD3DC;
+        --teal-deep: #B9E6EC;
+        --link: #8FD3DC;
+        --focus: #8FD3DC;
+        --ok: #3FB97A;
+        --ok-soft: #173A2A;
+        --warn: #F0B45A;
+        --warn-soft: #3A2A12;
+        --err: #F28B82;
+        --err-soft: #3E1C1C;
+        --info-soft: #1F2A40;
+        --maroon-soft: #3A1A27;
+        --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+        --shadow-l: 0 8px 28px rgba(0, 0, 0, .5);
+        color-scheme: dark;
+    }
+}

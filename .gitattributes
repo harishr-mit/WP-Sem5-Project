@@ -12,6 +12,8 @@ mvnw text eol=lf
 *.jar binary
 *.zip binary
 *.pdf binary
+*.woff2 binary
+*.p12 binary
 
 # Bundled design-canvas export (gzip+base64): line diffs are noise.
 MITPass[[:space:]]App[[:space:]]Screens.html -diff linguist-generated

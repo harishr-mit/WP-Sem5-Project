@@ -46,6 +46,9 @@
         <!-- Not in the Boot BOM; latest releases on Maven Central, checked 2026-10-16 (docs/DECISIONS.md D1) -->
         <zxing.version>3.5.4</zxing.version>
         <openpdf.version>3.0.5</openpdf.version>
+        <!-- Portal JS as WebJars (Phase 6, D15); npm "latest" tags on 2026-10-17 (htmx 4.0.0 is still "next") -->
+        <htmx.version>2.0.11</htmx.version>
+        <html5-qrcode.version>2.3.8</html5-qrcode.version>
 
         <spotless-maven-plugin.version>3.10.4</spotless-maven-plugin.version>
         <palantir-java-format.version>2.102.0</palantir-java-format.version>
@@ -91,6 +94,17 @@
                 <groupId>com.github.librepdf</groupId>
                 <artifactId>openpdf</artifactId>
                 <version>${openpdf.version}</version>
+            </dependency>
+            <!-- Portal front-end libraries (web-portal; webjars-locator-lite comes from the Boot BOM) -->
+            <dependency>
+                <groupId>org.webjars.npm</groupId>
+                <artifactId>htmx.org</artifactId>
+                <version>${htmx.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.webjars.npm</groupId>
+                <artifactId>html5-qrcode</artifactId>
+                <version>${html5-qrcode.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

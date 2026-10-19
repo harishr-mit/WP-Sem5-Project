@@ -1,5 +1,6 @@
 package com.mitpass.event.service;
 
+import com.mitpass.common.security.CurrentUser;
 import com.mitpass.common.web.error.ConflictException;
 import com.mitpass.common.web.error.NotFoundException;
 import com.mitpass.event.domain.Event;
@@ -29,7 +30,8 @@ public class SessionService {
     }
 
     public List<SessionResponse> list(long eventId) {
-        if (!events.existsById(eventId)) {
+        var event = events.findById(eventId).orElseThrow(() -> NotFoundException.of("Event", eventId));
+        if (!DraftVisibility.canSee(event, CurrentUser.current())) {
             throw NotFoundException.of("Event", eventId);
         }
         return sessions.findByEventIdOrderByStartsAtAsc(eventId).stream()

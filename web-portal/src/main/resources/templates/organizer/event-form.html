@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<!--/* Create or edit an event. th:object binds EventForm; errors (the portal's own and event-service's 400 field errors)
+     appear next to their fields. "Add session" / "Remove" are submit buttons that re-render the form without saving;
+     with HTMX only #event-form is swapped (hx-select), without it the whole page reloads. */-->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page(title=${event == null} ? #{org.newEvent} : #{org.editEvent}, content=~{::main})}">
+<main id="main" class="page page--medium">
+    <th:block th:if="${event != null}"><div th:replace="~{organizer/nav :: eventHead(${event}, 'edit')}"></div></th:block>
+    <div class="pagehead" th:if="${event == null}">
+        <a class="back" th:href="@{/organizer/events}" th:text="'← ' + #{nav.myEvents}">← My events</a>
+        <h1 th:text="#{org.newEvent}">New event</h1>
+        <p class="lead" th:text="#{eventForm.newLead}">A new event starts as a draft: only you see it until you publish it.</p>
+    </div>
+    <div th:replace="~{layout :: flash}"></div>
+
+    <form id="event-form" th:object="${form}" method="post" class="form" novalidate
+          th:action="${event == null} ? @{/organizer/events} : @{/organizer/events/{id}(id=${event.id()})}">
+        <input type="hidden" th:field="*{version}">
+        <input type="hidden" th:each="removed, st : *{removedSessionIds}" th:name="|removedSessionIds[${st.index}]|" th:value="${removed}">
+
+        <div class="flash flash--err" th:if="${#fields.hasGlobalErrors()}" role="alert">
+            <p th:each="e : ${#fields.globalErrors()}" th:text="${e}">Error</p>
+            <p th:if="${conflict}" class="mt-4">
+                <a th:href="@{/organizer/events/{id}/edit(id=${event.id()})}" th:text="#{eventForm.reload}">Reload the event</a>
+            </p>
+        </div>
+
+        <!--/* Basics */-->
+        <section class="card form">
+            <h3 class="mb-0" th:text="#{eventForm.basics}">Basics</h3>
+            <div class="form__row form__row--2">
+                <div class="field" th:classappend="${#fields.hasErrors('code')} ? 'field--error'">
+                    <label for="code" th:text="#{eventForm.code}">Event code</label>
+                    <input th:field="*{code}" maxlength="16" autocomplete="off" class="mono"
+                           th:readonly="${event != null and event.status() != 'DRAFT' and event.status() != 'PUBLISHED'}">
+                    <span class="field__hint" th:text="#{eventForm.code.hint}">3–16 letters or digits; part of every pass number.</span>
+                    <span class="field-error" th:if="${#fields.hasErrors('code')}" th:errors="*{code}">error</span>
+                </div>
+                <div class="field" th:classappend="${#fields.hasErrors('title')} ? 'field--error'">
+                    <label for="title" th:text="#{eventForm.title}">Title</label>
+                    <input th:field="*{title}" maxlength="160">
+                    <span class="field-error" th:if="${#fields.hasErrors('title')}" th:errors="*{title}">error</span>
+                </div>
+            </div>
+            <div class="field" th:classappend="${#fields.hasErrors('description')} ? 'field--error'">
+                <label for="description" th:text="#{eventForm.description}">Description</label>
+                <textarea th:field="*{description}" maxlength="4000" rows="4"></textarea>
+                <span class="field-error" th:if="${#fields.hasErrors('description')}" th:errors="*{description}">error</span>
+            </div>
+            <div class="form__row form__row--3">
+                <div class="field" th:classappend="${#fields.hasErrors('categoryId')} ? 'field--error'">
+                    <label for="categoryId" th:text="#{events.category}">Category</label>
+                    <select th:field="*{categoryId}">
+                        <option value="" th:text="#{eventForm.choose}">Choose…</option>
+                        <option th:each="c : ${categories}" th:value="${c.id()}" th:text="${c.name()}">Technical</option>
+                    </select>
+                    <span class="field-error" th:if="${#fields.hasErrors('categoryId')}" th:errors="*{categoryId}">error</span>
+                </div>
+                <div class="field" th:classappend="${#fields.hasErrors('venueId')} ? 'field--error'">
+                    <label for="venueId" th:text="#{event.where}">Venue</label>
+                    <select th:field="*{venueId}">
+                        <option value="" th:text="#{eventForm.choose}">Choose…</option>
+                        <option th:each="v : ${venues}" th:value="${v.id()}"
+                                th:text="${v.name()} + (${v.building() != null} ? ' · ' + ${v.building()} : '')">Main Auditorium</option>
+                    </select>
+                    <span class="field-error" th:if="${#fields.hasErrors('venueId')}" th:errors="*{venueId}">error</span>
+                </div>
+                <div class="field" th:classappend="${#fields.hasErrors('capacity')} ? 'field--error'">
+                    <label for="capacity" th:text="#{org.seats}">Seats</label>
+                    <input type="number" min="1" th:field="*{capacity}">
+                    <span class="field-error" th:if="${#fields.hasErrors('capacity')}" th:errors="*{capacity}">error</span>
+                </div>
+            </div>
+        </section>
+
+        <!--/* When */-->
+        <section class="card form">
+            <h3 class="mb-0" th:text="#{eventForm.when}">When</h3>
+            <p class="hint mb-0" th:text="#{eventForm.when.hint}">Campus time (IST).</p>
+            <div class="form__row form__row--2">
+                <div class="field" th:classappend="${#fields.hasErrors('startsAt') or #fields.hasErrors('endAfterStart')} ? 'field--error'">
+                    <label for="startsAt" th:text="#{eventForm.startsAt}">Starts</label>
+                    <input type="datetime-local" th:field="*{startsAt}">
+                    <span class="field-error" th:if="${#fields.hasErrors('startsAt')}" th:errors="*{startsAt}">error</span>
+                </div>
+                <div class="field" th:classappend="${#fields.hasErrors('endsAt') or #fields.hasErrors('endAfterStart')} ? 'field--error'">
+                    <label for="endsAt" th:text="#{eventForm.endsAt}">Ends</label>
+                    <input type="datetime-local" th:field="*{endsAt}">
+                    <span class="field-error" th:if="${#fields.hasErrors('endsAt')}" th:errors="*{endsAt}">error</span>
+                    <span class="field-error" th:if="${#fields.hasErrors('endAfterStart')}" th:errors="*{endAfterStart}">error</span>
+                </div>
+            </div>
+            <div class="form__row form__row--2">
+                <div class="field" th:classappend="${#fields.hasErrors('registrationOpensAt')} ? 'field--error'">
+                    <label for="registrationOpensAt" th:text="#{eventForm.opensAt}">Registration opens</label>
+                    <input type="datetime-local" th:field="*{registrationOpensAt}">
+                    <span class="field__hint" th:text="#{eventForm.opensAt.hint}">Empty: open it yourself.</span>
+                    <span class="field-error" th:if="${#fields.hasErrors('registrationOpensAt')}" th:errors="*{registrationOpensAt}">error</span>
+                </div>
+                <div class="field" th:classappend="${#fields.hasErrors('registrationClosesAt')} ? 'field--error'">
+                    <label for="registrationClosesAt" th:text="#{eventForm.closesAt}">Registration closes</label>
+                    <input type="datetime-local" th:field="*{registrationClosesAt}">
+                    <span class="field-error" th:if="${#fields.hasErrors('registrationClosesAt')}" th:errors="*{registrationClosesAt}">error</span>
+                </div>
+            </div>
+        </section>
+
+        <!--/* Who may register */-->
+        <section class="card form">
+            <h3 class="mb-0" th:text="#{eventForm.who}">Who may register</h3>
+            <fieldset class="field">
+                <legend th:text="#{eventForm.departments}">Departments</legend>
+                <div class="checks">
+                    <label th:each="d : ${departments}">
+                        <input type="checkbox" th:field="*{eligibleDepartments}" th:value="${d.code()}">
+                        <span th:text="${d.code()}" th:title="${d.name()}">CSE</span>
+                    </label>
+                </div>
+                <span class="field__hint" th:text="#{eventForm.departments.hint}">None ticked: open to every department.</span>
+                <span class="field-error" th:if="${#fields.hasErrors('eligibleDepartments')}" th:errors="*{eligibleDepartments}">error</span>
+            </fieldset>
+            <div class="form__row form__row--2">
+                <div class="field" th:classappend="${#fields.hasErrors('minYear') or #fields.hasErrors('yearsInOrder')} ? 'field--error'">
+                    <label for="minYear" th:text="#{eventForm.minYear}">From year</label>
+                    <select th:field="*{minYear}">
+                        <option value="" th:text="#{eventForm.anyYear}">Any</option>
+                        <option th:each="y : ${#numbers.sequence(1, 5)}" th:value="${y}" th:text="${y}">1</option>
+                    </select>
+                    <span class="field-error" th:if="${#fields.hasErrors('yearsInOrder')}" th:errors="*{yearsInOrder}">error</span>
+                </div>
+                <div class="field" th:classappend="${#fields.hasErrors('maxYear')} ? 'field--error'">
+                    <label for="maxYear" th:text="#{eventForm.maxYear}">To year</label>
+                    <select th:field="*{maxYear}">
+                        <option value="" th:text="#{eventForm.anyYear}">Any</option>
+                        <option th:each="y : ${#numbers.sequence(1, 5)}" th:value="${y}" th:text="${y}">5</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!--/* Sessions: a dynamic sub-form */-->
+        <section class="card form">
+            <div class="spread">
+                <h3 class="mb-0" th:text="#{event.sessions}">Sessions</h3>
+                <button type="submit" name="_addSession" value="1" class="btn--secondary btn--small" formnovalidate
+                        hx-target="#event-form" hx-select="#event-form" hx-swap="outerHTML"
+                        th:attr="hx-post=${event == null} ? @{/organizer/events} : @{/organizer/events/{id}(id=${event.id()})}"
+                        th:text="#{eventForm.addSession}">Add session</button>
+            </div>
+            <p class="hint mb-0" th:text="#{eventForm.sessions.hint}">Only for multi-session events. Each check-in counts per session.</p>
+            <div class="subform" th:if="${!form.sessions.isEmpty()}">
+                <div class="subform__row" th:each="row, st : *{sessions}">
+                    <input type="hidden" th:field="*{sessions[__${st.index}__].id}">
+                    <div class="field" th:classappend="${#fields.hasErrors('sessions[' + st.index + '].title')} ? 'field--error'">
+                        <label th:for="|sessions${st.index}.title|" th:text="#{eventForm.sessionTitle}">Title</label>
+                        <input th:field="*{sessions[__${st.index}__].title}" maxlength="160">
+                        <span class="field-error" th:if="${#fields.hasErrors('sessions[' + st.index + '].title')}"
+                              th:errors="*{sessions[__${st.index}__].title}">error</span>
+                    </div>
+                    <div class="field" th:classappend="${#fields.hasErrors('sessions[' + st.index + '].startsAt')} ? 'field--error'">
+                        <label th:for="|sessions${st.index}.startsAt|" th:text="#{eventForm.startsAt}">Starts</label>
+                        <input type="datetime-local" th:field="*{sessions[__${st.index}__].startsAt}">
+                        <span class="field-error" th:if="${#fields.hasErrors('sessions[' + st.index + '].startsAt')}"
+                              th:errors="*{sessions[__${st.index}__].startsAt}">error</span>
+                    </div>
+                    <div class="field" th:classappend="${#fields.hasErrors('sessions[' + st.index + '].endsAt') or #fields.hasErrors('sessions[' + st.index + '].endAfterStart')} ? 'field--error'">
+                        <label th:for="|sessions${st.index}.endsAt|" th:text="#{eventForm.endsAt}">Ends</label>
+                        <input type="datetime-local" th:field="*{sessions[__${st.index}__].endsAt}">
+                        <span class="field-error" th:if="${#fields.hasErrors('sessions[' + st.index + '].endsAt')}"
+                              th:errors="*{sessions[__${st.index}__].endsAt}">error</span>
+                        <span class="field-error" th:if="${#fields.hasErrors('sessions[' + st.index + '].endAfterStart')}"
+                              th:errors="*{sessions[__${st.index}__].endAfterStart}">error</span>
+                    </div>
+                    <button type="submit" name="_removeSession" th:value="${st.index}" class="btn--ghost btn--small" formnovalidate
+                            hx-target="#event-form" hx-select="#event-form" hx-swap="outerHTML"
+                            th:attr="hx-post=${event == null} ? @{/organizer/events} : @{/organizer/events/{id}(id=${event.id()})}"
+                            th:text="#{eventForm.removeSession}">Remove</button>
+                </div>
+            </div>
+        </section>
+
+        <!--/* Passes and the gate */-->
+        <section class="card form">
+            <h3 class="mb-0" th:text="#{eventForm.gate}">Passes and the gate</h3>
+            <div class="checks" style="flex-direction:column;align-items:flex-start">
+                <label><input type="checkbox" th:field="*{staticQrAllowed}"> <span th:text="#{eventForm.staticQr}">Printed ticket gets a QR</span></label>
+                <label><input type="checkbox" th:field="*{reentryAllowed}"> <span th:text="#{eventForm.reentry}">Allow re-entry</span></label>
+            </div>
+            <div class="form__row form__row--2">
+                <div class="field" th:classappend="${#fields.hasErrors('passColor')} ? 'field--error'">
+                    <label for="passColor" th:text="#{eventForm.color}">Pass colour</label>
+                    <div class="row">
+                        <input type="color" th:field="*{passColor}" style="width:4rem;padding:.2rem">
+                        <label class="checks"><input type="checkbox" th:field="*{useDefaultColor}"> <span th:text="#{eventForm.color.default}">MITPass maroon</span></label>
+                    </div>
+                    <span class="field__hint" th:text="#{eventForm.color.hint}">Dark enough for white text.</span>
+                    <span class="field-error" th:if="${#fields.hasErrors('passColor')}" th:errors="*{passColor}">error</span>
+                </div>
+                <div class="field" th:classappend="${#fields.hasErrors('certificateMinSessions')} ? 'field--error'">
+                    <label for="certificateMinSessions" th:text="#{eventForm.certificate}">Sessions for a certificate</label>
+                    <input type="number" min="1" max="50" th:field="*{certificateMinSessions}">
+                    <span class="field__hint" th:text="#{eventForm.certificate.hint}">Empty: all sessions.</span>
+                    <span class="field-error" th:if="${#fields.hasErrors('certificateMinSessions')}" th:errors="*{certificateMinSessions}">error</span>
+                </div>
+            </div>
+        </section>
+
+        <div class="actions">
+            <button type="submit" th:text="${event == null} ? #{eventForm.create} : #{common.save}">Create draft</button>
+            <a class="btn btn--ghost" th:href="@{/organizer/events}" th:text="#{common.cancel}">Cancel</a>
+        </div>
+    </form>
+</main>
+</html>
