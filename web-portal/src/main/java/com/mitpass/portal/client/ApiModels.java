@@ -49,7 +49,49 @@ public final class ApiModels {
             Instant startsAt,
             String status,
             Integer seatsTaken,
-            Integer seatsLeft) {}
+            Integer seatsLeft,
+            /** Phase 6: the moves allowed now (event-service adds them to the list too). */
+            List<String> allowedTransitions) {
+
+        /** Seats taken as a percentage of capacity, for the seats bar. */
+        public int fillPercent() {
+            return percent(seatsTaken, capacity);
+        }
+    }
+
+    static int percent(Integer part, Integer whole) {
+        if (part == null || whole == null || whole <= 0) {
+            return 0;
+        }
+        return (int) Math.min(100, Math.round(part * 100.0 / whole));
+    }
+
+    /** One session of an event (multi-session workshops). */
+    public record Session(Long id, String title, Instant startsAt, Instant endsAt) {}
+
+    /** The catalogue's search: every field optional (event-service {@code GET /api/events}). */
+    public record EventQuery(
+            String q,
+            String category,
+            String department,
+            java.time.LocalDate from,
+            java.time.LocalDate to,
+            boolean past,
+            int page) {
+
+        public boolean isEmpty() {
+            return blank(q) && blank(category) && blank(department) && from == null && to == null;
+        }
+
+        /** What is sent to event-service: without a start date and without "past", events from today on. */
+        public EventQuery effective(java.time.LocalDate today) {
+            return from != null || past ? this : new EventQuery(q, category, department, today, to, past, page);
+        }
+
+        private static boolean blank(String s) {
+            return s == null || s.isBlank();
+        }
+    }
 
     public record EventDetail(
             Long id,
@@ -72,7 +114,22 @@ public final class ApiModels {
             Integer maxYear,
             List<String> allowedTransitions,
             Integer seatsTaken,
-            Integer seatsLeft) {
+            Integer seatsLeft,
+            Long version,
+            List<Session> sessions,
+            Boolean staticQrAllowed,
+            String passColor,
+            Boolean reentryAllowed,
+            Integer certificateMinSessions) {
+
+        public int fillPercent() {
+            return percent(seatsTaken, capacity);
+        }
+
+        /** Few seats left (a tenth or less): the bar turns amber. */
+        public boolean seatsLow() {
+            return seatsLeft != null && capacity != null && seatsLeft > 0 && seatsLeft * 10 <= capacity;
+        }
 
         /** "CSE, IT · years 2-4", or "Open to everyone". */
         public String eligibilityText() {
@@ -160,6 +217,54 @@ public final class ApiModels {
         }
     }
 
+    /** One event in the student's attendance record (checkin-service {@code GET /api/attendance/me}). */
+    public record MyAttendance(
+            Long eventId,
+            String eventCode,
+            String eventTitle,
+            String passNumber,
+            Integer sessionsAttended,
+            Integer sessionsTotal,
+            Integer sessionsRequired,
+            Boolean certificateEligible,
+            Instant firstCheckIn) {
+
+        public int progressPercent() {
+            return percent(sessionsAttended, sessionsRequired);
+        }
+    }
+
+    /** The logged-in user's account (auth-service {@code GET /api/users/me}). */
+    public record UserProfile(
+            UUID id,
+            String email,
+            String fullName,
+            String department,
+            Integer year,
+            String registerNumber,
+            List<String> roles,
+            Boolean emailVerified,
+            Boolean locked,
+            Instant createdAt,
+            Instant lastLoginAt) {}
+
+    /** One registered instance and its health (gateway {@code GET /api/admin/health}, D15). */
+    public record InstanceHealth(
+            String service,
+            String instanceId,
+            String url,
+            String status,
+            java.util.Map<String, String> components,
+            String detail,
+            Instant checkedAt) {
+
+        public boolean isUp() {
+            return "UP".equals(status);
+        }
+    }
+
+    public record KeyRotation(String kid) {}
+
     /** Bytes the portal passes through to the browser (QR image, PDF ticket); never a token. */
     public record Binary(byte[] body, String contentType, String contentDisposition) {}
 
@@ -167,6 +272,10 @@ public final class ApiModels {
     // ------------------------------------------------------------------------
 
     public record Gate(Long id, String code, String name) {}
+
+    /** A volunteer assigned to an event (organizer's view); {@code gate} null = any gate of the event. */
+    public record Volunteer(
+            UUID volunteerId, String volunteerName, String volunteerEmail, Gate gate, Instant assignedAt) {}
 
     /** {@code gate} null = any gate of the event. */
     public record Assignment(Long eventId, String eventCode, String eventTitle, Instant eventStartsAt, Gate gate) {}

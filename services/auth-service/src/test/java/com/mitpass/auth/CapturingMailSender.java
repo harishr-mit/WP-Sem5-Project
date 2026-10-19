@@ -14,6 +14,7 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 public class CapturingMailSender extends JavaMailSenderImpl {
 
     private static final Pattern TOKEN = Pattern.compile("token=([A-Za-z0-9_-]+)");
+    private static final Pattern LINK = Pattern.compile("(https?://[^\s\"<>]+token=[A-Za-z0-9_-]+)");
 
     private final List<MimeMessage> sent = new CopyOnWriteArrayList<>();
 
@@ -22,13 +23,22 @@ public class CapturingMailSender extends JavaMailSenderImpl {
         sent.addAll(List.of(mimeMessages));
     }
 
+    /** The whole verification link from the newest email to this address, if one has arrived. */
+    public Optional<String> latestLinkFor(String email) {
+        return latestMatchFor(email, LINK);
+    }
+
     /** The verification token from the newest email to this address, if one has arrived. */
     public Optional<String> latestTokenFor(String email) {
+        return latestMatchFor(email, TOKEN);
+    }
+
+    private Optional<String> latestMatchFor(String email, Pattern pattern) {
         for (int i = sent.size() - 1; i >= 0; i--) {
             MimeMessage message = sent.get(i);
             try {
                 if (message.getAllRecipients()[0].toString().equalsIgnoreCase(email)) {
-                    Matcher matcher = TOKEN.matcher(contentOf(message));
+                    Matcher matcher = pattern.matcher(contentOf(message));
                     if (matcher.find()) {
                         return Optional.of(matcher.group(1));
                     }

@@ -77,7 +77,9 @@ class EventServiceApplicationTests {
                 .andExpect(status().isConflict());
 
         // search finds it by text, category and day (Asia/Kolkata)
+        // still a DRAFT: only its organizer and admins see it (DraftVisibilityTests)
         mvc.perform(get("/api/events")
+                        .header(HttpHeaders.AUTHORIZATION, ADMIN)
                         .param("q", "full flow")
                         .param("category", "WORKSHOP")
                         .param("from", "2099-12-05")
@@ -102,7 +104,7 @@ class EventServiceApplicationTests {
                                 {"title": "Too late", "startsAt": "2099-12-05T12:00:00Z", "endsAt": "2099-12-05T13:00:00Z"}
                                 """))
                 .andExpect(status().isUnprocessableContent());
-        mvc.perform(get("/api/events/{id}/sessions", id))
+        mvc.perform(get("/api/events/{id}/sessions", id).header(HttpHeaders.AUTHORIZATION, ADMIN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].title", hasItem("Afternoon")));
 

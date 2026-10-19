@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<!--/* The organizer's tabs inside one event (UI reference screen 7: Events · Registrations · Volunteers · Reports). */-->
+<html xmlns:th="http://www.thymeleaf.org">
+<div th:fragment="eventHead(event, active)" class="pagehead">
+    <a class="back" th:href="@{/organizer/events}" th:text="'← ' + #{nav.myEvents}">← My events</a>
+    <div class="row">
+        <span th:replace="~{layout :: badge(${event.status()})}"></span>
+        <span class="eyebrow mb-0 mono" th:text="${event.code()}">TECHFEST26</span>
+    </div>
+    <h1 class="mt-4" th:text="${event.title()}">HackNight 26</h1>
+    <p class="hint mb-0" th:text="${@fmt.when(event.startsAt())}">Sat 17 Oct 2026, 09:00</p>
+    <nav class="subnav mt-4" th:aria-label="#{org.tabs}">
+        <a th:href="@{/organizer/events/{id}/edit(id=${event.id()})}" th:aria-current="${active == 'edit'} ? 'page'"
+           th:text="#{org.tab.event}">Event</a>
+        <a th:href="@{/organizer/events/{id}/registrations(id=${event.id()})}"
+           th:aria-current="${active == 'registrations'} ? 'page'" th:text="#{org.tab.registrations}">Registrations</a>
+        <a th:href="@{/organizer/events/{id}/staff(id=${event.id()})}" th:aria-current="${active == 'staff'} ? 'page'"
+           th:text="#{org.tab.staff}">Volunteers</a>
+        <a th:href="@{/organizer/events/{id}/attendance(id=${event.id()})}"
+           th:aria-current="${active == 'attendance'} ? 'page'" th:text="#{org.tab.attendance}">Reports</a>
+    </nav>
+</div>
+</html>

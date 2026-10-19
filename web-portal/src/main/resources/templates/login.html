@@ -1,29 +1,41 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Log in')}"></head>
-<body>
-<header th:replace="~{fragments :: header}"></header>
-<main class="narrow">
-    <h1>Log in</h1>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{login.title}, content=~{::main})}">
+<main id="main" class="page page--narrow">
+    <div class="pagehead">
+        <p class="eyebrow" th:text="#{app.tagline}">Campus events · one pass</p>
+        <h1 th:text="#{login.title}">Log in</h1>
+    </div>
 
-    <p class="flash ok" th:if="${param.signedUp}">
-        Account created for <strong th:text="${signedUpEmail}">you</strong>. Open the verification link in the email
-        we sent, then log in.
-        <th:block th:if="${mailpitUrl != null and !#strings.isEmpty(mailpitUrl)}">
-            (Dev inbox: <a th:href="${mailpitUrl}" th:text="${mailpitUrl}" target="_blank">Mailpit</a>)
-        </th:block>
-    </p>
-    <p class="flash ok" th:if="${param.loggedOut}">You are logged out.</p>
-    <p class="flash err" th:if="${param.expired}">Your session has expired. Please log in again.</p>
-    <p class="flash err" th:if="${param.error}"
-       th:text="${loginError != null ? loginError : 'Email or password is wrong.'}">Email or password is wrong.</p>
+    <div class="flash flash--ok" th:if="${param.verified}" role="status"><p th:text="#{login.verified}">Verified.</p></div>
+    <div class="flash flash--ok" th:if="${param.loggedOut}" role="status"><p th:text="#{login.loggedOut}">Logged out.</p></div>
+    <div class="flash flash--err" th:if="${param.expired}" role="alert"><p th:text="#{login.expired}">Session expired.</p></div>
+    <div class="flash flash--err" th:if="${param.error}" role="alert">
+        <p th:text="${loginError != null ? loginError : #messages.msg('login.wrong')}">Email or password is wrong.</p>
+    </div>
+    <div th:replace="~{layout :: flash}"></div>
 
-    <form th:action="@{/login}" method="post" class="stack">
-        <label>College email <input type="email" name="email" required autofocus></label>
-        <label>Password <input type="password" name="password" required></label>
-        <button type="submit">Log in</button>
+    <form th:action="@{/login}" method="post" class="card form">
+        <div class="field">
+            <label for="email" th:text="#{login.email}">College email</label>
+            <input id="email" type="email" name="email" autocomplete="username" required autofocus>
+        </div>
+        <div class="field">
+            <label for="password" th:text="#{login.password}">Password</label>
+            <input id="password" type="password" name="password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn--block" th:text="#{login.submit}">Log in</button>
     </form>
-    <p>No account yet? <a th:href="@{/signup}">Create one</a>.</p>
+
+    <!-- Shown when the address isn't verified yet: ask for a new link (auth-service sends it). -->
+    <form th:if="${needsVerification}" th:action="@{/verify-email/resend}" method="post" class="card card--soft form mt-4">
+        <p class="mb-0" th:text="#{login.resend.text}">Didn't get the email?</p>
+        <div class="field">
+            <label for="resend-email" th:text="#{login.email}">College email</label>
+            <input id="resend-email" type="email" name="email" required>
+        </div>
+        <button type="submit" class="btn--secondary" th:text="#{login.resend.submit}">Send a new link</button>
+    </form>
+
+    <p class="center mt-5" th:inline="text">[[#{login.noAccount}]] <a th:href="@{/signup}" th:text="#{login.createOne}">Create one</a></p>
 </main>
-</body>
 </html>

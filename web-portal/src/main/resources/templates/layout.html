@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<!--/*
+  The page shell (docs/plans/phase-6.md §4, D15). A page calls it from its <html> element:
+    <html th:replace="~{layout :: page(title=#{events.title}, content=~{::main})}"> … <main class="page">…</main>
+  "bare" is the scanner's full-screen dark shell (no header). Variables come from CurrentUserInterceptor:
+  currentUser, theme ("light"/"dark"/null = OS), currentPath, langLinks.
+*/-->
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:fragment="page(title, content)" th:lang="${#locale.language}" th:attr="data-theme=${theme}"
+      th:data-msg-unavailable="#{js.unavailable}" th:data-msg-failed="#{js.failed}" th:data-msg-offline="#{js.offline}">
+<head th:replace="~{layout :: pageHead(${title})}"></head>
+<body>
+<a class="skip" href="#main" th:text="#{app.skip}">Skip to content</a>
+<header th:replace="~{layout :: topbar}"></header>
+<div th:replace="${content}"></div>
+<nav th:replace="~{layout :: bottombar}"></nav>
+<footer class="footer" th:text="#{app.footer}">MITPass · College Event Pass System</footer>
+</body>
+</html>
+
+<!--/* Full-screen pages (the scanner): always dark, no header, same head. */-->
+<html th:fragment="bare(title, content)" th:lang="${#locale.language}" data-theme="dark">
+<head th:replace="~{layout :: pageHead(${title})}"></head>
+<body class="scanner-body">
+<div th:replace="${content}"></div>
+</body>
+</html>
+
+<head th:fragment="pageHead(title)">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#7A1F3D">
+    <title th:text="${title} + ' · ' + #{app.name}">MITPass</title>
+    <!-- HTMX sends these with every request (portal.js); forms carry the hidden field as usual. -->
+    <meta name="_csrf" th:if="${_csrf != null}" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:if="${_csrf != null}" th:content="${_csrf.headerName}">
+    <link rel="icon" th:href="@{/favicon.svg}" type="image/svg+xml">
+    <link rel="stylesheet" th:href="@{/css/tokens.css}">
+    <link rel="stylesheet" th:href="@{/css/portal.css}">
+    <script th:src="@{/webjars/htmx.org/dist/htmx.min.js}" defer></script>
+    <script th:src="@{/js/portal.js}" defer></script>
+</head>
+
+<header th:fragment="topbar" class="topbar">
+    <div class="topbar__inner">
+        <a class="brand" th:href="@{/events}">
+            <span class="brand__mark" aria-hidden="true">M</span>
+            <span class="brand__name">MITPASS</span>
+            <span class="brand__tag" th:text="#{app.tagline}">Campus events · one pass</span>
+        </a>
+        <nav class="mainnav" th:aria-label="#{nav.main}">
+            <a th:href="@{/events}" th:aria-current="${#strings.startsWith(currentPath, '/events')} ? 'page'"
+               th:text="#{nav.explore}">Explore</a>
+            <th:block sec:authorize="hasRole('STUDENT')">
+                <a th:href="@{/my/passes}" th:aria-current="${#strings.startsWith(currentPath, '/my/passes')} ? 'page'"
+                   th:text="#{nav.myPasses}">My passes</a>
+                <a th:href="@{/my/registrations}"
+                   th:aria-current="${#strings.startsWith(currentPath, '/my/registrations')} ? 'page'"
+                   th:text="#{nav.myRegistrations}">My registrations</a>
+                <a th:href="@{/my/stamps}" th:aria-current="${#strings.startsWith(currentPath, '/my/stamps')} ? 'page'"
+                   th:text="#{nav.stamps}">Stamps</a>
+            </th:block>
+            <a sec:authorize="hasAnyRole('ORGANIZER', 'ADMIN')" th:href="@{/organizer/events}"
+               th:aria-current="${#strings.startsWith(currentPath, '/organizer')} ? 'page'"
+               th:text="#{nav.myEvents}">My events</a>
+            <a sec:authorize="hasAnyRole('VOLUNTEER', 'ORGANIZER')" th:href="@{/scan}" th:text="#{nav.scan}">Scan</a>
+            <th:block sec:authorize="hasRole('ADMIN')">
+                <a th:href="@{/admin/users}" th:aria-current="${#strings.startsWith(currentPath, '/admin/users')} ? 'page'"
+                   th:text="#{nav.users}">Users</a>
+                <a th:href="@{/admin/health}" th:aria-current="${#strings.startsWith(currentPath, '/admin/health')} ? 'page'"
+                   th:text="#{nav.health}">Health</a>
+                <a th:href="@{/admin/keys}" th:aria-current="${#strings.startsWith(currentPath, '/admin/keys')} ? 'page'"
+                   th:text="#{nav.keys}">Keys</a>
+            </th:block>
+        </nav>
+        <div class="usermenu">
+            <div class="prefs">
+                <form th:action="@{/preferences/theme}" method="post" class="inline">
+                    <input type="hidden" name="back" th:value="${currentPath}">
+                    <input type="hidden" name="theme" th:value="${theme == 'dark'} ? 'light' : 'dark'">
+                    <button type="submit" class="btn--small"
+                            th:title="${theme == 'dark'} ? #{pref.theme.switchToLight} : #{pref.theme.switchToDark}"
+                            th:aria-label="${theme == 'dark'} ? #{pref.theme.switchToLight} : #{pref.theme.switchToDark}"
+                            th:text="${theme == 'dark'} ? '☀' : '☾'">☾</button>
+                </form>
+                <th:block th:if="${langLinks != null}" th:each="link : ${langLinks}">
+                    <a th:unless="${link.key == #locale.language}" th:href="${link.value}" th:lang="${link.key}"
+                       th:text="#{'pref.lang.' + ${link.key}}">தமிழ்</a>
+                </th:block>
+            </div>
+            <th:block th:if="${currentUser != null}">
+                <a th:href="@{/my/profile}" class="avatar" th:title="${currentUser.displayName()}"
+                   th:text="${@fmt.initials(currentUser.displayName())}">PR</a>
+                <form th:action="@{/logout}" method="post" class="inline logout">
+                    <button type="submit" class="linkbtn" th:text="#{nav.logout}">Log out</button>
+                </form>
+            </th:block>
+            <th:block th:if="${currentUser == null}">
+                <a th:href="@{/login}" th:text="#{nav.login}">Log in</a>
+                <a th:href="@{/signup}" class="btn btn--small" th:text="#{nav.signup}">Sign up</a>
+            </th:block>
+        </div>
+    </div>
+</header>
+
+<!--/* Phones: the mockup's bottom bar. Students get the four wallet tabs; other roles their own links. */-->
+<nav th:fragment="bottombar" class="bottombar" th:if="${currentUser != null}" th:aria-label="#{nav.main}">
+    <a th:href="@{/events}" th:aria-current="${#strings.startsWith(currentPath, '/events')} ? 'page'">
+        <svg th:replace="~{layout :: icon('explore')}"></svg><span th:text="#{nav.explore}">Explore</span></a>
+    <th:block sec:authorize="hasRole('STUDENT')">
+        <a th:href="@{/my/passes}" th:aria-current="${#strings.startsWith(currentPath, '/my/passes')} ? 'page'">
+            <svg th:replace="~{layout :: icon('pass')}"></svg><span th:text="#{nav.myPasses}">My passes</span></a>
+        <a th:href="@{/my/stamps}" th:aria-current="${#strings.startsWith(currentPath, '/my/stamps')} ? 'page'">
+            <svg th:replace="~{layout :: icon('stamp')}"></svg><span th:text="#{nav.stamps}">Stamps</span></a>
+    </th:block>
+    <a sec:authorize="hasAnyRole('ORGANIZER', 'ADMIN')" th:href="@{/organizer/events}"
+       th:aria-current="${#strings.startsWith(currentPath, '/organizer')} ? 'page'">
+        <svg th:replace="~{layout :: icon('events')}"></svg><span th:text="#{nav.myEvents}">My events</span></a>
+    <a sec:authorize="hasAnyRole('VOLUNTEER', 'ORGANIZER')" th:href="@{/scan}">
+        <svg th:replace="~{layout :: icon('scan')}"></svg><span th:text="#{nav.scan}">Scan</span></a>
+    <a sec:authorize="hasRole('ADMIN')" th:href="@{/admin/users}"
+       th:aria-current="${#strings.startsWith(currentPath, '/admin')} ? 'page'">
+        <svg th:replace="~{layout :: icon('admin')}"></svg><span th:text="#{nav.admin}">Admin</span></a>
+    <a th:href="@{/my/profile}" th:aria-current="${#strings.startsWith(currentPath, '/my/profile')} ? 'page'">
+        <svg th:replace="~{layout :: icon('profile')}"></svg><span th:text="#{nav.profile}">Profile</span></a>
+</nav>
+
+<!--/* Small line icons (24 px grid, currentColor). */-->
+<svg th:fragment="icon(name)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" th:switch="${name}">
+    <g th:case="'explore'"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></g>
+    <g th:case="'pass'"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h3v3H8zM13 8h3M13 11h3M8 15h8"/></g>
+    <g th:case="'stamp'"><circle cx="12" cy="10" r="5"/><path d="M5 20h14M9 15l-1 5M15 15l1 5"/></g>
+    <g th:case="'profile'"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></g>
+    <g th:case="'events'"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></g>
+    <g th:case="'scan'"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10"/></g>
+    <g th:case="'admin'"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/></g>
+    <g th:case="*"><circle cx="12" cy="12" r="2"/></g>
+</svg>
+
+<!--/* Flash messages after a redirect (PRG): "message" (ok) and "error". aria-live so screen readers hear them. */-->
+<div th:fragment="flash" aria-live="polite">
+    <div class="flash flash--ok" th:if="${message}" role="status"><p th:text="${message}">Saved.</p></div>
+    <div class="flash flash--err" th:if="${error}" role="alert"><p th:text="${error}">Something went wrong.</p></div>
+</div>
+
+<!--/* A state chip; the colour follows the state's meaning, the text is the state from the bundle. */-->
+<span th:fragment="badge(state)" class="badge" th:classappend="${@fmt.badgeClass(state)}"
+      th:text="${@fmt.state(state)}">CONFIRMED</span>
+</html>

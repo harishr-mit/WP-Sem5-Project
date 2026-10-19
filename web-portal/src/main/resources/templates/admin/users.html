@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<!--/* Users (ADMIN): search by name, email or register number, filter by role; HTMX swaps #user-results while typing. */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{nav.users}, content=~{::main})}">
+<main id="main" class="page">
+    <div class="pagehead">
+        <p class="eyebrow" th:text="#{nav.admin}">Admin</p>
+        <h1 th:text="#{nav.users}">Users</h1>
+    </div>
+    <div th:replace="~{layout :: flash}"></div>
+
+    <form class="filters" role="search" th:action="@{/admin/users}" method="get"
+          th:attr="hx-get=@{/admin/users}" hx-trigger="input delay:300ms, submit" hx-target="#user-results"
+          hx-swap="outerHTML" hx-push-url="true">
+        <div class="field search">
+            <label for="q" th:text="#{events.search}">Search</label>
+            <input id="q" type="search" name="q" th:value="${q}" th:placeholder="#{admin.users.placeholder}" autocomplete="off">
+        </div>
+        <div class="field">
+            <label for="role" th:text="#{profile.roles}">Role</label>
+            <select id="role" name="role">
+                <option value="" th:text="#{admin.users.anyRole}">Any role</option>
+                <option th:each="r : ${roles}" th:value="${r}" th:text="#{'role.' + ${r}}" th:selected="${r == role}">Student</option>
+            </select>
+        </div>
+        <noscript><button type="submit" th:text="#{events.search}">Search</button></noscript>
+    </form>
+
+    <section id="user-results" th:fragment="results">
+        <div class="table-wrap" th:if="${!users.content().isEmpty()}">
+            <table class="stacked">
+                <thead><tr>
+                    <th th:text="#{regs.student}">Name</th>
+                    <th th:text="#{profile.roles}">Roles</th>
+                    <th th:text="#{registrations.status}">Status</th>
+                </tr></thead>
+                <tbody>
+                <tr th:each="u : ${users.content()}">
+                    <td th:data-label="#{regs.student}"><a th:href="@{/admin/users/{id}(id=${u.id()})}" th:text="${u.fullName()}">Priya Raman</a>
+                        <br><small th:text="${u.email()}">p@x</small></td>
+                    <td th:data-label="#{profile.roles}"><span class="badge badge--brand" th:each="r : ${u.roles()}" th:text="#{'role.' + ${r}}" style="margin:0 .25rem .25rem 0">Student</span></td>
+                    <td th:data-label="#{registrations.status}">
+                        <span class="badge badge--err" th:if="${u.locked()}" th:text="#{admin.locked}">Locked</span>
+                        <span class="badge badge--warn" th:if="${!u.emailVerified()}" th:text="#{admin.unverified}">Unverified</span>
+                        <span class="badge badge--ok" th:if="${!u.locked() and u.emailVerified()}" th:text="#{admin.active}">Active</span>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="empty card" th:if="${users.content().isEmpty()}"><strong th:text="#{regs.noMatch}">Nobody matches</strong></div>
+        <p class="hint mt-4" th:text="#{events.count(${users.totalElements()})}">12 events</p>
+    </section>
+</main>
+</html>

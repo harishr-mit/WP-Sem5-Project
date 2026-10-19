@@ -10,7 +10,7 @@ import java.util.UUID;
  * The logged-in user, kept in the server-side HTTP session (BFF, docs/DECISIONS.md D9). The tokens live here and only
  * here: pages get the display fields, the gateway client gets {@link #accessToken()}, the browser gets neither.
  *
- * @param expiresAt when the access token expires; after that the user logs in again (P3 slice; P6 refreshes)
+ * @param expiresAt when the access token expires; {@link TokenRefresher} renews it shortly before (P6)
  */
 public record PortalUser(
         UUID id,
@@ -21,11 +21,33 @@ public record PortalUser(
         Integer year,
         String accessToken,
         String refreshToken,
-        Instant expiresAt)
+        Instant expiresAt,
+        Instant issuedAt)
         implements Serializable {
 
     @Serial
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
+
+    /** Without the issue time (tests, older sessions): the token's lifetime is then unknown. */
+    public PortalUser(
+            java.util.UUID id,
+            String email,
+            String name,
+            Set<String> roles,
+            String department,
+            Integer year,
+            String accessToken,
+            String refreshToken,
+            Instant expiresAt) {
+        this(id, email, name, roles, department, year, accessToken, refreshToken, expiresAt, null);
+    }
+
+    /** How long the access token lives in total, if known. */
+    public java.util.Optional<java.time.Duration> tokenLifetime() {
+        return issuedAt == null || expiresAt == null
+                ? java.util.Optional.empty()
+                : java.util.Optional.of(java.time.Duration.between(issuedAt, expiresAt));
+    }
 
     public boolean hasRole(String role) {
         return roles.contains(role);

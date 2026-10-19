@@ -1,27 +1,33 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('My passes')}"></head>
-<body>
-<header th:replace="~{fragments :: header}"></header>
-<main>
-    <h1>My passes</h1>
-    <div th:replace="~{fragments :: flash}"></div>
-    <p class="hint">A pass appears here a moment after your registration is confirmed. Reload to see new ones.</p>
+<!--/* My passes: valid passes first (soonest first), then past and void ones. */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{nav.myPasses}, content=~{::main})}">
+<main id="main" class="page page--medium">
+    <div class="pagehead">
+        <p class="eyebrow" th:text="#{passes.eyebrow}">Your wallet</p>
+        <h1 th:text="#{nav.myPasses}">My passes</h1>
+    </div>
+    <div th:replace="~{layout :: flash}"></div>
 
-    <table th:if="${!passes.isEmpty()}">
-        <thead><tr><th>Event</th><th>Starts</th><th>Pass number</th><th>State</th><th></th></tr></thead>
-        <tbody>
-        <tr th:each="p : ${passes}">
-            <td th:text="${p.eventTitle()}">TechFest Hackathon</td>
-            <td th:text="${@fmt.when(p.startsAt())}">Sat 14 Nov 2026, 09:00</td>
-            <td><code class="pass-number" th:text="${p.passNumber()}">TECHFEST26-000042-7</code></td>
-            <td><span class="status" th:text="${p.status()}">ACTIVE</span></td>
-            <td><a th:href="@{/my/passes/{id}(id=${p.id()})}">Open pass</a></td>
-        </tr>
-        </tbody>
-    </table>
-    <p th:if="${passes.isEmpty()}">No passes yet. Register for an event and your pass shows up here.
-        <a th:href="@{/events}">Browse events</a>.</p>
+    <div class="wallet" th:if="${!passes.isEmpty()}">
+        <a class="pass-tile" th:each="p : ${passes}" th:href="@{/my/passes/{id}(id=${p.id()})}"
+           th:classappend="${!p.isValid()} ? 'muted'">
+            <div class="datechip" style="background:var(--maroon);color:#fff">
+                <b th:text="${@fmt.day(p.startsAt())}">17</b><span th:text="${@fmt.month(p.startsAt())}">OCT</span>
+            </div>
+            <div>
+                <strong th:text="${p.eventTitle()}">HackNight 26</strong>
+                <div class="pass-number hint" th:text="${p.passNumber()}">TECHFEST26-000042-7</div>
+                <div class="hint" th:if="${p.isActive()}" th:text="#{passes.live}">Live code ready</div>
+                <div class="hint" th:if="${p.status() == 'ISSUED' and p.codeUnlocksAt() != null}"
+                     th:text="#{pass.locked(${@fmt.shortWhen(p.codeUnlocksAt())})}">Code unlocks Fri 23 Oct, 16:30</div>
+            </div>
+            <span th:replace="~{layout :: badge(${p.status()})}"></span>
+        </a>
+    </div>
+    <div class="empty card" th:if="${passes.isEmpty()}">
+        <strong th:text="#{passes.empty}">No passes yet</strong>
+        <span th:text="#{passes.empty.text}">Register for an event and your pass shows up here a moment later.</span>
+        <div><a class="btn mt-4" th:href="@{/events}" th:text="#{registrations.browse}">Browse events</a></div>
+    </div>
 </main>
-</body>
 </html>

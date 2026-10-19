@@ -28,6 +28,8 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 
 **Pinned in the root POM:** springdoc-openapi 3.1.1, MapStruct 1.6.3, ZXing 3.5.4 (`core`; `javase` only in tests) and OpenPDF 3.0.5 (Phase 4; neither is in the Boot BOM; latest releases on Maven Central on 2026-10-16). OpenPDF 3 uses the `org.openpdf.text` packages; its `brotli4j` dependency (a per-OS native jar) is excluded because tickets don't need it.
 
+**Pinned in the root POM (Phase 6):** the WebJars `org.webjars.npm:htmx.org` **2.0.11** and `org.webjars.npm:html5-qrcode` **2.3.8** (the last release, 2023; D15). `webjars-locator-lite` comes from the Boot BOM, so templates use version-free `/webjars/htmx.org/dist/htmx.min.js` paths. The UI checks' Playwright (1.63.0) is an npm dev dependency in `web-portal/ui-checks/package.json`, not part of the Maven build.
+
 **Consequences.** Boot 4 differs from most tutorials (which target Boot 3). The practical differences are listed in `docs/plans/phase-1.md` ("Boot 4 gotchas"). Patch upgrades within 4.1.x are free. Moving to 4.2 waits for a Cloud train that supports it.
 
 ---
@@ -136,22 +138,22 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 
 **Everything else is a known shortcut.** Don't fix one early, and don't treat one as a bug:
 
-| Slice shortcut | From | P6 replaces it with |
-|---|---|---|
-| User logs in again when the 15 min access token expires | P3 | Automatic refresh with the refresh token held in the session |
-| Minimal styling, plain search form, full page reloads | P3 | UI reference visual language (hand-written CSS with design tokens, D15), HTMX live search and filters, dark mode, responsive layout |
-| Email verification link opens the auth-service API (`mitpass.auth.verify-link`) | P3 | Link to a portal page |
-| Spring's default error page | P3 | Custom 403/404/500 pages, i18n message bundles |
-| Live QR is an `<img>` reloaded by a plain 30 s timer | P4 | Pass card with a countdown ring (screens 3–4) |
-| Scan page takes a typed pass number or pasted token; plain result page | P5 | `html5-qrcode` camera scanner over HTTPS (self-signed keytool cert, D15), manual-entry tab, green/red flash, sound, vibration |
-| Attendance page updates on reload | P5 | Styled page in P6; live WebSocket updates in P7 |
-| Registration status and waitlist position update on reload (*My registrations*, event page) | P3 | HTMX refresh in P6; push updates with the P7 notifications |
-| Organizer "My events" loads each event's detail for its buttons (one call per event) | P3 | A list endpoint that carries `allowedTransitions`, or HTMX per row |
-| A new pass appears in *My passes* on reload (about a second after registering); the event page only says it is being issued | P4 | HTMX poll on the event page in P6; push with the P7 notifications |
-| The QR image and PDF are passed through the portal byte for byte (`/my/passes/{id}/qr.png`, `ticket.pdf`) | P4 | Kept in P6 (it is the BFF rule); P6 adds the countdown ring around it |
-| Lifecycle buttons as actions and confirmation pages for critical actions are plain server pages (`LifecycleActions`, `confirm-transition.html`, `confirm-revoke.html`; owner RL8/RL9, done early) | P5 | Wording moves into the i18n bundles; the confirmation can become an HTMX dialog, still enforced by the server |
+| Slice shortcut | From | P6 replaces it with | Replaced in P6 by |
+|---|---|---|---|
+| User logs in again when the 15 min access token expires | P3 | Automatic refresh with the refresh token held in the session | `TokenRefresher` refreshes 60 s ahead (at most a quarter of the token's lifetime) under a per-session lock; one refresh + retry on a 401 (T08.3) |
+| Minimal styling, plain search form, full page reloads | P3 | UI reference visual language (hand-written CSS with design tokens, D15), HTMX live search and filters, dark mode, responsive layout | `tokens.css` + `portal.css` (D15), HTMX live search with filters and `hx-push-url`, dark mode, 360 px layouts (T08.2, T08.4) |
+| Email verification link opens the auth-service API (`mitpass.auth.verify-link`) | P3 | Link to a portal page | `/verify-email` portal page (button, POST spends the token); auth-service `verify-link` default points there (T08.3) |
+| Spring's default error page | P3 | Custom 403/404/500 pages, i18n message bundles | `error/403`, `404`, `500`, `503` (+ 4xx/5xx) with the correlation id; English + Tamil bundles (T08.2, T08.11) |
+| Live QR is an `<img>` reloaded by a plain 30 s timer | P4 | Pass card with a countdown ring (screens 3–4) | Pass card: SVG code, preload-then-swap, countdown ring, `data-refresh-ms` (no JS inlining) (T08.5) |
+| Scan page takes a typed pass number or pasted token; plain result page | P5 | `html5-qrcode` camera scanner over HTTPS (self-signed keytool cert, D15), manual-entry tab, green/red flash, sound, vibration | Camera scanner (`html5-qrcode`), `/scan/submit` + `HX-Trigger` flash/tone/vibration, manual tab, `lan` HTTPS profile (T08.8, T08.9) |
+| Attendance page updates on reload | P5 | Styled page in P6; live WebSocket updates in P7 | Styled Reports tab (screen 7) with an HTMX Refresh; live push stays P7 (T08.7) |
+| Registration status and waitlist position update on reload (*My registrations*, event page) | P3 | HTMX refresh in P6; push updates with the P7 notifications | HTMX refresh of *My registrations* and the event's registration box while waiting, stopped with 286 (T08.4) |
+| Organizer "My events" loads each event's detail for its buttons (one call per event) | P3 | A list endpoint that carries `allowedTransitions`, or HTMX per row | `allowedTransitions` on event-service's list; one call (T08.4/T08.6) |
+| A new pass appears in *My passes* on reload (about a second after registering); the event page only says it is being issued | P4 | HTMX poll on the event page in P6; push with the P7 notifications | "You're in" (screen 3) polls for the pass and stops with 286 (T08.4) |
+| The QR image and PDF are passed through the portal byte for byte (`/my/passes/{id}/qr.png`, `ticket.pdf`) | P4 | Kept in P6 (it is the BFF rule); P6 adds the countdown ring around it | Kept (BFF rule); the pass card wraps it (T08.5) |
+| Lifecycle buttons as actions and confirmation pages for critical actions are plain server pages (`LifecycleActions`, `confirm-transition.html`, `confirm-revoke.html`; owner RL8/RL9, done early) | P5 | Wording moves into the i18n bundles; the confirmation can become an HTMX dialog, still enforced by the server | Labels/consequences in the bundles (`action.*`, `consequence.*`); dialogs with `confirmed=true`, still enforced by the server (T08.6) |
 
-**Consequences.** If a slice can't work without a P6 item, build the smallest version that works and add a row to this table. P6 is done when every row above is replaced.
+**Consequences.** If a slice can't work without a P6 item, build the smallest version that works and add a row to this table. P6 is done when every row above is replaced. **All rows were replaced in Phase 6 (2026-10-18), last column; checked in the browser with `web-portal/ui-checks`.**
 
 ---
 
@@ -249,13 +251,16 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 
 ## D15: The finished portal (Phase 6)
 
-*2026-10-17 · accepted (owner answers to `docs/plans/phase-6.md` §17 Q1–Q4). To be built in Phase 6*
+*2026-10-17 · accepted (owner answers to `docs/plans/phase-6.md` §17 Q1–Q4; draft events Q12 the same day). Built in Phase 6 (as built: plan §18)*
 
 **Decision.**
 - **Styling (owner, Q1).** Hand-written CSS with design tokens (CSS custom properties taken from the UI mockup), redefined for dark mode. No Tailwind and no Node build step. The owner asked which option was faster and less work. The answer was plain CSS: no plugin, Node download, lock file or CI change; the mockup's CSS turns straight into tokens; and the portal is small (about 25 templates, 20 components). JS libraries (`htmx.org`, `html5-qrcode`) are WebJars pinned in the root POM (D1). Fonts are self-hosted woff2 files (OFL).
 - **HTTPS for phone cameras (owner, Q2).** A self-signed PKCS#12 certificate made by `scripts/make-dev-cert` with the project JDK's `keytool` (SANs for localhost and the laptop's LAN IPs). The portal serves it under the `lan` profile on :8443; each phone accepts the warning once. No mkcert, because `mkcert -install` changes the system trust store. Only the portal faces the phone, so only the portal gets HTTPS.
 - **Health overview (owner, Q3).** api-gateway serves `GET /api/admin/health` (ADMIN). It reads the instances from Eureka (`ReactiveDiscoveryClient`) and each one's `/actuator/health` with a 2 s timeout (status and component names only; `show-components: always`, details hidden). The gateway authorizes this endpoint itself, because here it is the service (D7). The portal still calls only the gateway (D9).
 - **i18n (owner, Q4).** English and Tamil bundles (`messages.properties`, `messages_ta.properties`) with a cookie locale resolver and a language switch. The Tamil text is drafted by the agent and checked by the owner. Lifecycle labels (RL8) and result-code messages come from the bundles; the APIs keep their codes.
-- **Token refresh.** The portal refreshes the access token 60 s before it expires, under a per-session lock with a re-read after the lock is taken, so parallel requests never reuse a refresh token (that would trigger D7's reuse detection and end the session). A 401 triggers one refresh and one retry.
+- **Draft events (owner, 2026-10-17).** event-service shows a DRAFT event only to its organizer and admins (`DraftVisibility`): left out of `GET /api/events` for anyone else, and `GET /api/events/{id}` and `/sessions` answer 404, as for an unknown id (a 403 would confirm the event exists). Until now drafts were public, which leaked unpublished events. No service depends on reading drafts: registrations, passes and scans need a published event.
+- **Token refresh.** The portal refreshes the access token 60 s before it expires (`mitpass.portal.refresh-ahead`; at most a quarter of the token's lifetime, so short demo tokens aren't refreshed on every request), under a per-session lock with a re-read after the lock is taken, so parallel requests never reuse a refresh token (that would trigger D7's reuse detection and end the session). A 401 triggers one refresh and one retry.
+
+**As built.** web-portal: `tokens.css` (mockup colours, type and spacing as custom properties, redefined under `[data-theme=dark]` and `prefers-color-scheme`) + `portal.css` (components, `:lang(ta)` rules: no letter-spacing, long words wrap); static files content-hashed with a one-year cache; self-hosted fonts with their OFL licences. `CurrentUserInterceptor` puts the user, theme and language links in every model (error pages too, through `PortalAdvice`). `CookieLocaleResolver` (`mitpass-lang`, default from the browser) with a `?lang=` switch that accepts only `mitpass.portal.supported-locales`; both bundles hold the same ~445 keys, Bean Validation messages included (`I18nTest`). `TokenRefresher` takes the session mutex, re-reads the user from the session, refreshes, and saves the context through the `SecurityContextRepository`; `GatewayClient` retries once after a 401. With 1-minute tokens the first version refreshed on every request, because the 60 s window covered the whole lifetime (95 rotations in 3.5 min, none reused); the window is now capped at a quarter of the lifetime (computed from the token's `iat`/`exp`), and the same run made 4 rotations. api-gateway: `AdminHealthController` over the composite `ReactiveDiscoveryClient`, a `WebClient` with `mitpass.gateway.admin-health.timeout` (2 s), `/api/admin/**` `hasRole(ADMIN)` with a ProblemDetail 403; a stopped pass-service showed DOWN on the next call. event-service: `DraftVisibility` (a JPA `Specification` for lists, `canSee` for single reads), `allowedTransitions` on `EventSummaryResponse`. auth-service: the verification link opens `http://localhost:8090/verify-email?token=…`, where a button POSTs the token (a link preview can't spend it). The portal also sends `size=100` for an organizer's own events, because the list showed only the API's default 20.
 
 **Consequences.** PROJECT.md §4 no longer lists Tailwind, and §P6 names keytool instead of mkcert. A new LAN needs the certificate made again (the IP is in the SANs). Pages are plain MVC endpoints that also answer HTMX requests with fragments, so every page still works without JavaScript.

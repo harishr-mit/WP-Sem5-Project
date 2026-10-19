@@ -82,8 +82,9 @@ class PassPagesTest {
 
         mvc.perform(get("/my/passes/" + PASS_ID).with(authentication(TestTokens.login(student))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("/my/passes/" + PASS_ID + "/qr.png")))
-                .andExpect(content().string(containsString("setInterval")))
+                .andExpect(content().string(containsString("/my/passes/" + PASS_ID + "/qr.svg")))
+                .andExpect(content().string(containsString("/js/pass-card")))
+                .andExpect(content().string(containsString("class=\"ring\"")))
                 .andExpect(content().string(containsString("ticket.pdf")))
                 .andExpect(content().string(not(matchesPattern(JWS_PATTERN))))
                 .andExpect(content().string(not(containsString(TestTokens.ACCESS))));
@@ -91,7 +92,8 @@ class PassPagesTest {
 
     /**
      * RL6 regression: Thymeleaf's JavaScript inlining drops the text after an inlined expression, so
-     * {@code /*[[${refreshSeconds}]]*&#47; 30 * 1000} rendered as {@code 30}: the image reloaded every 30 ms.
+     * {@code /*[[${refreshSeconds}]]*&#47; 30 * 1000} rendered as {@code 30}: the image reloaded every 30 ms. Since
+     * P6 the interval is a rendered attribute (no inlining at all), and the script refuses anything under 5 s.
      */
     @Test
     void liveQrRefreshesEveryThirtySecondsNotEveryThirtyMilliseconds() throws Exception {
@@ -99,8 +101,80 @@ class PassPagesTest {
 
         mvc.perform(get("/my/passes/" + PASS_ID).with(authentication(TestTokens.login(student))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("const refreshMillis = 30000;")))
-                .andExpect(content().string(not(matchesPattern("(?s).*setInterval\\([^)]*\\b30\\);.*"))));
+                .andExpect(content().string(containsString("data-refresh-ms=\"30000\"")))
+                .andExpect(content().string(not(containsString("th:inline"))))
+                .andExpect(content().string(not(containsString("refreshMillis ="))));
+        mvc.perform(get("/js/pass-card.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("dataset.refreshMs")))
+                .andExpect(content().string(containsString("refreshMs >= 5000")));
+    }
+
+    @Test
+    void theCardShowsTheSvgCodeWithACspAndKeepsThePngForOtherCallers() throws Exception {
+        byte[] svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"/>".getBytes();
+        given(gateway.liveQrSvg(PASS_ID)).willReturn(new Binary(svg, "image/svg+xml", null));
+
+        mvc.perform(get("/my/passes/" + PASS_ID + "/qr.svg").with(authentication(TestTokens.login(student))))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("image/svg+xml"))
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Content-Security-Policy", containsString("default-src 'none'")))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(content().bytes(svg));
+    }
+
+    @Test
+    void theWalletPutsValidPassesFirst() throws Exception {
+        Pass revoked = pass("REVOKED");
+        Pass active = pass("ACTIVE");
+        given(gateway.myPasses()).willReturn(new Page<>(List.of(revoked, active), 0, 50, 2, 1));
+
+        String body = mvc.perform(get("/my/passes").with(authentication(TestTokens.login(student))))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        org.assertj.core.api.Assertions.assertThat(body.indexOf("Active")).isLessThan(body.indexOf("Revoked"));
+    }
+
+    @Test
+    void thePassCardTakesTheEventsColourAndVenue() throws Exception {
+        given(gateway.pass(PASS_ID)).willReturn(pass("ACTIVE"));
+        var event = PortalPagesTest.detail(1, List.of(), "LIVE", List.of());
+        given(gateway.event(1L))
+                .willReturn(new com.mitpass.portal.client.ApiModels.EventDetail(
+                        event.id(),
+                        event.code(),
+                        event.title(),
+                        event.description(),
+                        event.category(),
+                        new com.mitpass.portal.client.ApiModels.Venue(3L, "Main Auditorium", "Block A"),
+                        event.department(),
+                        event.capacity(),
+                        event.startsAt(),
+                        event.endsAt(),
+                        event.registrationOpensAt(),
+                        event.registrationClosesAt(),
+                        event.status(),
+                        event.organizerId(),
+                        event.organizerName(),
+                        event.eligibleDepartments(),
+                        event.minYear(),
+                        event.maxYear(),
+                        event.allowedTransitions(),
+                        event.seatsTaken(),
+                        event.seatsLeft(),
+                        event.version(),
+                        event.sessions(),
+                        true,
+                        "#1D4E89",
+                        false,
+                        null));
+
+        mvc.perform(get("/my/passes/" + PASS_ID).with(authentication(TestTokens.login(student))))
+                .andExpect(content().string(containsString("--pass-color:#1D4E89")))
+                .andExpect(content().string(containsString("Main Auditorium")))
+                .andExpect(content().string(containsString("MP&lt;TECHFEST26&lt;&lt;RAMAN&lt;PRIYA")));
     }
 
     @Test
@@ -119,7 +193,7 @@ class PassPagesTest {
 
         mvc.perform(get("/my/passes/" + PASS_ID).with(authentication(TestTokens.login(student))))
                 .andExpect(content().string(containsString("Code unlocks")))
-                .andExpect(content().string(not(containsString("qr.png"))));
+                .andExpect(content().string(not(containsString("qr.svg"))));
     }
 
     @Test
@@ -128,7 +202,7 @@ class PassPagesTest {
 
         mvc.perform(get("/my/passes/" + PASS_ID).with(authentication(TestTokens.login(student))))
                 .andExpect(content().string(containsString("was revoked")))
-                .andExpect(content().string(not(containsString("qr.png"))))
+                .andExpect(content().string(not(containsString("qr.svg"))))
                 .andExpect(content().string(not(containsString("ticket.pdf"))));
     }
 
@@ -206,7 +280,7 @@ class PassPagesTest {
                         .param("note", "Fake ID")
                         .param("confirmed", "true"))
                 .andExpect(redirectedUrl("/organizer/events/1/registrations"))
-                .andExpect(flash().attribute("message", "Pass TECHFEST26-000042-7 is now REVOKED."));
+                .andExpect(flash().attribute("message", "Pass TECHFEST26-000042-7 is now Revoked."));
     }
 
     /** RL9: revoking asks first, showing whose pass it is; nothing is revoked on the first click. */

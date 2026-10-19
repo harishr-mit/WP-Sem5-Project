@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.beans.BeanWrapperImpl;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.WebAttributes;
 import org.springframework.stereotype.Controller;
@@ -16,6 +17,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -44,6 +46,7 @@ public class AccountController {
                 && session != null
                 && session.getAttribute(WebAttributes.AUTHENTICATION_EXCEPTION) instanceof AuthenticationException ex) {
             model.addAttribute("loginError", ex.getMessage());
+            model.addAttribute("needsVerification", ex instanceof DisabledException);
         }
         return "login";
     }
@@ -71,14 +74,55 @@ public class AccountController {
                         form.getYear(),
                         form.getRegisterNumber());
                 redirect.addFlashAttribute("signedUpEmail", form.getEmail());
-                redirect.addFlashAttribute("mailpitUrl", properties.mailpitUrl());
-                return "redirect:/login?signedUp";
+                return "redirect:/check-email";
             } catch (ApiProblemException ex) {
                 copyErrors(ex, binding);
             }
         }
         addDepartments(model);
         return "signup";
+    }
+
+    /** After sign-up (PRG): "check your inbox", with a resend form and, in dev, a link to Mailpit. */
+    @GetMapping("/check-email")
+    public String checkEmail(Model model) {
+        model.addAttribute("mailpitUrl", properties.mailpitUrl());
+        return "auth/check-email";
+    }
+
+    /**
+     * The link in the verification email opens this page (D9 row). It only shows a button: the token is spent by the
+     * POST, so a mail scanner or link preview that fetches the URL can't use it up.
+     */
+    @GetMapping("/verify-email")
+    public String verifyPage(@RequestParam(required = false) String token, Model model) {
+        model.addAttribute("token", token);
+        return "auth/verify-email";
+    }
+
+    @PostMapping("/verify-email")
+    public String verify(@RequestParam String token, Model model) {
+        try {
+            gateway.verifyEmail(token);
+            return "redirect:/login?verified";
+        } catch (ApiProblemException ex) {
+            model.addAttribute("token", null);
+            model.addAttribute("failed", true);
+            return "auth/verify-email";
+        }
+    }
+
+    /** Always the same answer, so the form can't be used to find out which addresses have accounts. */
+    @PostMapping("/verify-email/resend")
+    public String resend(@RequestParam String email, RedirectAttributes redirect) {
+        try {
+            gateway.resendVerification(email.strip());
+        } catch (ApiProblemException ignored) {
+            // Same answer either way (see above), also for a malformed address.
+        }
+        redirect.addFlashAttribute("resentTo", email.strip());
+        redirect.addFlashAttribute("signedUpEmail", email.strip());
+        return "redirect:/check-email";
     }
 
     /** auth-service's 400 field errors go onto the matching fields; anything else (409, 422) is a form-level error. */

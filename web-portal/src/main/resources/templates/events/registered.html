@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<!--/* Screen 3, "You're in". The pass step (#pass-step) asks every few seconds until pass-service has issued the pass
+     (D9 row "the new pass appears on reload"), then shows "Open my pass". Email and reminder steps arrive with P7. */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{registered.title}, content=~{::main})}">
+<main id="main" class="page page--narrow">
+    <div class="pagehead">
+        <p class="eyebrow" th:text="#{registered.eyebrow}">Registration confirmed</p>
+        <h1 th:text="#{registered.title}">You're in</h1>
+        <p class="lead" th:text="#{registered.lead(${event.title()})}">Your seat for HackNight 26 is reserved.</p>
+    </div>
+
+    <a class="pass-tile" th:href="@{/events/{id}(id=${event.id()})}"
+       th:style="${event.passColor() != null} ? |--pass-color:${event.passColor()}|">
+        <div class="datechip" style="background:var(--maroon);color:#fff">
+            <b th:text="${@fmt.day(event.startsAt())}">17</b><span th:text="${@fmt.month(event.startsAt())}">OCT</span>
+        </div>
+        <div>
+            <strong th:text="${event.title()}">HackNight 26</strong>
+            <div class="hint" th:text="(${event.venue() != null} ? ${event.venue().name()} + ' · ' : '') + ${@fmt.time(event.startsAt())}">Main Auditorium · 09:00</div>
+        </div>
+        <span th:replace="~{layout :: badge('CONFIRMED')}"></span>
+    </a>
+
+    <section class="card mt-5">
+        <p class="eyebrow" th:text="#{registered.what}">What just happened</p>
+        <ol class="timeline">
+            <li>
+                <span class="timeline__dot" aria-hidden="true">✓</span>
+                <div><strong th:text="#{registered.seat}">Seat reserved</strong>
+                    <p class="hint" th:text="#{registered.seat.text}">No one else can take it, even in a rush.</p></div>
+                <span class="timeline__time" th:text="${@fmt.seconds(registration.createdAt())}">08:12:03</span>
+            </li>
+        </ol>
+        <div th:fragment="passStep" id="pass-step" aria-live="polite"
+             th:attr="hx-get=${pass == null and !tooLong} ? @{/events/{id}/registered/pass(id=${event != null ? event.id() : eventId})},
+                      hx-trigger=${pass == null and !tooLong} ? |every ${pollSeconds}s|"
+             hx-swap="outerHTML">
+            <ol class="timeline mt-4">
+                <li>
+                    <span class="timeline__dot" th:classappend="${pass == null} ? 'is-waiting'" aria-hidden="true">
+                        <th:block th:if="${pass != null}">✓</th:block><span th:if="${pass == null}" class="spinner"></span>
+                    </span>
+                    <div>
+                        <strong th:text="${pass != null} ? #{registered.pass} : #{registered.pass.waiting}">Pass issued and signed</strong>
+                        <p class="hint" th:text="${pass != null} ? #{registered.pass.text} : (${tooLong} ? #{registered.pass.slow} : #{registered.pass.wait})">A tampered or copied QR won't pass the gate.</p>
+                    </div>
+                    <span class="timeline__time" th:if="${pass != null}" th:text="${@fmt.seconds(pass.issuedAt())}">08:12:04</span>
+                </li>
+            </ol>
+            <div class="actions mt-5">
+                <a th:if="${pass != null}" class="btn" th:href="@{/my/passes/{id}(id=${pass.id()})}" th:text="#{event.you.openPass}">Open my pass</a>
+                <a th:if="${pass == null}" class="btn btn--secondary" th:href="@{/my/passes}" th:text="#{nav.myPasses}">My passes</a>
+                <a class="btn btn--ghost" th:href="@{/events}" th:text="#{registered.back}">Back to events</a>
+            </div>
+        </div>
+    </section>
+</main>
+</html>

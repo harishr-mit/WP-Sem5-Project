@@ -1,39 +1,85 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('My events')}"></head>
-<body>
-<header th:replace="~{fragments :: header}"></header>
-<main>
-    <h1>My events</h1>
-    <div th:replace="~{fragments :: flash}"></div>
-    <p class="hint">Only the actions the event allows right now are shown. Events go live by themselves shortly before
-        they start; if one went live too early, press <strong>Undo start</strong>. Cancelling, ending and undoing a
-        start ask for confirmation first.</p>
+<!--/* My events. One call: each list entry carries its allowedTransitions (D9 row replaced). Critical moves (cancel,
+     end, undo start; RL9) open a dialog with confirmed=true; without JavaScript the same button goes to the
+     confirmation page. The server refuses a critical move without confirmed=true either way. */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{nav.myEvents}, content=~{::main})}">
+<main id="main" class="page">
+    <div class="pagehead spread">
+        <div>
+            <p class="eyebrow" th:text="#{nav.organizer}">Organizer</p>
+            <h1 class="mb-0" th:text="${allEvents} ? #{org.allEvents} : #{nav.myEvents}">My events</h1>
+        </div>
+        <a class="btn" th:href="@{/organizer/events/new}" th:text="#{org.newEvent}">New event</a>
+    </div>
+    <div th:replace="~{layout :: flash}"></div>
+    <p class="hint" th:text="#{org.events.hint}">Events go live by themselves shortly before they start.</p>
 
-    <table th:if="${!events.isEmpty()}">
-        <thead><tr><th>Event</th><th>Starts</th><th>Status</th><th>Seats taken</th><th>Actions</th></tr></thead>
-        <tbody>
-        <tr th:each="e : ${events}">
-            <td><a th:href="@{/events/{id}(id=${e.id()})}" th:text="${e.title()}">TechFest Hackathon</a>
-                <br><code th:text="${e.code()}">TECHFEST26</code>
-                <br><a th:href="@{/organizer/events/{id}/registrations(id=${e.id()})}">Registrations &amp; passes</a>
-                · <a th:href="@{/organizer/events/{id}/attendance(id=${e.id()})}">Attendance</a></td>
-            <td th:text="${@fmt.when(e.startsAt())}">Sat 14 Nov 2026, 09:00</td>
-            <td><span class="status" th:text="${e.status()}">PUBLISHED</span></td>
-            <td th:text="${e.seatsTaken() + ' / ' + e.capacity()}">0 / 100</td>
-            <td class="row">
-                <form th:each="to : ${e.allowedTransitions()}"
-                      th:action="@{/organizer/events/{id}/transitions(id=${e.id()})}" method="post" class="inline">
-                    <input type="hidden" name="to" th:value="${to}">
-                    <button type="submit" th:classappend="${to == 'CANCELLED'} ? 'danger'"
-                            th:text="${@actions.label(e.status(), to)}">Open registrations</button>
-                </form>
-                <span th:if="${e.allowedTransitions().isEmpty()}">—</span>
-            </td>
-        </tr>
-        </tbody>
-    </table>
-    <p th:if="${events.isEmpty()}">You don't organise any events yet.</p>
+    <div class="table-wrap" th:if="${!events.isEmpty()}">
+        <table class="stacked">
+            <thead><tr>
+                <th th:text="#{registrations.event}">Event</th>
+                <th th:text="#{registrations.starts}">Starts</th>
+                <th th:text="#{registrations.status}">Status</th>
+                <th th:text="#{org.seats}">Seats</th>
+                <th th:text="#{registrations.actions}">Actions</th>
+            </tr></thead>
+            <tbody>
+            <tr th:each="e : ${events}">
+                <td th:data-label="#{registrations.event}">
+                    <a th:href="@{/events/{id}(id=${e.id()})}" th:text="${e.title()}">HackNight 26</a>
+                    <br><small class="mono" th:text="${e.code()}">TECHFEST26</small>
+                    <div class="row mt-0" style="font-size:.88rem">
+                        <a th:if="${e.status() != 'LIVE' and e.status() != 'COMPLETED' and e.status() != 'CANCELLED'}"
+                           th:href="@{/organizer/events/{id}/edit(id=${e.id()})}" th:text="#{org.edit}">Edit</a>
+                        <a th:href="@{/organizer/events/{id}/registrations(id=${e.id()})}" th:text="#{org.tab.registrations}">Registrations</a>
+                        <a th:href="@{/organizer/events/{id}/staff(id=${e.id()})}" th:text="#{org.tab.staff}">Volunteers</a>
+                        <a th:href="@{/organizer/events/{id}/attendance(id=${e.id()})}" th:text="#{org.tab.attendance}">Reports</a>
+                    </div>
+                </td>
+                <td th:data-label="#{registrations.starts}" th:text="${@fmt.when(e.startsAt())}">Sat 14 Nov 2026, 09:00</td>
+                <td th:data-label="#{registrations.status}"><span th:replace="~{layout :: badge(${e.status()})}"></span></td>
+                <td th:data-label="#{org.seats}" th:text="#{common.seats(${e.seatsTaken()}, ${e.capacity()})}">0 / 100</td>
+                <td th:data-label="#{registrations.actions}">
+                    <div class="actions">
+                        <th:block th:each="to : ${e.allowedTransitions()}" th:with="critical=${@actions.isCritical(e.status(), to)}">
+                            <form th:action="@{/organizer/events/{id}/transitions(id=${e.id()})}" method="post" class="inline">
+                                <input type="hidden" name="to" th:value="${to}">
+                                <button type="submit" class="btn--small"
+                                        th:classappend="${critical} ? 'btn--danger' : ''"
+                                        th:attr="data-open-dialog=${critical} ? |move-${e.id()}-${to}|"
+                                        th:text="${@actions.label(e.status(), to)}">Open registrations</button>
+                            </form>
+                            <dialog th:if="${critical}" class="confirm" th:id="|move-${e.id()}-${to}|"
+                                    th:aria-labelledby="|move-${e.id()}-${to}-title|">
+                                <form th:action="@{/organizer/events/{id}/transitions(id=${e.id()})}" method="post">
+                                    <input type="hidden" name="to" th:value="${to}">
+                                    <input type="hidden" name="confirmed" value="true">
+                                    <div class="confirm__body">
+                                        <h2 th:id="|move-${e.id()}-${to}-title|"
+                                            th:text="#{lifecycle.confirm.title(${@actions.label(e.status(), to)}, ${e.title()})}">Cancel event: Tech Quiz?</h2>
+                                        <p th:text="${@actions.consequence(e.status(), to)}">This can't be undone.</p>
+                                        <div class="field" th:if="${@actions.needsCode(to)}">
+                                            <label th:for="|code-${e.id()}|" th:text="#{lifecycle.confirm.code(${e.code()})}">Type the event code</label>
+                                            <input th:id="|code-${e.id()}|" type="text" name="code" autocomplete="off" required>
+                                        </div>
+                                    </div>
+                                    <div class="confirm__foot">
+                                        <button type="button" class="btn--ghost" data-close-dialog th:text="#{common.goBack}">Go back</button>
+                                        <button type="submit" class="btn--danger" th:text="${@actions.label(e.status(), to)}">Cancel event</button>
+                                    </div>
+                                </form>
+                            </dialog>
+                        </th:block>
+                        <span class="hint" th:if="${e.allowedTransitions() == null or e.allowedTransitions().isEmpty()}">—</span>
+                    </div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="empty card" th:if="${events.isEmpty()}">
+        <strong th:text="#{org.events.empty}">No events yet</strong>
+        <a class="btn mt-4" th:href="@{/organizer/events/new}" th:text="#{org.newEvent}">New event</a>
+    </div>
 </main>
-</body>
 </html>

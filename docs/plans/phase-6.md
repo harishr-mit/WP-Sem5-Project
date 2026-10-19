@@ -11,7 +11,7 @@
 **Exit demo** (all must pass before T08 is marked done):
 
 1. **Full journey (PROJECT.md §P6 exit):** sign up → verify through the link in Mailpit (opens a **portal** page) → log in → find the event with the live search → register → the "You're in" page (screen 3) shows the pass **without a reload** → open the pass on phone A at `https://<laptop-ip>:8443` (pass card, rotating QR, countdown ring) → phone B, a volunteer on the scanner page, points its camera at it → **green full-screen flash, the attendee's name, a beep and a vibration**. Scanning again gives a red `ALREADY_CHECKED_IN`. A screenshot of the code 60 s later gives `EXPIRED_TOKEN`.
-2. **Automatic refresh:** with `MITPASS_ACCESS_TTL=1m` on auth-service, a user keeps working for 5 minutes without being sent to the login page. Ten parallel requests from one session at expiry cause **exactly one** refresh call, and auth-service's reuse detection never fires (`TokenRefresherTest`; checked live in the auth-service log too). An expired or revoked refresh token sends the user to `/login?expired`.
+2. **Automatic refresh:** with auth-service started with `--mitpass.auth.access-token-ttl=1m`, a user keeps working for 5 minutes without being sent to the login page. Ten parallel requests from one session at expiry cause **exactly one** refresh call, and auth-service's reuse detection never fires (`TokenRefresherTest`; checked live in the auth-service log too). An expired or revoked refresh token sends the user to `/login?expired`.
 3. **Organizer:** create an event with two sessions in the form (sessions added and removed in the sub-form). An invalid form shows errors next to the fields, both the portal's own Bean Validation errors and event-service's 400 field errors. Editing with a stale version shows the "someone changed this event, reload" message (409). Lifecycle actions show only the allowed moves, and critical ones ask for confirmation in a dialog (still enforced by the server). Add a gate, assign a volunteer by email, see registrations, revoke a pass, open the attendance page and download the CSV.
 4. **Admin:** search users, change roles (granting ADMIN asks for confirmation), unlock a locked account, end a user's sessions, rotate the auth and pass signing keys (confirmation). The **health overview** lists every registered service as UP with its components (db, rabbit, discovery). Stopping pass-service turns it DOWN within one refresh.
 5. **MVC fundamentals visible:** PRG on every form (refreshing after a post doesn't resubmit), flash messages, a missing CSRF token gives 403, custom **403 / 404 / 500** pages plus a "service unavailable" page when the gateway is down, the current user is set by a `HandlerInterceptor`, and a **language switch to Tamil** changes every label on the page.
@@ -134,7 +134,7 @@ Navigation follows the mockup: students get **Explore · My passes · Stamps · 
 
 ## 7. Token refresh
 
-- `TokenRefresher.ensureFresh(request)` runs before every gateway call (in the `GatewayClient` interceptor) and in `SessionExpiryFilter`. If the access token expires within `mitpass.portal.refresh-ahead` (60 s), it refreshes.
+- `TokenRefresher.ensureFresh(request)` runs before every gateway call (in the `GatewayClient` interceptor) and in `SessionExpiryFilter`. If the access token expires within `mitpass.portal.refresh-ahead` (60 s, but at most a quarter of the token's lifetime; added in T08.13, §18), it refreshes.
 - **One refresh per session at a time:** it locks the session mutex (`WebUtils.getSessionMutex`), then **reads the user from the session again**. If another request has already refreshed, it uses that result. Only then does it call `POST /api/auth/refresh`.
 - The new `PortalUser` (new access token, new refresh token, new `expiresAt`, roles re-read from the new token) replaces the old one in the `SecurityContext` and is **saved explicitly** through the `SecurityContextRepository` (Spring Security 6+ doesn't save it automatically).
 - A 401 from the gateway on a call that carried a token triggers one refresh and one retry. A second 401, or a refresh that fails (expired, revoked, reused), ends the session → `/login?expired`.
@@ -291,4 +291,55 @@ Order: T08.1 → T08.2 → T08.3 → T08.4 → T08.5 → T08.6 → T08.7 → T08
 8. **Q8: Fonts** are self-hosted woff2 files committed under `static/fonts` with their OFL licence (about 150 KB; no WebJar exists for them), not loaded from Google Fonts. This keeps the closed-LAN demo and P7's offline shell working. *Default: as described.*
 9. **Q9: Scanner counters:** volunteers see "scanned on this device" only. The mockup's "Scanned at this gate / Inside" figures need the event summary, which only owners and admins may read; live gate counts come with P7. *Default: as described.*
 10. **Q10: `html5-qrcode`** (named in PROJECT.md §4) has had no release since 2023 (2.3.8), but it is still widely used. *Default: keep it, with the `BarcodeDetector` fallback from gotcha 8 if needed.*
-11. **Pre-phase commit:** the owner commits this plan (and the T08.1 doc changes) before T08.2 starts.
+11. **Pre-phase commit:** the owner commits this plan (and the T08.1 doc changes) before T08.2 starts. Done: `f1ebc27`.
+
+**Asked during the build:**
+
+12. **Q12: Draft events** (2026-10-17, T08.4). The public catalogue and `GET /api/events/{id}` returned DRAFT events to anyone. **Answer: hide drafts from everyone but their organizer and admins**, fixed in event-service with tests (`DraftVisibility`, `DraftVisibilityTests`; D15). Three older tests that read their own fresh draft without a token now send the owner's token.
+
+## 18. As built (2026-10-18)
+
+Built on branch `phase6` in the order of §15. Decisions as built: `docs/DECISIONS.md` D15 (and the D9 table, every row
+replaced). Demo requests: `docs/http/phase-6.http`. Browser checks: `web-portal/ui-checks/` (Playwright on Node,
+installed Edge; AGENTS.md *Working rules*, added mid-phase at the owner's request, T36).
+
+### Exit criteria
+
+| # | Criterion | Result |
+|---|---|---|
+| 1 | Full journey | **Browser, all green:** `signup.mjs` 7/7 (sign-up → Mailpit link opens `http://localhost:8090/verify-email` → the button confirms → log in), `student.mjs` 30/30 (live search → register → "You're in" shows the pass without a reload → pass card with SVG code and a running countdown), `scanner.mjs` 11/11 (Priya's real live QR fed to the browser as its camera: green *Admitted* with the flash colour in `HX-Trigger`, then amber *Already in*, then the manual tab). `EXPIRED_TOKEN` for an old code is covered by checkin-service's pipeline tests (Phase 5). **Open: the two real phones** (camera, beep, vibration, certificate warning, Wi-Fi) for the owner's exit demo |
+| 2 | Automatic refresh | auth-service started with `--mitpass.auth.access-token-ttl=1m`; `refresh.mjs 5` (2026-10-19): 30 rounds of 5 parallel page requests over 5 min, all 200, still logged in; auth-service issued 7 refresh tokens for that login (6 rotations, about one per token lifetime), none revoked, no reuse detected. `TokenRefresherTest`: 10 parallel callers → 1 refresh; `SessionRefreshTest` (a real session): the new tokens are saved and a refused refresh token ends on `/login?expired`. A bug found live is fixed (below) |
+| 3 | Organizer | `organizer.mjs` 17/17; `OrganizerFormsTest` (sessions sub-form, portal and API field errors in one `BindingResult`, stale-version 409, PRG), `StaffingPagesTest`, attendance page with the CSV link |
+| 4 | Admin | `admin.mjs` 10/10 (6 instances UP with their components); `AdminPagesTest` (ADMIN grant confirmation, can't remove your own ADMIN, unlock, end sessions, key rotation); live: stopping pass-service showed it DOWN on the next refresh |
+| 5 | MVC fundamentals | PRG + flash on every form; `PortalPagesTest` (forms and login without CSRF → 403), `ErrorPagesTest` (403/404/500/503 with the correlation id), `ShellTest` (the interceptor's user, theme and language), `I18nTest` + `tamil.mjs` 10/10 |
+| 6 | Look | `sweep.mjs` 120/120 (every role's pages, dark mode, 360 px and desktop: no sideways scroll, fields labelled, images with alt, buttons named) |
+| 7 | D9 closed | all 12 rows of the D9 table name their replacement |
+| 8 | Security | `NoTokensInPagesTest` (22 pages, one user with every role), `sec:authorize` on the navigation with server-side 403s, the gateway endpoint in `AdminHealthTest` (anonymous 401, student and organizer 403, admin 200) and in `docs/security-matrix.md` |
+| 9 | Build | `./mvnw verify` green locally (2026-10-19), 589 tests: common-web 27, common-security 13, security-test-support 17, common-messaging 22, common-pass 14, discovery 1, gateway 23, auth 59, event 136, pass 63, checkin 58, portal 156. GitHub Actions runs once the branch is pushed (the owner pushes) |
+
+### Different from the plan
+
+- **Refresh window:** `refresh-ahead` (60 s) is capped at a quarter of the token's lifetime, worked out from the token's `iat`/`exp` (`PortalUser.issuedAt`, `tokenLifetime()`). With 1-minute tokens the uncapped window covered the whole lifetime, so every request refreshed: 95 rotations in 3.5 min (none reused, so no logout, but pointless load). With the cap, 4.
+- **Browser tests:** §13 planned to check the JavaScript only on real phones. After the owner's Playwright rule (T36), `ui-checks/` holds ten scripts, and they found about twenty problems MockMvc can't see (below). They are not part of `./mvnw verify`; CI keeps the MockMvc tests.
+- **Test names:** `CurrentUserInterceptorTest` became `ShellTest`; `RegistrationFlowTest` is part of `EventPagesTest`; the gateway endpoint's security cases are in `AdminHealthTest`, not `EdgeSecurityTest`. Also new: `AccountPagesTest`, `MyAccountPagesTest`, `SessionRefreshTest`, `RefreshClientTest`, `DraftVisibilityTests` (event-service). Portal suite: 156 tests (62 before Phase 6).
+- **`theme.js`** is part of `portal.js` (theme, CSRF header for HTMX, `responseHandling` for 422, dialogs).
+- **Explore** opens on upcoming events, with an *Include past events* filter (the seed has past events, and they came first).
+- **Scanner result** is a bottom sheet over the camera (at phone height the result below the camera was off-screen).
+- **Draft events** are hidden from everyone but their organizer and admins (Q12, found while building the catalogue; event-service change with tests).
+- **Gate name** is required in the portal form too (the API requires it; the form had it optional).
+- **Organizer's list** asks for `size=100` (it showed only the API's default 20 events).
+- **Static files** are content-hashed (`/css/portal-<hash>.css`) with a one-year cache, fonts included; the version pattern has to match hashed names too (`/favicon*.svg`).
+
+### Bugs found and fixed during the phase
+
+Found by tests or review: DRAFT events public (Q12); the first refresh test passed for the wrong reason (MockMvc's `authentication()` keeps no session, now `SessionRefreshTest` with a real session); a null role filter threw in the admin users page; the gateway controller had two constructors; a `@Primary` fake discovery client clashed with Spring Cloud's composite one; `SignupForm` messages were hard-coded English.
+
+Found in the browser: after login the user landed on the favicon (its hashed URL wasn't public); Explore opened on past events; the countdown ring overlapped the code; the phone header wrapped to two rows; filters took five rows; the machine-readable line wrapped (now 30 characters); a 4 px sideways scroll (`.field` min-width); form rows misaligned and the session *Remove* overlapping; the scanner result off-screen; "Scan next" and initials invisible on the dark scanner; letter-spacing tore Tamil glyph clusters apart, and a Tamil word overflowed the stamps page; dark-mode danger buttons white on pink; the organizer list stopped at 20 events.
+
+Found live: the refresh window (above).
+
+### Open
+
+- **Two-phone exit demo** (criterion 1): `scripts/make-dev-cert.ps1`, portal with `--spring.profiles.active=lan`, the firewall rule (README *Phone demo*), phone A opens the pass, phone B scans it.
+- **Tamil review by the owner** (log.md T34): `web-portal/src/main/resources/messages_ta.properties`; `node ui-checks/tamil.mjs <dir>` makes screenshots of the key pages.
+- **GitHub Actions** on the pushed branch.

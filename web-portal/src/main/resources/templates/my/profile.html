@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<!--/* Profile (mockup's wallet bar): the account from auth-service, and "log out everywhere" behind a dialog. */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{nav.profile}, content=~{::main})}">
+<main id="main" class="page page--narrow">
+    <div class="pagehead">
+        <div class="row">
+            <span class="avatar" style="width:3.5rem;height:3.5rem;font-size:1.2rem"
+                  th:text="${@fmt.initials(profile.fullName())}">PR</span>
+            <div>
+                <h1 class="mb-0" th:text="${profile.fullName()}">Priya Raman</h1>
+                <p class="hint mb-0" th:text="${profile.email()}">2026509001@student.annauniv.edu</p>
+            </div>
+        </div>
+    </div>
+    <div th:replace="~{layout :: flash}"></div>
+
+    <section class="card">
+        <dl class="facts">
+            <dt th:text="#{profile.department}">Department</dt><dd th:text="${profile.department()}">CSE</dd>
+            <dt th:text="#{profile.year}">Year</dt>
+            <dd th:text="${profile.year() != null} ? ${profile.year()} : '—'">3</dd>
+            <dt th:text="#{profile.regNo}">Register no.</dt>
+            <dd class="mono" th:text="${profile.registerNumber() != null} ? ${profile.registerNumber()} : '—'">2026509001</dd>
+            <dt th:text="#{profile.roles}">Roles</dt>
+            <dd><span class="badge badge--brand" th:each="r : ${profile.roles()}" th:text="#{'role.' + ${r}}" style="margin-right:.25rem">Student</span></dd>
+            <dt th:text="#{profile.since}">Member since</dt><dd th:text="${@fmt.when(profile.createdAt())}">Fri 9 Oct 2026</dd>
+        </dl>
+    </section>
+
+    <form th:action="@{/logout}" method="post" class="card">
+        <button type="submit" class="btn--block btn--secondary" th:text="#{nav.logout}">Log out</button>
+    </form>
+
+    <section class="card">
+        <h3 th:text="#{profile.sessions}">Signed in elsewhere?</h3>
+        <p th:text="#{profile.sessions.text}">Log out on every device at once.</p>
+        <form th:action="@{/my/profile/logout-everywhere}" method="post">
+            <button type="submit" class="btn--secondary" data-open-dialog="logout-everywhere"
+                    th:text="#{profile.logoutEverywhere}">Log out everywhere</button>
+        </form>
+        <dialog class="confirm" id="logout-everywhere" aria-labelledby="logout-everywhere-title">
+            <form th:action="@{/my/profile/logout-everywhere}" method="post">
+                <div class="confirm__body">
+                    <h2 id="logout-everywhere-title" th:text="#{profile.logoutEverywhere.title}">Log out everywhere?</h2>
+                    <p class="mb-0" th:text="#{profile.logoutEverywhere.text}">Every device is logged out.</p>
+                </div>
+                <div class="confirm__foot">
+                    <button type="button" class="btn--ghost" data-close-dialog th:text="#{common.cancel}">Cancel</button>
+                    <button type="submit" class="btn--danger" th:text="#{profile.logoutEverywhere}">Log out everywhere</button>
+                </div>
+            </form>
+        </dialog>
+    </section>
+</main>
+</html>

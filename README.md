@@ -12,14 +12,14 @@ Students register for campus events, get a cryptographically signed QR pass, vol
 
 ## Status
 
-**Phases 1–5 are done.** Eureka, the API gateway, `auth-service`, `event-service`, `pass-service`, `checkin-service` and a first `web-portal` run against PostgreSQL and RabbitMQ, with Swagger UI at the gateway.
+**Phases 1–5 are done; Phase 6 (the finished web portal) is built**, with its two-phone exit demo still to run. Eureka, the API gateway, `auth-service`, `event-service`, `pass-service`, `checkin-service` and `web-portal` run against PostgreSQL and RabbitMQ, with Swagger UI at the gateway.
 
 - **Identity (Phase 2):** sign-up with a `<register number>@student.annauniv.edu` or Gmail address, email verification (Mailpit), login with RS256 access tokens (15 min) and rotating refresh tokens with reuse detection, account lockout, a public JWK set.
 - **Authorization:** the catalogue is public to read; every write needs a token. Organizers change only their own events, admins manage users and roles, organizers assign volunteers to gates. The gateway and every service verify the token.
 - **Registration (Phase 3):** events move through an audited state machine (illegal moves → `409` with the allowed states; a scheduler opens and closes registration and starts events). Students register without overbooking (500 parallel registrations for 100 seats → exactly 100 confirmed), join a FIFO waitlist when full, and move up automatically when someone cancels. Department/year eligibility, `Idempotency-Key` retries, and a transactional outbox that publishes every fact to RabbitMQ.
 - **Passes (Phase 4):** every confirmed registration becomes a pass automatically (`pass-service` consumes `RegistrationConfirmed`, exactly once even when RabbitMQ redelivers). A pass number like `TECHFEST26-000042-7` with a check digit; a QR code that carries an **ES256-signed token** anyone can verify against `/.well-known/pass-jwks.json`. The live code rotates (valid 45 s) and unlocks 2 hours before doors open; the PDF ticket carries a longer-lived code if the event allows it. Organizers revoke passes, scanners get a revocation feed, and cancelling an event revokes all its passes. Messages that keep failing land in a dead-letter queue (minimal for now; Phase 7 completes it).
 - **Gate scans (Phase 5):** `checkin-service` checks what an attendee shows (a QR token or a typed pass number) through a pipeline of steps: the volunteer is assigned to this gate, the ES256 signature, expiry, right event, event LIVE, session open, pass known, not revoked. Then one transaction records attendance and presence. Every outcome has a typed result with a colour (green / amber / red). Two volunteers scanning the same pass at the same instant get exactly one `ACCEPTED`. Check-out and re-entry (per-event setting), per-session attendance, manual entry with a visual name check, CSV export and certificate eligibility. Pass data is a local copy of pass-service's, kept in step **automatically**: by messages, plus a reconciler that re-reads the revocation feed every minute and the passes of events about to start every 5 minutes, with its own internal service identity.
-- **Web portal (Phase 3–5 slices):** http://localhost:8090. Sign up, log in, browse, register/cancel, see your waitlist position, open *My passes* (live QR, PDF ticket); organizers move their events through the lifecycle, revoke passes and see attendance; volunteers scan at their gate (a text field for now, the camera comes in Phase 6). Deliberately plain; Phase 6 finishes it ([D9](docs/DECISIONS.md)).
+- **Web portal (Phase 6):** http://localhost:8090, a server-rendered Spring MVC app (Thymeleaf + HTMX) for all four roles, styled after the [UI mockup](MITPass%20App%20Screens.html) with hand-written CSS, light and dark mode, phone-first, in **English and Tamil**. It is a BFF: your tokens stay in the server-side session and are refreshed automatically, so you're never sent to log in mid-task. Students search the catalogue live, register, watch the pass appear, and carry a passport-style pass card with a rotating QR and a countdown ring; organizers create events with sessions, run the lifecycle (only the allowed moves, critical ones confirmed), manage gates, volunteers, registrations and attendance; volunteers scan with the **phone camera** (green/amber/red flash, sound, vibration) or by pass number; admins manage users and roles, rotate signing keys and see every service's health. Draft events are visible only to their organizer and admins.
 
 ## Quick start
 
@@ -33,16 +33,9 @@ All commands run from the repo root. Each block shows Git Bash first and PowerSh
 | **Maven** | Nothing to install. The wrapper (`./mvnw`, `mvnw.cmd`) downloads Maven 3.9.16 on first use |
 | **Docker Desktop** | Install it and **start it**. It must be running for step 2 and for the tests |
 
-| **Firewall (phone demo only)** | Only needed to open the portal from a phone on the same Wi-Fi (camera scanner and wallet, Phase 6). See *Phone demo* below |
+| **Firewall (phone demo only)** | Only needed to open the portal from phones (camera scanner and wallet, Phase 6). See *Phone demo* below |
 
-**Phone demo: open the portal from a phone (one-time, optional).** Phone cameras only work over HTTPS. Under its `lan` profile the portal serves `https://<laptop-ip>:8443` with a self-signed certificate (the script that makes it, `scripts/make-dev-cert`, and the profile arrive in Phase 6). The laptop must accept incoming connections on that port. This is a system setting the project never changes for you. On Windows, run once in an **administrator** PowerShell:
-
-```powershell
-New-NetFirewallRule -DisplayName "MITPass portal (HTTPS 8443)" -Direction Inbound -Protocol TCP -LocalPort 8443 -Action Allow -Profile Private
-# to undo later: Remove-NetFirewallRule -DisplayName "MITPass portal (HTTPS 8443)"
-```
-
-The rule covers *Private* networks only, so set your Wi-Fi to *Private* (Settings → Network & internet → Wi-Fi → your network → Network profile type). Use a trusted network or a phone hotspot: campus Wi-Fi often blocks device-to-device traffic. On Linux, run `sudo ufw allow 8443/tcp` if ufw is on; on macOS, allow Java when the firewall asks. Each phone shows a certificate warning once: accept it to continue.
+**Phone demo** (two phones, camera scanner): the one-time firewall setup and the steps are in [*Phone demo*](#phone-demo-two-phones-the-camera-scanner) below.
 
 When `JAVA_HOME` is unset, the wrapper finds `.tools/jdk-21` by itself. For other commands, point a shell at that JDK with `source scripts/env.sh` (Git Bash) or `. .\scripts\env.ps1` (PowerShell). VS Code terminals already have it.
 
@@ -73,7 +66,7 @@ You don't need this step before every run: the jars in `target/` and the install
 ./mvnw -pl services/pass-service spring-boot:run         # 4. pass-service   :8083
 ./mvnw -pl services/checkin-service spring-boot:run      # 5. checkin-service :8084
 ./mvnw -pl platform/api-gateway spring-boot:run          # 6. gateway        :8080
-./mvnw -pl web-portal spring-boot:run                    # 7. web portal     :8090
+./mvnw -pl web-portal spring-boot:run                    # 7. web portal     :8090 (https :8443 with the lan profile: see Phone demo)
 ```
 
 Start `pass-service` before anyone registers: it declares its RabbitMQ queue on start, and a registration confirmed before the queue exists gets no pass (no backfill). checkin-service doesn't need that care: whatever its queue missed, its reconciler pulls in within 5 minutes (and at once when an event goes LIVE). For a clean demo, wipe old data first with `docker compose -f infra/docker-compose.yml down -v`.
@@ -97,13 +90,17 @@ Through the gateway, the API answers `503` for up to ~30 s after start, until th
 | What | Where |
 |---|---|
 | **Swagger UI (through the gateway)** | http://localhost:8080/swagger-ui.html: pick an operation, then *Try it out* |
-| **Web portal** | http://localhost:8090: log in as `2026509001@student.annauniv.edu` and register for *Tech Quiz*, then as `2026505014@student.annauniv.edu` (waitlisted #1); cancel the first and reload *My registrations* of the second |
+| **Web portal: student** | http://localhost:8090: *Sign up* (the link in Mailpit opens the portal; press *Confirm my email*), or log in as `2026509001@student.annauniv.edu`. *Explore*: type to search, filter by category or date. Register for *Tech Quiz* → *You're in* shows the pass when it arrives. Then log in as `2026505014@student.annauniv.edu` in a private window and register too (waitlisted #1); cancel as the first student, and the second one's *My registrations* updates by itself. *My passes* → a pass card; *Stamps*, *Profile* (log out everywhere) in the bottom bar. The header switches the language (English / தமிழ்) and the theme (light / dark) |
+| **Web portal: organizer** | As `organizer.a@mitpass.test`: *My events* → *New event* (add and remove sessions in the form; mistakes are shown next to the fields), then *Publish*. Each event's buttons show only the moves its state allows; *Cancel event* asks first. *Registrations* (filter, revoke a pass), *Volunteers* (gates, assign `volunteer@mitpass.test`), *Reports* (attendance, certificates, CSV) |
+| **Web portal: volunteer** | As `volunteer@mitpass.test` once assigned to a gate → **Scan**: pick the event and gate, allow the camera, and point it at a pass. Works on `localhost` in a desktop browser; on a phone it needs the HTTPS `lan` profile (*Phone demo* below). The *Type pass no.* tab shows the name first, then confirms |
+| **Web portal: admin** | As `admin@mitpass.test`: *Users* (search, roles, unlock, end sessions; granting ADMIN asks first), *Health* (every registered instance and its components, refreshing; stop a service to see it go DOWN), *Keys* (rotate the auth and pass signing keys) |
+| **Phone demo** | Two phones, the laptop as hotspot: see [*Phone demo*](#phone-demo-two-phones-the-camera-scanner) below; `scripts\phone-demo-check.ps1` says when it's ready |
 | **Passes** | Register for an event, then open *My passes* in the portal: the pass appears about a second later. The live QR shows from 2 h before doors open (seed events are weeks away, so their passes say *Code unlocks …*: create an event that starts within 2 h to see the live code, as [phase-4.http](docs/http/phase-4.http) does). *Download PDF ticket* works at once. As `organizer.a@mitpass.test`, *My events* → *Registrations & passes* → **Revoke** |
 | **Verify a QR yourself** | Scan the QR with any phone app, copy the text, then `.tools/jdk-21/bin/java scripts/VerifyPassToken.java "<text>"`: it checks the ES256 signature against the gateway's `/.well-known/pass-jwks.json` with the JDK only. Change one character and it says `INVALID SIGNATURE` |
-| **Gate scans** | Run [phase-5.http](docs/http/phase-5.http): it creates an event starting in 25 min, gates, assigns the volunteer, and walks through every result code. In the portal as `volunteer@mitpass.test` → **Scan**: pick the gate, type a pass number (you see the name first, then confirm) or paste a QR token. As the organizer: *My events* → **Attendance** (reload for new counts), *Export CSV* |
+| **Gate scans** | Run [phase-5.http](docs/http/phase-5.http): it creates an event starting in 25 min, gates, assigns the volunteer, and walks through every result code. In the portal as `volunteer@mitpass.test` → **Scan** (camera, or *Type pass no.*). As the organizer: *My events* → **Reports** (*Refresh* for new counts; live push comes in Phase 7), *Export CSV* |
 | Race demo | `./mvnw -pl services/checkin-service verify -Dtest=DoubleScanRaceTest`: 20 simultaneous scans of one pass → 1 `ACCEPTED`, 19 `ALREADY_CHECKED_IN` |
 | Eureka dashboard | http://localhost:8761 (shows `API-GATEWAY`, `AUTH-SERVICE`, `EVENT-SERVICE`, `PASS-SERVICE`, `CHECKIN-SERVICE` and `WEB-PORTAL`) |
-| Ready-made requests | [docs/http/phase-5.http](docs/http/phase-5.http): every scan result, check-out/re-entry, manual entry, reports. [docs/http/phase-4.http](docs/http/phase-4.http): pass issuance, live/static QR, PDF, revocation and the feed, the cancellation saga, key rotation. [docs/http/phase-3.http](docs/http/phase-3.http): lifecycle and illegal moves, registration, waitlist promotion, idempotency, eligibility, optimistic locking. [phase-2.http](docs/http/phase-2.http): sign-up → verify → login, refresh-token reuse, ownership 403, volunteer assignment, lockout. [phase-1.http](docs/http/phase-1.http): catalogue CRUD and each error case |
+| Ready-made requests | [docs/http/phase-6.http](docs/http/phase-6.http): token refresh and reuse, draft visibility, `allowedTransitions`, the portal verification link, the admin health overview. [docs/http/phase-5.http](docs/http/phase-5.http): every scan result, check-out/re-entry, manual entry, reports. [docs/http/phase-4.http](docs/http/phase-4.http): pass issuance, live/static QR, PDF, revocation and the feed, the cancellation saga, key rotation. [docs/http/phase-3.http](docs/http/phase-3.http): lifecycle and illegal moves, registration, waitlist promotion, idempotency, eligibility, optimistic locking. [phase-2.http](docs/http/phase-2.http): sign-up → verify → login, refresh-token reuse, ownership 403, volunteer assignment, lockout. [phase-1.http](docs/http/phase-1.http): catalogue CRUD and each error case |
 | Log in for Swagger | `POST /api/auth/login` with a demo account, copy `accessToken`, press **Authorize** |
 | Forged-token demo | `scripts/forge-token.sh "<a student's accessToken>"` rewrites the roles to ADMIN and keeps the signature; every service answers `401` |
 | RabbitMQ UI | http://localhost:15672 (`mitpass` / `mitpass`). Queues → `mitpass.events.tap` → *Get messages* shows every domain event (dev-only tap queue, last 1000). `pass-service.inbox` and `checkin-service.inbox` are the services' queues; their `.dlq` partners hold messages that failed 3 times (replay them by hand until Phase 7) |
@@ -115,6 +112,55 @@ curl "http://localhost:8080/api/events?q=hack&category=TECHNICAL&from=2026-11-01
 ```
 
 Errors come back as `application/problem+json` (RFC 9457), with an `errors[]` array for validation failures and a `correlationId` that also appears in the service's log lines.
+
+### Phone demo: two phones, the camera scanner
+
+Phone A shows a student's pass, phone B is a volunteer's scanner, and the laptop runs everything. Phone cameras only work over HTTPS, so the portal's `lan` profile serves `https://<laptop>:8443` with a self-signed certificate.
+
+**The reliable way: make the laptop the Wi-Fi hotspot** and connect both phones to it. Phone hotspots, campus Wi-Fi and many routers silently stop devices on them from reaching each other (the phone just times out). With the laptop as the hotspot nothing sits in between. Windows gives its hotspot the address `192.168.137.1` and counts it as a *Public* network, which is why step 1 adds a rule for it, limited to devices on that hotspot.
+
+**1. One-time firewall setup** (Windows, **administrator** PowerShell, from the repo root). It only touches rules for the project's Java and port 8443:
+
+```powershell
+# a. Remove every rule Windows made for the project's Java from its "Allow access?" prompt. Both answers are
+#    a problem: Cancel makes a Block rule (beats every Allow rule, so the phones time out), Allow makes a rule
+#    that opens EVERY port of this Java (Eureka 8761, the services 8081-8084, http 8090) on that network type.
+#    This only deletes rules; afterwards Windows blocks incoming connections to this Java by default.
+$java = (Resolve-Path .tools\jdk-21\bin\java.exe).Path
+Get-NetFirewallApplicationFilter | Where-Object Program -eq $java | Get-NetFirewallRule | Remove-NetFirewallRule
+Remove-NetFirewallRule -DisplayName "MITPass portal (HTTPS 8443*" -ErrorAction SilentlyContinue   # older versions of b and c
+
+# b. The laptop's own hotspot: only the project's Java, only port 8443, only devices on that hotspot (192.168.137.x)
+New-NetFirewallRule -DisplayName "MITPass portal (HTTPS 8443, laptop hotspot)" -Direction Inbound -Program $java -Protocol TCP -LocalPort 8443 -Action Allow -Profile Public -RemoteAddress 192.168.137.0/24
+
+# c. Optional, only for a shared Wi-Fi router set to Private: the same, for devices on that network
+New-NetFirewallRule -DisplayName "MITPass portal (HTTPS 8443)" -Direction Inbound -Program $java -Protocol TCP -LocalPort 8443 -Action Allow -Profile Private -RemoteAddress LocalSubnet
+```
+
+With *b* (or *c*) in place Windows should no longer ask "Allow access?" for the project's Java. If it does, answer either way and run *a*–*c* again afterwards; `scripts\phone-demo-check.ps1` flags the rule the prompt leaves behind. On Linux, `sudo ufw allow 8443/tcp` if ufw is on; on macOS, allow Java when the firewall asks.
+
+**2. Before each demo**
+
+1. **Hotspot:** Settings → Network & internet → **Mobile hotspot**: share your internet connection over Wi-Fi, switch it on. Connect both phones to it and **turn their mobile data off** (so they don't try to reach the laptop over the internet).
+2. **Certificate**, with the hotspot on (it names the laptop's current addresses; nothing is installed, the project JDK's `keytool` makes it): `powershell -ExecutionPolicy Bypass -File scripts\make-dev-cert.ps1` (or `sh scripts/make-dev-cert.sh`). Make it again after changing networks.
+3. **Start** the infrastructure and services 1–6 as in steps 2–4 above, then the portal **from the repo root** (not `./mvnw … spring-boot:run`, which serves only http :8090 and can't find the certificate):
+   ```bash
+   .tools/jdk-21/bin/java -jar web-portal/target/web-portal.jar --spring.profiles.active=lan
+   ```
+4. **Check** (read-only, no admin): `powershell -ExecutionPolicy Bypass -File scripts\phone-demo-check.ps1`. Every line should say `OK`, and the last line prints the address to open (`https://192.168.137.1:8443`). A `FIX` line says what to do.
+5. **An event to scan:** the seeded events are weeks away, but a live QR appears only 2 h before the start and scans need a LIVE event. Run [docs/http/phase-5.http](docs/http/phase-5.http) sections 1–3 (up to "Wait until status is LIVE"): an event starting in 25 minutes, gate MAIN with `volunteer@mitpass.test`, Priya and Arun registered, registration closed, LIVE within about 30 s.
+
+**3. The demo**
+
+1. On both phones open the address from the check and accept the certificate warning once (Chrome: *Advanced → Proceed*; Safari: *Show Details → visit this website*).
+2. **Phone A:** log in as `2026509001@student.annauniv.edu` (Priya, `Passw0rd!`) → *My passes* → the new event's pass: the passport card with a rotating QR and a countdown ring.
+3. **Phone B:** log in as `volunteer@mitpass.test` (`Passw0rd!`) → **Scan** → pick the event and gate MAIN → start the camera and allow it → point it at phone A.
+4. Expected: a **green** full-screen flash with Priya's name, a beep and a vibration. Scan again: amber *Already in*. A screenshot of an older code: red, expired. The *Type pass no.* tab works without the camera.
+5. On the laptop, as `organizer.a@mitpass.test`: *My events* → the event → **Reports** shows the check-in.
+
+**4. Afterwards:** stop the portal and services (step 6), switch the hotspot off. The firewall rules can stay for the next demo, or go: `Remove-NetFirewallRule -DisplayName "MITPass portal (HTTPS 8443, laptop hotspot)"` (and `"MITPass portal (HTTPS 8443)"` if you made it). Anyone who can join the hotspot can reach the portal, and the demo accounts' password is in this README, so use a hotspot password and keep the portal off when you're not demoing.
+
+Background and the full diagnosis that led to this setup: [archive/2026-10-19_phone-demo_network-diagnosis.md](archive/2026-10-19_phone-demo_network-diagnosis.md).
 
 ### 6. Stop
 
@@ -133,6 +179,8 @@ docker compose -f infra/docker-compose.yml down        # keeps the data; add -v 
 
 GitHub Actions runs `./mvnw verify` on every push and pull request ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
 
+**Browser checks of the portal** (Playwright on Node, not part of `./mvnw verify`): [web-portal/ui-checks/](web-portal/ui-checks/README.md). With the stack running: `cd web-portal/ui-checks`, `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci` once (project-local; uses the installed Edge), then for example `node student.mjs <screenshot-folder>`. There are scripts for each role, the camera scanner (a real QR through a fake camera), Tamil, a dark-mode and accessibility sweep, and token refresh.
+
 ### Troubleshooting
 
 | Symptom | Fix |
@@ -148,7 +196,12 @@ GitHub Actions runs `./mvnw verify` on every push and pull request ([.github/wor
 | A scan says `UNAUTHORIZED_SCANNER` / `WRONG_GATE` | The volunteer isn't assigned to that event / to that gate: `POST /api/events/{id}/volunteers`. Assignments are cached for 30 s |
 | A scan says `NOT_YET_OPEN` | The event isn't LIVE yet (the scheduler starts it 30 min before `startsAt`), or a multi-session event is between sessions |
 | `503 event-service-unavailable` from pass- or checkin-service | They read venue, colours, gates, assignments and the organizer from event-service: start it, or wait for Eureka |
-| Portal sends you to the log-in page after 15 minutes | Intended in the Phase 3 slice: the access token expired and you log in again. Phase 6 refreshes it automatically ([D9](docs/DECISIONS.md)) |
+| Portal sends you to the log-in page (`/login?expired`) | The refresh token expired (7 days) or was revoked (an admin ended your sessions, or *Log out everywhere*). The 15-minute access token itself is refreshed automatically |
+| The scanner says the camera isn't available | Browsers allow the camera only on a secure page: `localhost`, or the `lan` profile's `https://<laptop-ip>:8443` (accept the certificate warning). Also allow the camera when the browser asks. *Type a number* works without it |
+| The phone can't reach `https://<laptop>:8443` | Run `scripts\phone-demo-check.ps1`: it checks the hotspot, the certificate, the portal and the firewall rules, and says what to fix |
+| The check says ready, but the phone times out | The phone isn't on the laptop's hotspot (Wi-Fi details), its mobile data is on, or a VPN / Private DNS on the phone takes the traffic. On a shared network instead of the laptop's hotspot, the network itself may drop it: see the [diagnosis](archive/2026-10-19_phone-demo_network-diagnosis.md) |
+| The phone says the certificate is invalid, with no way to continue | The certificate doesn't name the address you opened: remake it with the hotspot on, restart the portal |
+| A template change doesn't show | Templates are cached; run the portal with the `dev` profile while editing |
 | `RabbitMQ not reachable at startup` in a service log | Start the compose infrastructure. Events wait in the service's `outbox_message` table and are sent once RabbitMQ is back |
 | `423 account-locked` | 5 wrong passwords in a row. Wait 15 minutes, or `POST /api/users/{id}/unlock` as admin |
 | Port 5432 / 8080 already in use | Stop whatever else uses it, or change the port in `infra/docker-compose.yml` / `application.yml` |

@@ -85,8 +85,14 @@ management:
     web:
       exposure:
         include: health,info,gateway
+  endpoint:
+    health:
+      show-components: always   # names and status for the admin health page (D15); details stay hidden
 
 mitpass:
+  gateway:
+    admin-health:
+      timeout: 2s   # GET /api/admin/health: an instance silent this long is reported DOWN (D15)
   security:
     # Edge pre-check only: requests on these paths pass without a token, everything else needs a valid one.
     # Each service enforces its own list (and all role rules) again. Keep this a superset of the services' lists.

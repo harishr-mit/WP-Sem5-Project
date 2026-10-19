@@ -22,3 +22,6 @@ management:
     web:
       exposure:
         include: health,info
+  endpoint:
+    health:
+      show-components: always   # names and status for the admin health page (D15); details stay hidden

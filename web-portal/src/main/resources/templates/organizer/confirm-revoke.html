@@ -1,33 +1,28 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Revoke pass')}"></head>
-<body>
-<header th:replace="~{fragments :: header}"></header>
-<main>
-    <!-- RL9: revoking can't be undone, so it is confirmed here first. -->
-    <h1>Revoke this pass?</h1>
-    <section class="box warn">
+<!--/* RL9 without JavaScript: revoking can't be undone, so it is confirmed here first (a dialog does it with JS). */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{revoke.title}, content=~{::main})}">
+<main id="main" class="page page--narrow">
+    <a class="back" th:href="@{/organizer/events/{id}/registrations(id=${eventId})}" th:text="'← ' + #{org.tab.registrations}">← Registrations</a>
+    <h1 th:text="#{revoke.title}">Revoke this pass?</h1>
+    <section class="card card--warn">
         <dl class="facts">
-            <dt>Holder</dt>
-            <dd class="pass-holder" th:text="${pass.holderName()}">Priya Raman</dd>
-            <dt>Pass</dt>
-            <dd><code th:text="${pass.passNumber()}">TECHFEST26-000042-7</code></dd>
-            <dt>Event</dt>
-            <dd th:text="${pass.eventTitle()}">TechFest Hackathon</dd>
+            <dt th:text="#{pass.holder}">Holder</dt><dd><strong th:text="${pass.holderName()}">Priya Raman</strong></dd>
+            <dt th:text="#{pass.number}">Pass</dt><dd class="pass-number" th:text="${pass.passNumber()}">TECHFEST26-000042-7</dd>
+            <dt th:text="#{registrations.event}">Event</dt><dd th:text="${pass.eventTitle()}">TechFest Hackathon</dd>
         </dl>
-        <p>The pass stops working at once, at every gate and on the printed ticket. This can't be undone.</p>
+        <p class="mb-0 mt-4" th:text="#{revoke.consequence}">The pass stops working at once. This can't be undone.</p>
     </section>
-    <form th:action="@{/organizer/passes/{id}/revoke(id=${pass.id()})}" method="post" class="stack box">
+    <form th:action="@{/organizer/passes/{id}/revoke(id=${pass.id()})}" method="post" class="card form">
         <input type="hidden" name="eventId" th:value="${eventId}">
         <input type="hidden" name="confirmed" value="true">
-        <label>Reason (optional)
-            <input type="text" name="note" maxlength="200" th:value="${note}">
-        </label>
-        <div>
-            <button type="submit" class="danger">Revoke pass</button>
-            <a th:href="@{/organizer/events/{id}/registrations(id=${eventId})}">Go back</a>
+        <div class="field">
+            <label for="note" th:text="#{revoke.reason}">Reason (optional)</label>
+            <input id="note" type="text" name="note" maxlength="200" th:value="${note}">
+        </div>
+        <div class="actions">
+            <button type="submit" class="btn--danger" th:text="#{revoke.button}">Revoke pass</button>
+            <a class="btn btn--ghost" th:href="@{/organizer/events/{id}/registrations(id=${eventId})}" th:text="#{common.goBack}">Go back</a>
         </div>
     </form>
 </main>
-</body>
 </html>

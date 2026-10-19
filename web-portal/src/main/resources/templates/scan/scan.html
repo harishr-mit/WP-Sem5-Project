@@ -1,48 +1,117 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Scan')}"></head>
-<body>
-<header th:replace="~{fragments :: header}"></header>
-<main>
-    <h1>Scan at the gate</h1>
-    <div th:replace="~{fragments :: flash}"></div>
+<!--/* The scanner (UI reference screens 5–6). One form (#scan-form) holds gate, mode and the manual field, so the page
+     works without JavaScript (POST /scan, PRG, result as a flash attribute). With JavaScript, scanner.js starts the
+     camera (html5-qrcode) and posts each read to /scan/submit; the manual tab posts to /scan/check. Both answer a
+     fragment of this template into #scan-result, plus HX-Trigger "scanResult" for the flash, tone and vibration. */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: bare(title=#{nav.scan}, content=~{::main})}">
+<main id="main" class="scanner" th:data-repeat-ignore-ms="${repeatIgnoreMillis}"
+      th:data-offline-label="#{scan.offline}" th:data-no-secure="#{scan.noSecure}" th:data-no-camera="#{scan.noCamera}">
+    <div class="flashscreen" id="flashscreen" aria-hidden="true"></div>
 
-    <!-- The last result (screen 6, thin): colour, code, message and the attendee's name. -->
-    <section th:if="${result != null}" class="scan-result" th:classappend="${result.colorClass()}">
-        <p class="scan-code" th:text="${result.result()}">ACCEPTED</p>
-        <p class="scan-message" th:text="${result.message()}">Welcome, Priya Raman.</p>
-        <p th:if="${result.attendee() != null}">
-            <span th:text="${result.attendee().holderName()}">Priya Raman</span> ·
-            <code th:text="${result.attendee().passNumber()}">TECHFEST26-000042-7</code>
-        </p>
-        <p th:if="${result.sessionTitle() != null}" class="hint" th:text="'Session: ' + ${result.sessionTitle()}">
-            Session: Data preparation</p>
-    </section>
+    <form id="scan-form" th:action="@{/scan}" method="post" th:attr="hx-post=@{/scan/check},data-submit=@{/scan/submit}"
+          hx-target="#scan-result" hx-swap="innerHTML">
+        <input type="hidden" name="deviceId" id="device-id">
 
-    <p th:if="${options.isEmpty()}" class="flash err">
-        No gates to scan at: you aren't assigned to any gate yet, and you don't organize an event with gates.
-    </p>
+        <div class="scanner__top">
+            <a th:href="@{/events}" th:aria-label="#{common.back}">←</a>
+            <div class="scanner__gate" th:unless="${options.isEmpty()}">
+                <label for="gate" class="visually-hidden" th:text="#{staff.gate}">Gate</label>
+                <select id="gate" name="gateId">
+                    <option th:each="o : ${options}" th:value="${o.gateId()}" th:text="${o.label()}"
+                            th:selected="${o.gateId() == gateId}">TECHFEST26 · Main Gate</option>
+                </select>
+            </div>
+            <span class="online" id="online" th:text="#{scan.online}">● Online</span>
+        </div>
 
-    <!-- D9 shortcut: a text field instead of the camera (P6 adds html5-qrcode). -->
-    <form th:unless="${options.isEmpty()}" th:action="@{/scan}" method="post" class="stack box">
-        <label>Gate
-            <select name="gateId">
-                <option th:each="o : ${options}" th:value="${o.gateId()}" th:text="${o.label()}"
-                        th:selected="${o.gateId() == gateId}">TECHFEST26 · Main Gate</option>
-            </select>
-        </label>
-        <fieldset>
-            <legend>Mode</legend>
-            <label><input type="radio" name="mode" value="IN" th:checked="${mode == 'IN'}"> Check in</label>
-            <label><input type="radio" name="mode" value="OUT" th:checked="${mode == 'OUT'}"> Check out</label>
-        </fieldset>
-        <label>Pass number or QR code
-            <input type="text" name="code" autocomplete="off" autofocus
-                   placeholder="TECHFEST26-000042-7, or paste the code">
-        </label>
-        <button type="submit">Check</button>
-        <p class="hint">A typed pass number is looked up first, so you can compare the name with the person.</p>
+        <p class="flash flash--err" style="margin:1rem" th:if="${options.isEmpty()}" th:text="#{scan.noGates}">
+            No gates to scan at.</p>
+
+        <th:block th:unless="${options.isEmpty()}">
+            <div class="scanner__modes">
+                <fieldset class="segmented">
+                    <legend class="visually-hidden" th:text="#{scan.mode}">Mode</legend>
+                    <label><input type="radio" name="mode" value="IN" th:checked="${mode == 'IN'}"><span th:text="#{scan.in}">Check in</span></label>
+                    <label><input type="radio" name="mode" value="OUT" th:checked="${mode == 'OUT'}"><span th:text="#{scan.out}">Check out</span></label>
+                </fieldset>
+                <div class="tabs mb-0" role="tablist" id="scan-tabs" hidden>
+                    <button type="button" role="tab" aria-selected="true" data-tab="camera" th:text="#{scan.tab.camera}">Camera</button>
+                    <button type="button" role="tab" aria-selected="false" data-tab="manual" th:text="#{scan.tab.manual}">Type pass no.</button>
+                </div>
+            </div>
+
+            <div class="viewfinder" id="camera-panel" hidden>
+                <div id="reader"></div>
+                <div class="viewfinder__frame"></div>
+                <div class="viewfinder__msg" id="camera-msg" th:text="#{scan.hold}">Hold the QR inside the frame</div>
+            </div>
+
+            <div class="scanner__panel" id="manual-panel">
+                <div class="field">
+                    <label for="code" th:text="#{scan.manual}">Pass number or QR code</label>
+                    <input id="code" type="text" name="code" autocomplete="off" inputmode="text" class="mono"
+                           th:placeholder="#{scan.manual.placeholder}">
+                </div>
+                <button type="submit" class="btn--block mt-4" th:text="#{scan.check}">Check</button>
+                <p class="hint mb-0" th:text="#{scan.manual.hint}">A typed number is looked up first, so you can compare the name.</p>
+            </div>
+        </th:block>
     </form>
+
+    <div id="scan-result" aria-live="assertive">
+        <div th:if="${error}" class="flash flash--err" style="margin:1rem" th:text="${error}">Error</div>
+        <th:block th:if="${result != null}"><div th:replace="~{:: result}"></div></th:block>
+    </div>
+
+    <div class="scanner__count" style="padding:0 1rem 1rem" th:unless="${options.isEmpty()}">
+        <span th:text="#{scan.countLabel}">Scanned on this device</span> <b id="scan-count">0</b>
+    </div>
+
+    <!--/* Fragment definitions only: never rendered on the page itself (selecting a fragment ignores this th:if). */-->
+    <th:block th:if="${false}">
+    <!--/* A scan's answer (screen 6): colour, word, who, and "Scan next". */-->
+    <div th:fragment="result" class="result" th:with="code=${result != null} ? ${result.result()} : 'ERROR'"
+         th:classappend="${result != null} ? 'result--' + ${result.colorClass()} : 'result--red'">
+        <div class="spread">
+            <div class="result__icon" aria-hidden="true"
+                 th:text="${result != null and result.colorClass() == 'green'} ? '✓' : (${result != null and result.colorClass() == 'amber'} ? '!' : '✕')">✓</div>
+            <span class="result__code" th:text="${code}">ACCEPTED</span>
+        </div>
+        <p class="result__word" th:text="#{'scan.word.' + ${code}}">Admitted</p>
+        <p class="result__msg" th:if="${result != null}"
+           th:text="${#messages.msgOrNull('scan.hint.' + code) != null} ? #{'scan.hint.' + ${code}} : ${result.message()}">Welcome.</p>
+        <p class="result__msg" th:if="${result == null}" th:text="${problem}">Something went wrong.</p>
+        <div class="result__who" th:if="${result != null and result.attendee() != null}">
+            <span class="avatar" th:text="${@fmt.initials(result.attendee().holderName())}">PR</span>
+            <div>
+                <p><strong th:text="${result.attendee().holderName()}">Priya Raman</strong></p>
+                <p class="pass-number" th:text="${result.attendee().passNumber()}">TECHFEST26-000042-7</p>
+                <p th:if="${result.sessionTitle() != null}" th:text="${result.sessionTitle()}">Day 1</p>
+                <p th:if="${result.checkedInAt() != null}" th:text="#{scan.at(${@fmt.seconds(result.checkedInAt())})}">Marked at 09:14:22</p>
+            </div>
+        </div>
+        <a class="btn" th:href="@{/scan}" data-scan-next th:text="#{scan.next}">Scan next</a>
+    </div>
+
+    <!--/* Manual entry step one: compare the name with the person, then confirm (HTMX). */-->
+    <div th:fragment="lookup" class="card" style="margin:1rem">
+        <p class="eyebrow" th:text="#{scan.isThis}">Is this the person?</p>
+        <p class="stat__value mt-0" style="font-size:2rem" th:text="${lookup.holderName()}">Priya Raman</p>
+        <p class="pass-number" th:text="${lookup.passNumber()}">TECHFEST26-000042-7</p>
+        <p class="row"><span th:replace="~{layout :: badge(${lookup.passStatus()})}"></span>
+            <span th:replace="~{layout :: badge(${lookup.presence()})}"></span>
+            <span class="hint" th:if="${lookup.sessionTitle() != null}" th:text="${lookup.sessionTitle()}">Day 1</span></p>
+        <form th:attr="hx-post=@{/scan/submit}" hx-target="#scan-result" hx-swap="innerHTML" hx-include="#gate, [name=mode]:checked, #device-id">
+            <input type="hidden" name="passNumber" th:value="${lookup.passNumber()}">
+            <div class="actions">
+                <button type="submit" th:text="${mode == 'OUT'} ? #{scan.confirmOut} : #{scan.confirmIn}">Confirm check-in</button>
+                <a class="btn btn--ghost" th:href="@{/scan}" data-scan-next th:text="#{common.cancel}">Cancel</a>
+            </div>
+        </form>
+    </div>
+    </th:block>
+
+    <script th:src="@{/webjars/html5-qrcode/html5-qrcode.min.js}" defer></script>
+    <script th:src="@{/js/scanner.js}" defer></script>
 </main>
-</body>
 </html>

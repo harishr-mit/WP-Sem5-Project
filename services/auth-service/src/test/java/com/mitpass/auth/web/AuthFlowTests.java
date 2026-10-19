@@ -104,6 +104,18 @@ class AuthFlowTests {
                 .andExpect(jsonPath("$.type").value("urn:mitpass:problem:invalid-refresh-token"));
     }
 
+    /** Phase 6 (D9 row): the email's link opens the portal's confirmation page, not this service's API. */
+    @Test
+    void theVerificationLinkOpensThePortalPage() throws Exception {
+        String email = TestAccounts.uniqueGmail();
+        signup(email, "Techfest2026").andExpect(status().isCreated());
+
+        String link = await().atMost(Duration.ofSeconds(10))
+                .until(() -> mail.latestLinkFor(email).orElse(null), l -> l != null);
+        assertThat(link).startsWith("http://localhost:8090/verify-email?token=");
+        assertThat(link).doesNotContain("/api/");
+    }
+
     @Test
     void fiveWrongPasswordsLockTheAccount() throws Exception {
         String email = TestAccounts.uniqueGmail();

@@ -148,3 +148,14 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 **Built for now.** Nobody can undo a check-in. Revoking a pass (organizer of the event or admin only, pass-service) is something else: it makes the whole pass invalid from then on, and it does not remove the check-in. A check-out (any assigned scanner) only moves presence to OUT; the attendance row stays, so it still counts for reports and certificates. Every scan is in `scan_log`.
 
 **Options.** (a) An organizer/admin action "void check-in": marks the attendance row void (kept for audit, excluded from counts and certificates), moves presence back, and publishes a correcting event so pass-service clears `checkedInAt` / `usedAt`. Volunteers can't do it. (b) Leave it: check-out plus a manual note. (c) Only admins. Whatever is chosen, it is a confirmed action (RL9) with its own audit row.
+
+## RL13: Explore opens on upcoming events only
+
+*2026-10-19 · OPEN · from: Phase 6 browser check (T08.4/T08.13), decided by the agent without asking*
+
+**Question.** Should the student catalogue (*Explore*) show past events by default?
+
+**Built for now.** *Explore* lists events from today on; an *Include past events* filter shows the rest. Before this, the seed's past events came first and pushed the current ones off the first page. The API is unchanged (`GET /api/events` without `from` still returns everything); only the portal adds `from=<today>`.
+
+**Options.** (a) Keep it. (b) Show everything, newest first. (c) Show upcoming first and past events below them, on the same page.
+

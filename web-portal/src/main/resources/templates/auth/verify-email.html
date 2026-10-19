@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{verify.title}, content=~{::main})}">
+<main id="main" class="page page--narrow">
+    <div class="pagehead">
+        <p class="eyebrow" th:text="#{checkEmail.eyebrow}">One more step</p>
+        <h1 th:text="#{verify.title}">Confirm your email</h1>
+    </div>
+    <!-- The token is spent only by this POST (a link preview fetching the GET can't use it up). -->
+    <form th:if="${token != null and !#strings.isEmpty(token)}" th:action="@{/verify-email}" method="post" class="card form">
+        <p class="lead mt-0" th:text="#{verify.text}">Press the button to confirm that this address is yours.</p>
+        <input type="hidden" name="token" th:value="${token}">
+        <button type="submit" class="btn--block" th:text="#{verify.submit}">Confirm my email</button>
+    </form>
+    <div th:if="${token == null or #strings.isEmpty(token)}" class="flash flash--err" role="alert">
+        <p th:text="${failed} ? #{verify.failed} : #{verify.missing}">This link is invalid or has expired.</p>
+    </div>
+    <form th:if="${token == null or #strings.isEmpty(token)}" th:action="@{/verify-email/resend}" method="post"
+          class="card card--soft form">
+        <p class="mb-0" th:text="#{login.resend.text}">Need a new link?</p>
+        <div class="field">
+            <label for="email" th:text="#{login.email}">College email</label>
+            <input id="email" type="email" name="email" autocomplete="email" required>
+        </div>
+        <button type="submit" class="btn--secondary" th:text="#{login.resend.submit}">Send a new link</button>
+    </form>
+</main>
+</html>

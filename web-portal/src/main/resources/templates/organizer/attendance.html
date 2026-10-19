@@ -1,84 +1,102 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Attendance')}"></head>
-<body>
-<header th:replace="~{fragments :: header}"></header>
-<main>
-    <p><a th:href="@{/organizer/events}">&larr; My events</a></p>
-    <h1 th:text="'Attendance: ' + ${summary.eventTitle()}">Attendance: TechFest Hackathon</h1>
-    <div th:replace="~{fragments :: flash}"></div>
+<!--/* Reports (UI reference screen 7). P6: the figures checkin-service's summary has, refreshed by a button (HTMX swaps
+     #attendance only); live push and the arrivals chart come with P7 (plan Q7). The CSV is passed through. */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{org.tab.attendance} + ' · ' + ${event.title()}, content=~{::main})}">
+<main id="main" class="page">
+    <div th:replace="~{organizer/nav :: eventHead(${event}, 'attendance')}"></div>
+    <div th:replace="~{layout :: flash}"></div>
 
-    <!-- D9 shortcut: reload for new numbers (P7 makes this live). -->
-    <section class="box">
-        <dl class="facts">
-            <dt>Checked in</dt>
-            <dd><strong th:text="${summary.checkedIn()}">42</strong> of <span th:text="${summary.validPasses()}">80</span>
-                valid passes (<span th:text="${summary.percent()}">52.5</span>%)</dd>
-            <dt>Inside now</dt>
-            <dd th:text="${summary.insideNow()}">40</dd>
-            <dt>Last scan</dt>
-            <dd th:text="${summary.lastScanAt() == null} ? 'none yet' : ${@fmt.when(summary.lastScanAt())}">Sat 14 Nov, 09:12</dd>
-        </dl>
-        <p>
-            <a th:href="@{/organizer/events/{id}/attendance.csv(id=${summary.eventId()})}">Export CSV</a>
-            · <a th:href="@{/organizer/events/{id}/attendance(id=${summary.eventId()})}">Reload</a>
-        </p>
+    <section id="attendance" th:fragment="board" aria-live="polite">
+        <div class="spread mb-0">
+            <p class="hint mb-0" th:text="${summary.lastScanAt() == null} ? #{att.noScans} : #{att.lastScan(${@fmt.shortWhen(summary.lastScanAt())})}">Last scan Sat 17 Oct, 09:14</p>
+            <div class="actions">
+                <button type="button" class="btn--ghost btn--small"
+                        th:attr="hx-get=@{/organizer/events/{id}/attendance(id=${event.id()})}"
+                        hx-target="#attendance" hx-swap="outerHTML" hx-indicator="#att-spinner">
+                    <span id="att-spinner" class="spinner htmx-indicator" aria-hidden="true"></span>
+                    <span th:text="#{common.refresh}">Refresh</span></button>
+                <a class="btn btn--secondary btn--small" th:href="@{/organizer/events/{id}/attendance.csv(id=${event.id()})}"
+                   th:text="#{att.csv}">Export attendance CSV</a>
+            </div>
+        </div>
+
+        <div class="grid grid--3 mt-4">
+            <div class="stat">
+                <p class="stat__label" th:text="#{att.inside}">Inside now</p>
+                <p class="stat__value"><span th:text="${summary.insideNow()}">487</span>
+                    <small th:text="'/ ' + ${summary.validPasses()}">/ 600</small></p>
+            </div>
+            <div class="stat">
+                <p class="stat__label" th:text="#{att.checkedIn}">Checked in</p>
+                <p class="stat__value" th:text="${summary.checkedIn()}">513</p>
+                <p class="stat__note" th:text="#{att.percent(${#numbers.formatDecimal(summary.percent() == null ? 0 : summary.percent(), 1, 0)})}">86% of valid passes</p>
+            </div>
+            <div class="stat">
+                <p class="stat__label" th:text="#{att.notYet}">Not arrived yet</p>
+                <p class="stat__value" th:text="${summary.validPasses() - summary.checkedIn()}">87</p>
+            </div>
+        </div>
+
+        <div class="grid grid--2 mt-5">
+            <section class="card">
+                <h3 th:text="#{att.byGate}">Gates</h3>
+                <p class="hint" th:if="${summary.gates().isEmpty()}" th:text="#{att.noScans}">No check-ins yet.</p>
+                <div class="bars" th:unless="${summary.gates().isEmpty()}">
+                    <div class="bars__row" th:each="g : ${summary.gates()}">
+                        <span class="mono" th:text="${g.gateCode()}">MAIN</span>
+                        <span class="bars__bar"><span th:style="|width:${gateMax == 0 ? 0 : g.checkedIn() * 100 / gateMax}%|"></span></span>
+                        <span class="right" th:text="${g.checkedIn()}">212</span>
+                    </div>
+                </div>
+            </section>
+            <section class="card" th:if="${summary.sessions().size() > 1}">
+                <h3 th:text="#{event.sessions}">Sessions</h3>
+                <div class="bars">
+                    <div class="bars__row" th:each="s : ${summary.sessions()}">
+                        <span th:text="${s.title()}">Day 1</span>
+                        <span class="bars__bar"><span th:style="|width:${s.percent() == null ? 0 : s.percent()}%|"></span></span>
+                        <span class="right" th:text="${s.checkedIn()}">30</span>
+                    </div>
+                </div>
+            </section>
+            <section class="card" th:if="${!certificates.isEmpty() or summary.sessions().size() > 1}">
+                <h3 th:text="#{stamps.certificates}">Certificates</h3>
+                <p class="hint" th:if="${certificates.isEmpty()}" th:text="#{att.noCertificates}">Nobody qualifies yet.</p>
+                <ul class="mb-0" th:unless="${certificates.isEmpty()}">
+                    <li th:each="c : ${certificates}"><span th:text="${c.holderName()}">Priya Raman</span>
+                        <span class="hint" th:text="'· ' + #{stamps.cert.progress(${c.sessionsAttended()}, ${c.required()})}">· 2 / 2</span></li>
+                </ul>
+            </section>
+        </div>
+
+        <h2 th:text="#{att.attendees}">Latest check-ins</h2>
+        <div class="table-wrap" th:if="${!attendees.content().isEmpty()}">
+            <table class="stacked">
+                <thead><tr>
+                    <th th:text="#{att.firstIn}">First in</th>
+                    <th th:text="#{regs.student}">Attendee</th>
+                    <th th:text="#{pass.number}">Pass no.</th>
+                    <th th:text="#{staff.gate}">Gate</th>
+                    <th th:text="#{att.now}">Now</th>
+                </tr></thead>
+                <tbody>
+                <tr th:each="a : ${attendees.content()}">
+                    <td th:data-label="#{att.firstIn}" class="mono" th:text="${a.firstCheckIn() == null} ? '—' : ${@fmt.time(a.firstCheckIn())}">09:14</td>
+                    <td th:data-label="#{regs.student}"><strong th:text="${a.holderName()}">Priya Raman</strong></td>
+                    <td th:data-label="#{pass.number}" class="pass-number" th:text="${a.passNumber()}">TECHFEST26-000042-7</td>
+                    <td th:data-label="#{staff.gate}" class="mono" th:text="${a.lastGate() == null} ? '—' : ${a.lastGate()}">MAIN</td>
+                    <td th:data-label="#{att.now}"><span th:replace="~{layout :: badge(${a.presence()})}"></span></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="hint" th:if="${attendees.content().isEmpty()}" th:text="#{att.noAttendees}">Nobody has checked in yet.</p>
+        <p class="hint" th:if="${attendees.hasNext()}" th:text="#{att.first100}">Showing the first 100; the CSV has everyone.</p>
     </section>
 
-    <h2>Per session</h2>
-    <table>
-        <thead><tr><th>Session</th><th>Checked in</th><th>%</th></tr></thead>
-        <tbody>
-        <tr th:each="s : ${summary.sessions()}">
-            <td th:text="${s.title()}">Data preparation</td>
-            <td th:text="${s.checkedIn()}">30</td>
-            <td th:text="${s.percent()}">37.5</td>
-        </tr>
-        </tbody>
-    </table>
-
-    <h2>Per gate</h2>
-    <p th:if="${summary.gates().isEmpty()}" class="hint">No check-ins yet.</p>
-    <table th:unless="${summary.gates().isEmpty()}">
-        <thead><tr><th>Gate</th><th>Check-ins</th></tr></thead>
-        <tbody>
-        <tr th:each="g : ${summary.gates()}">
-            <td th:text="${g.gateCode()}">MAIN</td>
-            <td th:text="${g.checkedIn()}">30</td>
-        </tr>
-        </tbody>
-    </table>
-
-    <h2>Attendees</h2>
-    <table>
-        <thead><tr><th>Pass</th><th>Name</th><th>Pass state</th><th>Sessions</th><th>First in</th><th>Now</th></tr></thead>
-        <tbody>
-        <tr th:each="a : ${attendees.content()}">
-            <td><code th:text="${a.passNumber()}">TECHFEST26-000042-7</code></td>
-            <td th:text="${a.holderName()}">Priya Raman</td>
-            <td><span class="status" th:text="${a.passStatus()}">VALID</span></td>
-            <td th:text="${a.sessionsAttended()}">1</td>
-            <td th:text="${a.firstCheckIn() == null} ? '' : ${@fmt.when(a.firstCheckIn())}">Sat 14 Nov, 09:02</td>
-            <td><span class="status" th:text="${a.presence()}">IN</span></td>
-        </tr>
-        </tbody>
-    </table>
-    <p th:if="${attendees.hasNext()}" class="hint">Showing the first 100; the CSV has everyone.</p>
-
-    <h2>Certificates</h2>
-    <p th:if="${certificates.isEmpty()}" class="hint">Nobody qualifies yet.</p>
-    <ul th:unless="${certificates.isEmpty()}">
-        <li th:each="c : ${certificates}">
-            <span th:text="${c.holderName()}">Priya Raman</span> (<code th:text="${c.passNumber()}">TECHFEST26-000042-7</code>):
-            <span th:text="${c.sessionsAttended()} + ' of ' + ${c.required()} + ' sessions'">2 of 2 sessions</span>
-        </li>
-    </ul>
-
-    <form th:action="@{/organizer/events/{id}/attendance/sync(id=${summary.eventId()})}" method="post" class="box">
-        <p class="hint">Passes are kept in step with pass-service automatically (every few minutes and when the event
-            goes LIVE). Use this only if a pass is reported missing at the gate right now.</p>
-        <button type="submit" class="secondary">Sync passes now</button>
+    <form th:if="${isAdmin}" th:action="@{/organizer/events/{id}/attendance/sync(id=${event.id()})}" method="post" class="card card--soft mt-5">
+        <p class="hint mt-0" th:text="#{att.sync.hint}">Passes are kept in step automatically. Admins can force a sync.</p>
+        <button type="submit" class="btn--secondary" th:text="#{att.sync}">Sync passes now</button>
     </form>
 </main>
-</body>
 </html>

@@ -135,12 +135,85 @@ class GatewayClientTest {
     }
 
     @Test
+    void theOrganizersListAsksForUpToAHundredEvents() {
+        server.expect(requestTo(org.hamcrest.Matchers.containsString("/api/events?page=0&size=100")))
+                .andRespond(withSuccess(
+                        "{\"content\":[],\"page\":0,\"size\":100,\"totalElements\":0,\"totalPages\":0}",
+                        MediaType.APPLICATION_JSON));
+
+        assertThat(client.events(null, null, java.util.UUID.randomUUID(), 0).content())
+                .isEmpty();
+        server.verify();
+    }
+
+    @Test
     void aRejectedTokenMeansTheSessionExpired() {
         SecurityContextHolder.getContext().setAuthentication(TestTokens.login(TestTokens.user("STUDENT")));
         server.expect(requestTo("http://gateway.test/api/registrations/me?size=50"))
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
         assertThatThrownBy(() -> client.myRegistrations()).isInstanceOf(SessionExpiredException.class);
+    }
+
+    /** Phase 6 (plan §7): a 401 gets one refresh and one retry with the new token. */
+    @Test
+    void aRejectedTokenIsRefreshedOnceAndTheCallRetried() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer retrying = MockRestServiceServer.bindTo(builder).build();
+        StubTokens tokens = new StubTokens("old-token", "new-token");
+        GatewayClient refreshing = new GatewayClient(
+                builder, "http://gateway.test", JsonMapper.builder().build(), tokens);
+        retrying.expect(requestTo("http://gateway.test/api/registrations/me?size=50"))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer old-token"))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+        retrying.expect(requestTo("http://gateway.test/api/registrations/me?size=50"))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer new-token"))
+                .andRespond(withSuccess(
+                        "{\"content\":[],\"page\":0,\"size\":50,\"totalElements\":0,\"totalPages\":0}",
+                        MediaType.APPLICATION_JSON));
+
+        assertThat(refreshing.myRegistrations().content()).isEmpty();
+        assertThat(tokens.rejected).containsExactly("old-token");
+        retrying.verify();
+    }
+
+    @Test
+    void aSecond401AfterTheRefreshEndsTheSession() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer retrying = MockRestServiceServer.bindTo(builder).build();
+        GatewayClient refreshing = new GatewayClient(
+                builder, "http://gateway.test", JsonMapper.builder().build(), new StubTokens("old", "new"));
+        retrying.expect(requestTo("http://gateway.test/api/registrations/me?size=50"))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+        retrying.expect(requestTo("http://gateway.test/api/registrations/me?size=50"))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer new"))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+
+        assertThatThrownBy(refreshing::myRegistrations).isInstanceOf(SessionExpiredException.class);
+    }
+
+    /** Hands out {@code first}, and {@code second} once {@code first} was rejected. */
+    static final class StubTokens implements AccessTokenSource {
+        final java.util.List<String> rejected = new java.util.ArrayList<>();
+        private String token;
+        private final String next;
+
+        StubTokens(String first, String next) {
+            this.token = first;
+            this.next = next;
+        }
+
+        @Override
+        public String current() {
+            return token;
+        }
+
+        @Override
+        public String afterRejection(String old) {
+            rejected.add(old);
+            token = next;
+            return next;
+        }
     }
 
     @Test

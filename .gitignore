@@ -36,6 +36,7 @@ Thumbs.db
 *.env.local
 infra/certs/*.pem
 infra/certs/*.key
+infra/certs/*.p12
 
 # Front-end tooling (run through npx, never installed globally)
 node_modules/

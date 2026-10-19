@@ -69,13 +69,20 @@ public class EventService {
         this.zone = ZoneId.of(timeZone);
     }
 
+    /** DRAFT events are listed only for their organizer and admins ({@link DraftVisibility}). */
     public PageResponse<EventSummaryResponse> search(EventSearchCriteria criteria, Pageable pageable) {
-        return PageResponse.from(
-                events.findAll(EventSpecifications.matching(criteria, zone), pageable), mapper::toSummary);
+        var visible =
+                EventSpecifications.matching(criteria, zone).and(DraftVisibility.visibleTo(CurrentUser.current()));
+        return PageResponse.from(events.findAll(visible, pageable), mapper::toSummary);
     }
 
+    /** A DRAFT event is a 404 for anyone but its organizer and admins, like an unknown id. */
     public EventDetailResponse get(long id) {
-        return mapper.toDetail(loadDetailed(id));
+        Event event = loadDetailed(id);
+        if (!DraftVisibility.canSee(event, CurrentUser.current())) {
+            throw NotFoundException.of("Event", id);
+        }
+        return mapper.toDetail(event);
     }
 
     /** The caller becomes the event's organizer (owner). */

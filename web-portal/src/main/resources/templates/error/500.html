@@ -1,0 +1,4 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{error.500.title}, content=~{::main})}">
+<main th:replace="~{error/page :: body('500', #{error.500.title}, #{error.500.text})}"></main>
+</html>

@@ -8,6 +8,8 @@ import com.mitpass.portal.client.ApiModels.LookupAnswer;
 import com.mitpass.portal.client.ApiModels.ScanAnswer;
 import com.mitpass.portal.client.ApiProblemException;
 import com.mitpass.portal.client.GatewayClient;
+import com.mitpass.portal.config.PortalProperties;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -16,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -23,18 +27,27 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The volunteer's scan page (UI reference screens 5–6; D9 slice: a text field, no camera). One field takes either a
- * typed pass number, which goes through lookup and a visual check first, or a pasted QR token, which is scanned
- * straight away. Every POST redirects (PRG); the result travels as a flash attribute. Gate and mode are remembered in
- * the session, and so is a device id for the scan log.
+ * The scanner (UI reference screens 5–6; docs/plans/phase-6.md §8). With JavaScript the phone's camera reads the QR
+ * (html5-qrcode) and posts the text to {@code /scan/submit}, which answers the result card and an {@code HX-Trigger}
+ * ({@code scanResult}) that makes {@code scanner.js} flash the screen, play a tone and vibrate. Typed pass numbers go
+ * through {@code /scan/check} (the holder's name for a visual check) and then {@code /scan/submit}.
+ *
+ * <p>Without JavaScript (or without a camera) the same page works as in P5: one field takes a typed pass number (lookup
+ * and visual check first) or a pasted token; every POST redirects (PRG) and the result travels as a flash attribute.
+ * Gate and mode are remembered in the session, and so is a device id for the scan log; the camera page sends its own
+ * device id, kept in the browser.
  */
 @Controller
 public class ScanPagesController {
 
     /** Looks like a pass number ({@code TECHFEST26-000042-7}); anything else is treated as a token. */
     static final Pattern PASS_NUMBER = Pattern.compile("^[A-Za-z0-9]{3,16}-\\d{6,9}-\\d$");
+
+    /** A device id sent by the browser: letters, digits and dashes only (it goes into the scan log). */
+    static final Pattern DEVICE_ID = Pattern.compile("^[A-Za-z0-9-]{4,40}$");
 
     static final String GATE = "scan.gateId";
     static final String MODE = "scan.mode";
@@ -44,9 +57,16 @@ public class ScanPagesController {
     public record GateOption(long gateId, String label) {}
 
     private final GatewayClient gateway;
+    private final PortalProperties properties;
+    private final JsonMapper json;
+    private final MessageSource messages;
 
-    public ScanPagesController(GatewayClient gateway) {
+    public ScanPagesController(
+            GatewayClient gateway, PortalProperties properties, JsonMapper json, MessageSource messages) {
         this.gateway = gateway;
+        this.properties = properties;
+        this.json = json;
+        this.messages = messages;
     }
 
     @GetMapping("/scan")
@@ -60,7 +80,84 @@ public class ScanPagesController {
         model.addAttribute("options", options);
         model.addAttribute("gateId", gateId);
         model.addAttribute("mode", session.getAttribute(MODE) == null ? "IN" : session.getAttribute(MODE));
+        model.addAttribute("repeatIgnoreMillis", properties.scanRepeatIgnore().toMillis());
         return "scan/scan";
+    }
+
+    /**
+     * HTMX: a camera read (token) or a confirmed pass number. Answers the result card; the {@code HX-Trigger} header
+     * carries the colour for the flash, tone and vibration. A refusal is a result like any other (200).
+     */
+    @PostMapping("/scan/submit")
+    public String submit(
+            @RequestParam(required = false) String token,
+            @RequestParam(required = false) String passNumber,
+            @RequestParam long gateId,
+            @RequestParam(defaultValue = "IN") String mode,
+            @RequestParam(required = false) String deviceId,
+            HttpSession session,
+            HttpServletResponse response,
+            Model model) {
+        String inOut = "OUT".equals(mode) ? "OUT" : "IN";
+        session.setAttribute(GATE, gateId);
+        session.setAttribute(MODE, inOut);
+        String device = deviceId != null && DEVICE_ID.matcher(deviceId).matches() ? deviceId : device(session);
+        try {
+            ScanAnswer answer = token != null && !token.isBlank()
+                    ? gateway.scan(token.strip(), null, gateId, device, inOut)
+                    : gateway.scan(null, passNumber == null ? null : passNumber.strip(), gateId, device, inOut);
+            model.addAttribute("result", answer);
+            trigger(response, answer.colorClass(), answer.result());
+        } catch (ApiProblemException ex) {
+            model.addAttribute("problem", ex.getMessage());
+            trigger(response, "red", "ERROR");
+        }
+        return "scan/scan :: result";
+    }
+
+    /**
+     * HTMX, the manual tab: a typed pass number gets the holder's name for a visual check (or the refusal as a result
+     * card); a pasted QR token is scanned straight away, as on the no-JavaScript path.
+     */
+    @PostMapping("/scan/check")
+    public String check(
+            @RequestParam(defaultValue = "") String code,
+            @RequestParam long gateId,
+            @RequestParam(defaultValue = "IN") String mode,
+            @RequestParam(required = false) String deviceId,
+            HttpSession session,
+            HttpServletResponse response,
+            Model model) {
+        String input = code.strip();
+        if (!PASS_NUMBER.matcher(input).matches()) {
+            return submit(input, null, gateId, mode, deviceId, session, response, model);
+        }
+        String device = deviceId != null && DEVICE_ID.matcher(deviceId).matches() ? deviceId : device(session);
+        try {
+            LookupAnswer answer = gateway.lookup(input, gateId, device);
+            if (answer.refusal() != null) {
+                model.addAttribute("result", answer.refusal());
+                trigger(
+                        response,
+                        answer.refusal().colorClass(),
+                        answer.refusal().result());
+                return "scan/scan :: result";
+            }
+            model.addAttribute("lookup", answer.pass());
+            model.addAttribute("gateId", gateId);
+            model.addAttribute("mode", "OUT".equals(mode) ? "OUT" : "IN");
+            return "scan/scan :: lookup";
+        } catch (ApiProblemException ex) {
+            model.addAttribute("problem", ex.getMessage());
+            trigger(response, "red", "ERROR");
+            return "scan/scan :: result";
+        }
+    }
+
+    /** {@code HX-Trigger: {"scanResult": {"color": "green", "result": "ACCEPTED"}}} for scanner.js. */
+    private void trigger(HttpServletResponse response, String color, String result) {
+        Map<String, Object> detail = Map.of("color", color, "result", result == null ? "" : result);
+        response.setHeader("HX-Trigger", json.writeValueAsString(Map.of("scanResult", detail)));
     }
 
     @PostMapping("/scan")
@@ -133,7 +230,8 @@ public class ScanPagesController {
             for (EventSummary event : gateway.events(null, null, user.id(), 0).content()) {
                 for (Gate gate : gateway.gates(event.id())) {
                     options.putIfAbsent(
-                            gate.id(), new GateOption(gate.id(), event.code() + " · " + gate.name() + " (your event)"));
+                            gate.id(),
+                            new GateOption(gate.id(), event.code() + " · " + gate.name() + " " + yourEvent()));
                 }
             }
         }
@@ -146,6 +244,10 @@ public class ScanPagesController {
             }
         }
         return new ArrayList<>(options.values());
+    }
+
+    private String yourEvent() {
+        return messages.getMessage("scan.yourEvent", null, "(your event)", LocaleContextHolder.getLocale());
     }
 
     /** A random id per browser session: the scan log tells this device's scans apart. */

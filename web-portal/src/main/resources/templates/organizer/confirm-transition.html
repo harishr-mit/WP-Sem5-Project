@@ -1,30 +1,30 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Confirm')}"></head>
-<body>
-<header th:replace="~{fragments :: header}"></header>
-<main>
-    <!-- RL9: critical moves are confirmed here first (the server refuses them without confirmed=true). -->
-    <h1 th:text="${label} + ': ' + ${event.title()} + '?'">Cancel event: Tech Quiz?</h1>
-    <div th:replace="~{fragments :: flash}"></div>
+<!--/* RL9 without JavaScript: a critical move is confirmed on this page (with JavaScript, a dialog on My events does
+     the same). The server refuses the move without confirmed=true, and cancelling also needs the event code. */-->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page(title=#{lifecycle.confirm.title(${label}, ${event.title()})}, content=~{::main})}">
+<main id="main" class="page page--narrow">
+    <a class="back" th:href="@{/organizer/events}" th:text="'← ' + #{nav.myEvents}">← My events</a>
+    <h1 th:text="#{lifecycle.confirm.title(${label}, ${event.title()})}">Cancel event: Tech Quiz?</h1>
+    <div th:replace="~{layout :: flash}"></div>
 
-    <section class="box warn">
-        <p th:text="${consequence}">The event is cancelled for everyone. This can't be undone.</p>
-        <p class="hint">Event <code th:text="${event.code()}">MINIQUIZ26</code>, now
-            <span class="status" th:text="${event.status()}">REGISTRATION_OPEN</span>.</p>
+    <section class="card card--warn">
+        <p class="mt-0" th:text="${consequence}">The event is cancelled for everyone. This can't be undone.</p>
+        <p class="hint mb-0"><span class="mono" th:text="${event.code()}">MINIQUIZ26</span> ·
+            <span th:replace="~{layout :: badge(${event.status()})}"></span></p>
     </section>
 
-    <form th:action="@{/organizer/events/{id}/transitions(id=${event.id()})}" method="post" class="stack box">
+    <form th:action="@{/organizer/events/{id}/transitions(id=${event.id()})}" method="post" class="card form">
         <input type="hidden" name="to" th:value="${to}">
         <input type="hidden" name="confirmed" value="true">
-        <label th:if="${needsCode}">Type the event code <code th:text="${event.code()}">MINIQUIZ26</code> to confirm
-            <input type="text" name="code" autocomplete="off" required autofocus>
-        </label>
-        <div>
-            <button type="submit" class="danger" th:text="${label}">Cancel event</button>
-            <a th:href="@{/organizer/events}">Go back</a>
+        <div class="field" th:if="${needsCode}">
+            <label for="code" th:text="#{lifecycle.confirm.code(${event.code()})}">Type the event code to confirm</label>
+            <input id="code" type="text" name="code" autocomplete="off" required autofocus>
+        </div>
+        <div class="actions">
+            <button type="submit" class="btn--danger" th:text="${label}">Cancel event</button>
+            <a class="btn btn--ghost" th:href="@{/organizer/events}" th:text="#{common.goBack}">Go back</a>
         </div>
     </form>
 </main>
-</body>
 </html>

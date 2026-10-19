@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<!--/* System health (ADMIN): every instance in Eureka, from the gateway's /api/admin/health (D15). The board refreshes
+     itself every few seconds (HTMX); without JavaScript, reload. */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{nav.health}, content=~{::main})}">
+<main id="main" class="page page--medium">
+    <div class="pagehead">
+        <p class="eyebrow" th:text="#{nav.admin}">Admin</p>
+        <h1 th:text="#{admin.health.title}">System health</h1>
+    </div>
+    <section id="health" th:fragment="board" aria-live="polite"
+             th:attr="hx-get=@{/admin/health},hx-trigger=|every ${refreshSeconds}s|" hx-swap="outerHTML">
+        <div class="flash" th:classappend="${allUp} ? 'flash--ok' : 'flash--err'" role="status">
+            <p th:text="${allUp} ? #{admin.health.allUp(${instances.size()})} : #{admin.health.someDown}">All 6 instances are up.</p>
+        </div>
+        <div class="health">
+            <div class="card health__item" th:each="i : ${instances}">
+                <span class="dot" th:classappend="${i.isUp()} ? 'dot--up' : 'dot--down'" aria-hidden="true"></span>
+                <div>
+                    <strong th:text="${i.service()}">pass-service</strong>
+                    <span class="hint mono" th:text="' · ' + ${i.url()}">· http://…:8083</span>
+                    <div class="row mt-0" th:if="${i.components() != null and !i.components().isEmpty()}">
+                        <span class="badge" th:each="c : ${i.components()}" th:classappend="${c.value == 'UP'} ? 'badge--ok' : 'badge--err'"
+                              th:text="${c.key}">db</span>
+                    </div>
+                    <p class="err-text mb-0" th:if="${i.detail() != null}" th:text="${i.detail()}">no answer in 2 s</p>
+                </div>
+                <span th:replace="~{layout :: badge(${i.status()})}"></span>
+            </div>
+        </div>
+        <p class="hint mt-4" th:text="#{admin.health.refresh(${refreshSeconds})}">Refreshes every 10 s.</p>
+    </section>
+</main>
+</html>

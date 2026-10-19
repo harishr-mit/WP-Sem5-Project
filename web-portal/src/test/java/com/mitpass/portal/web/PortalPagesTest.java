@@ -71,6 +71,7 @@ class PortalPagesTest {
     void catalogue() {
         given(gateway.categories()).willReturn(List.of(new Category(1L, "TECHNICAL", "Technical")));
         given(gateway.events(any(), any(), any(), anyInt())).willReturn(new Page<>(List.of(summary()), 0, 20, 1, 1));
+        given(gateway.search(any())).willReturn(new Page<>(List.of(summary()), 0, 12, 1, 1));
         given(gateway.event(1L))
                 .willReturn(detail(1, List.of(), "REGISTRATION_OPEN", List.of("REGISTRATION_CLOSED", "CANCELLED")));
         given(gateway.departments()).willReturn(List.of(new Department("CSE", "Computer Science")));
@@ -83,7 +84,8 @@ class PortalPagesTest {
         mvc.perform(get("/events"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Tech Quiz")))
-                .andExpect(content().string(containsString("0 / 1")));
+                .andExpect(content().string(containsString("1 / 1")))
+                .andExpect(content().string(containsString("Full")));
         mvc.perform(get("/events/1"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("to register")))
@@ -184,11 +186,10 @@ class PortalPagesTest {
     }
 
     @Test
-    void successfulSignupRedirectsToLoginWithTheInboxLink() throws Exception {
+    void successfulSignupRedirectsToCheckYourInbox() throws Exception {
         mvc.perform(validSignup())
-                .andExpect(redirectedUrl("/login?signedUp"))
-                .andExpect(flash().attribute("signedUpEmail", "2026509032@student.annauniv.edu"))
-                .andExpect(flash().attribute("mailpitUrl", "http://mailpit.test"));
+                .andExpect(redirectedUrl("/check-email"))
+                .andExpect(flash().attribute("signedUpEmail", "2026509032@student.annauniv.edu"));
     }
 
     // ---- event detail and registering ---------------------------------------------------------------------------
@@ -198,7 +199,7 @@ class PortalPagesTest {
         given(gateway.eligibility(1L)).willReturn(new Eligibility(true, true, List.of(), 1, 0L, null));
 
         mvc.perform(get("/events/1").with(authentication(TestTokens.login(student))))
-                .andExpect(content().string(containsString("eligible: CSE · year 1")))
+                .andExpect(content().string(containsString("eligible: CSE · Year 1")))
                 .andExpect(content().string(containsString("name=\"idempotencyKey\"")))
                 .andExpect(content().string(containsString(">Register<")));
     }
@@ -229,8 +230,9 @@ class PortalPagesTest {
                 .willReturn(new Eligibility(true, true, List.of(), 0, 1L, registration("WAITLISTED", 1, null)));
 
         mvc.perform(get("/events/1").with(authentication(TestTokens.login(student))))
-                .andExpect(content().string(containsString("WAITLISTED #1")))
-                .andExpect(content().string(containsString("Cancel my registration")));
+                .andExpect(content().string(containsString("#1")))
+                .andExpect(content().string(containsString("on the waitlist")))
+                .andExpect(content().string(containsString("Leave the waitlist")));
     }
 
     @Test
@@ -286,8 +288,8 @@ class PortalPagesTest {
 
         mvc.perform(get("/my/registrations").with(authentication(TestTokens.login(student))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("CONFIRMED")))
-                .andExpect(content().string(containsString("CANCELLED")));
+                .andExpect(content().string(containsString("Confirmed")))
+                .andExpect(content().string(containsString("Cancelled")));
     }
 
     @Test
@@ -324,7 +326,7 @@ class PortalPagesTest {
                         .with(authentication(TestTokens.login(organizer)))
                         .param("to", "REGISTRATION_CLOSED"))
                 .andExpect(redirectedUrl("/organizer/events"))
-                .andExpect(flash().attribute("message", "Tech Quiz is now REGISTRATION_CLOSED."));
+                .andExpect(flash().attribute("message", "Tech Quiz is now Registration closed."));
     }
 
     /** RL8: buttons say what they do ("Close registrations", "Cancel event"), not the target state's name. */
@@ -336,14 +338,39 @@ class PortalPagesTest {
                 .andExpect(content().string(containsString(">Cancel event</button>")))
                 .andExpect(content().string(not(containsString(">CANCELLED</button>"))));
 
-        given(gateway.event(1L)).willReturn(detail(1, List.of(), "LIVE", List.of("REGISTRATION_CLOSED", "COMPLETED")));
+        organizerList("LIVE", List.of("REGISTRATION_CLOSED", "COMPLETED"));
         mvc.perform(get("/organizer/events").with(authentication(TestTokens.login(organizer))))
                 .andExpect(content().string(containsString(">Undo start</button>")))
                 .andExpect(content().string(containsString(">End event</button>")));
 
-        given(gateway.event(1L)).willReturn(detail(1, List.of(), "DRAFT", List.of("PUBLISHED")));
+        organizerList("DRAFT", List.of("PUBLISHED"));
         mvc.perform(get("/organizer/events").with(authentication(TestTokens.login(organizer))))
                 .andExpect(content().string(containsString(">Publish</button>")));
+        // D9 row replaced: the list carries the allowed moves, so no detail call per event
+        verify(gateway, never()).event(anyLong());
+    }
+
+    private void organizerList(String status, List<String> allowed) {
+        EventSummary s = summary();
+        given(gateway.events(any(), any(), any(), anyInt()))
+                .willReturn(new Page<>(
+                        List.of(new EventSummary(
+                                s.id(),
+                                s.code(),
+                                s.title(),
+                                s.categoryName(),
+                                s.venueName(),
+                                s.department(),
+                                s.capacity(),
+                                s.startsAt(),
+                                status,
+                                s.seatsTaken(),
+                                s.seatsLeft(),
+                                allowed)),
+                        0,
+                        20,
+                        1,
+                        1));
     }
 
     /** RL9: a critical move goes to a confirmation page first; nothing changes on the first click. */
@@ -382,7 +409,7 @@ class PortalPagesTest {
                         .param("confirmed", "true")
                         .param("code", " miniquiz26 "))
                 .andExpect(redirectedUrl("/organizer/events"))
-                .andExpect(flash().attribute("message", "Tech Quiz is now CANCELLED."));
+                .andExpect(flash().attribute("message", "Tech Quiz is now Cancelled."));
     }
 
     @Test
@@ -442,14 +469,6 @@ class PortalPagesTest {
     }
 
     @Test
-    void anExpiredTokenEndsTheSession() throws Exception {
-        PortalUser expired = TestTokens.user(Instant.now().minusSeconds(1), "STUDENT");
-
-        mvc.perform(get("/my/registrations").with(authentication(TestTokens.login(expired))))
-                .andExpect(redirectedUrl("/login?expired"));
-    }
-
-    @Test
     void aTokenRejectedByTheGatewayAlsoEndsTheSession() throws Exception {
         given(gateway.myRegistrations()).willThrow(new SessionExpiredException());
 
@@ -482,7 +501,8 @@ class PortalPagesTest {
                 START,
                 "REGISTRATION_OPEN",
                 1,
-                0);
+                0,
+                List.of("REGISTRATION_CLOSED", "CANCELLED"));
     }
 
     static EventDetail detail(long id, List<String> departments, String status, List<String> allowed) {
@@ -507,7 +527,13 @@ class PortalPagesTest {
                 null,
                 allowed,
                 0,
-                1);
+                1,
+                3L,
+                List.of(),
+                true,
+                null,
+                false,
+                null);
     }
 
     static Registration registration(String status, Integer position, UUID promoted) {

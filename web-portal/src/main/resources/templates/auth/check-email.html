@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{checkEmail.title}, content=~{::main})}">
+<main id="main" class="page page--narrow">
+    <div class="pagehead">
+        <p class="eyebrow" th:text="#{checkEmail.eyebrow}">One more step</p>
+        <h1 th:text="#{checkEmail.title}">Check your inbox</h1>
+    </div>
+    <div class="flash flash--ok" th:if="${resentTo != null}" role="status">
+        <p th:text="#{checkEmail.resent}">If that address is waiting for verification, a new link is on its way.</p>
+    </div>
+    <section class="card">
+        <p class="lead mt-0" th:if="${signedUpEmail != null}"
+           th:utext="#{checkEmail.sentTo(${#strings.escapeXml(signedUpEmail)})}">We sent a link to you.</p>
+        <p class="lead mt-0" th:if="${signedUpEmail == null}" th:text="#{checkEmail.sent}">We sent you a link.</p>
+        <p th:text="#{checkEmail.next}">Open it to confirm your address, then log in.</p>
+        <p th:if="${mailpitUrl != null and !#strings.isEmpty(mailpitUrl)}" class="callout" th:inline="text">
+            [[#{login.devInbox}]] <a th:href="${mailpitUrl}" th:text="${mailpitUrl}" target="_blank" rel="noopener">Mailpit</a></p>
+        <a class="btn btn--block" th:href="@{/login}" th:text="#{checkEmail.toLogin}">Go to log in</a>
+    </section>
+    <form th:action="@{/verify-email/resend}" method="post" class="card card--soft form">
+        <p class="mb-0" th:text="#{login.resend.text}">Didn't get it?</p>
+        <div class="field">
+            <label for="email" th:text="#{login.email}">College email</label>
+            <input id="email" type="email" name="email" th:value="${signedUpEmail}" autocomplete="email" required>
+        </div>
+        <button type="submit" class="btn--secondary" th:text="#{login.resend.submit}">Send a new link</button>
+    </form>
+</main>
+</html>

@@ -23,17 +23,17 @@ public class SignupForm {
     private String email;
 
     @NotBlank
-    @Size(min = 8, max = 72, message = "must be 8-72 characters")
+    @Size(min = 8, max = 72, message = "{signup.password.size}")
     private String password;
 
-    @NotBlank(message = "choose your department")
+    @NotBlank(message = "{signup.department.required}")
     private String department;
 
     @Min(1)
     @Max(5)
     private Integer year;
 
-    @Pattern(regexp = "^$|\\d{10}(\\d{2})?", message = "must be 10 or 12 digits")
+    @Pattern(regexp = "^$|\\d{10}(\\d{2})?", message = "{signup.regNo.pattern}")
     private String registerNumber;
 
     public String getFullName() {
