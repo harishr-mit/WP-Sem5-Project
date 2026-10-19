@@ -172,6 +172,27 @@ class ScanPagesTest {
                 .andExpect(content().string(not(containsString("Couldn&#39;t check"))));
     }
 
+    /**
+     * Found in the two-phone demo (2026-10-19): the camera couldn't read a dense code off another phone's screen. The
+     * scanner asks for a sharp image (high resolution, continuous focus), uses the browser's own detector where there
+     * is one, and offers zoom so the phone can stay far enough away to focus.
+     */
+    @Test
+    void theCameraAsksForASharpImageAndOffersZoom() throws Exception {
+        mvc.perform(get("/scan").with(authentication(TestTokens.login(volunteer))))
+                .andExpect(content().string(containsString("id=\"camera-zoom\"")))
+                .andExpect(content().string(containsString(">Zoom<")))
+                .andExpect(content().string(containsString("20–30 cm")));
+        mvc.perform(get("/js/scanner.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("useBarCodeDetectorIfSupported: true")))
+                .andExpect(content().string(containsString("focusMode")))
+                .andExpect(content().string(containsString("aspectRatio: { ideal: 1 }")))
+                // html5-qrcode shrinks each frame to the box's on-screen size; the native detector reads the full video
+                .andExpect(content().string(containsString("detector.detect(video)")))
+                .andExpect(content().string(containsString("Html5QrcodeSupportedFormats.QR_CODE")));
+    }
+
     @Test
     void aCameraReadAnswersTheCardAndTheFlashColour() throws Exception {
         ScanAnswer accepted = answer("ACCEPTED", "GREEN", "Welcome, Priya Raman.");

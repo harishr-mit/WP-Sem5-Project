@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-19 (Claude Opus 5.5) — **Phase 6 built (T08.1–T08.12 done, T08.13 docs done)** on branch `phase6`, not committed. Full `./mvnw verify` green: 589 tests. Browser checks (`web-portal/ui-checks`, Playwright on Node + Edge) green for every role, the camera scanner (fake camera), Tamil, the dark/360 px sweep, sign-up via Mailpit and 5 min of 1-minute tokens. Docs: PROJECT.md §P6 ticked + status, DECISIONS D1/D9/D15 as built, plan §18 as built, README per-role walkthrough, `docs/http/phase-6.http`, security matrix, AGENTS.md parts table, REVIEW-LATER RL13. **Open, for the owner:** the two-phone exit demo (criterion 1; README *Phone demo*), the Tamil review (T34), the post-phase commit (ask first), then GitHub Actions on push. Nothing running; Docker Desktop off. Parked for after P8: `docs/REVIEW-LATER.md` (RL1–RL4, RL10, RL12, RL13 open; RL5–RL9, RL11 resolved).
+* **Last updated:** 2026-10-19 (Claude Opus 5.5) — **Phase 6 done** on branch `phase6` (owner commit `7d6979e` + the T08.14 changes, not yet committed). Two-phone exit demo passed (owner, laptop as hotspot); Tamil reviewed (T34). T08.14: QR level M (D12), pass-service mask read-back, full-screen code on the pass page, scanner square 1080 stream + native detector + zoom. Full `./mvnw clean verify` green: 593 tests. Next: the owner commits (ask first) and pushes for CI; then Phase 7 (T09). Nothing running; Docker Desktop off. Parked for after P8: `docs/REVIEW-LATER.md` (RL1–RL4, RL10, RL12, RL13 open; RL5–RL9, RL11 resolved).
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
@@ -114,7 +114,7 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T07.12: Portal slice (scan, confirm, result, attendance page, CSV proxy, wallet line)
   * [x] T07.16: RL7 (owner, mid-phase): pass-service EventCopyReconciler for its own event copy
   * [x] T07.13: Exit demo + docs
-* [ ] T08: **Phase 6** — Web portal, Spring MVC (PROJECT.md §P6; plan and "done when" checks: `docs/plans/phase-6.md` §15). Plan written 2026-10-17; Q1–Q4 answered (hand-written CSS, keytool cert, gateway health, English + Tamil); Q5–Q10 are defaults. Pre-phase commit `f1ebc27` by the owner; building since 2026-10-17
+* [x] T08: **Phase 6** — Web portal, Spring MVC (PROJECT.md §P6; plan and "done when" checks: `docs/plans/phase-6.md` §15). Plan written 2026-10-17; Q1–Q4 answered (hand-written CSS, keytool cert, gateway health, English + Tamil); Q5–Q10 are defaults. Pre-phase commit `f1ebc27` by the owner; building since 2026-10-17
   * [x] T08.1: Owner decisions recorded (PROJECT.md §2/§4/§P6, DECISIONS D9 rows + new D15) before code
   * [x] T08.2: Foundation: WebJars, layout, design tokens + components, fonts, dark mode, interceptor, locale resolver, error pages
   * [x] T08.3: Session and account: TokenRefresher (per-session lock) + 401 retry, verify-email portal page, auth-service verify-link default
@@ -127,7 +127,12 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T08.10: Admin: gateway GET /api/admin/health, users/roles/unlock/sessions, health page, key rotation
   * [x] T08.11: i18n: English bundle complete, Tamil bundle, language switch (owner review of the Tamil: T34, open)
   * [x] T08.12: Polish sweep: D9 checklist, dark mode + 360 px, accessibility, no tokens in pages
-  * [~] T08.13: Exit demo (two phones) + docs — docs and every desktop check done 2026-10-19; **the two-phone demo is the owner's** (then mark [x])
+  * [x] T08.13: Exit demo (two phones) + docs — two-phone scan passed 2026-10-19 (owner)
+  * [x] T08.14: Camera scan fails on real phones (owner, 2026-10-19: "Type pass no." works, the camera can't read the QR: blurry, glare). Owner decisions: QR error correction M (was H), keep the badge; light event colours fall back to near-black
+    * [x] T08.14a: pass-service `QrRenderer`: level, badge ratio, contrast fallback from `mitpass.passes.qr.*`; tests decode at M with the badge; done when pass-service verify is green
+    * [x] T08.14b: portal pass page: the code as large as the screen allows, tap for a full-screen white view; done when PassPagesTest green + Playwright phone screenshot
+    * [x] T08.14c: scanner: native BarcodeDetector where supported, high camera resolution, continuous focus, zoom control; done when scanner.mjs green (fake camera)
+    * [x] T08.14d: docs (PROJECT.md §P4, D12, plan §18, README phone demo tips), full `./mvnw verify`, owner retries the two-phone scan
 * [ ] T09: **Phase 7** — Real-time dashboard, notifications & offline scanning (PROJECT.md §P7)
 * [ ] T10: **Phase 8** — Hardening, observability & showcase (PROJECT.md §P8)
 * [x] T11: UI mockup of the end app (visual only, no code) — https://claude.ai/artifact/WyLQJ9nh1AcMkVossG6WaH
@@ -162,7 +167,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T33: Plan Phase 6 → `docs/plans/phase-6.md` + T08 sub-tasks; record the owner's four answers (CSS, HTTPS, health, i18n) in PROJECT.md / DECISIONS before any code (no Phase 6 code)
 * [x] T35: README quick start: Windows Firewall rule for the phone demo (TCP 8443), for anyone cloning the repo (owner request; the owner sets up their own laptop)
 
-* [ ] T34: **Owner:** review the Tamil text (`messages_ta.properties`) once T08.11 drafts it, or earlier whenever the agent asks. Owner agreed 2026-10-17
+* [x] T34: **Owner:** review the Tamil text (`messages_ta.properties`) once T08.11 drafts it, or earlier whenever the agent asks. Owner agreed 2026-10-17 — **Done 2026-10-19: the owner checked it, "looks fine".**
 
 * [x] T36: AGENTS.md "Working rules": web UI checks use Playwright on Node (owner: "use node"; npx, project-local, installed Edge or the existing browser cache), with exceptions (backend/docs-only, real-phone checks, CI stays MockMvc). Owner request 2026-10-17
 
@@ -182,6 +187,44 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-19 — Claude (Opus 5.5) — Phase 6 done
+
+* **Task:** owner: "works great now" (small codes scan too); close Phase 6
+* **Status:** DONE (commit and push wait for the owner)
+* **Files:** `PROJECT.md` (§P6 status: done), `docs/plans/phase-6.md` (§18 Closed/Open), `log.md` (T08, T08.13, T08.14 ticked; Current Status)
+* **Details:** All 7 JVMs stopped, `docker compose down`. `./mvnw clean verify`: BUILD SUCCESS, 593 tests (common-web 27, common-security 13, security-test-support 17, common-messaging 22, common-pass 14, discovery 1, gateway 23, auth 59, event 136, pass 65, checkin 58, portal 158).
+
+### 2026-10-19 — Claude (Opus 5.5) — T08.14: scans only when the code fills ~80 % of the box
+
+* **Task:** owner: "the scan works great", but only with the code filling ~80 % of the box; usual scanners read it at ~30 %
+* **Status:** WORKING (owner retries)
+* **Files:** `static/js/scanner.js` (`nativeDetector`: `BarcodeDetector.detect(video)` loop every ~100 ms beside html5-qrcode), `ScanPagesTest` (asserts it)
+* **Details:** Cause, read in html5-qrcode 2.3.8 (`esm/html5-qrcode.js` line 571): each frame is drawn into a canvas the size of the scan box on screen (~270 CSS px) before decoding, so an 85-module code at 30 % fill had under 1 px per module. The native detector reads the `<video>` at the stream's full resolution (1080×1080). Skipped when there is no detector (iOS, desktop Windows); html5-qrcode stays the fallback. ScanPagesTest 18/18, scanner.mjs 12/12 (regression only: Edge on Windows has no BarcodeDetector).
+
+### 2026-10-19 — Claude (Opus 5.5) — T08.14: scan box misaligned on the phone (regression), fixed
+
+* **Task:** owner's retry: still no scan; screenshot showed html5-qrcode's corner brackets off the cyan frame. Owner also approved the new Tamil strings ("tamil text is fire")
+* **Status:** WORKING (owner retries)
+* **Files:** `web-portal/src/main/resources/static/js/scanner.js` (stream `aspectRatio: { ideal: 1 }`, 1080×1080, `aspectRatio: 1` + qrbox back), `ScanPagesTest` (asserts the square request), `ui-checks/scanner.mjs` (+1 check: the stream is square)
+* **Details:** Cause (my T08.14c change): asking for 1920×1080 made the stream 16:9; the square viewfinder crops it (`object-fit: cover`) but html5-qrcode maps its scan box as if the video kept its shape, so it scanned and drew brackets on the wrong part of the frame. Removing the box made it worse (the desktop fake camera stopped reading: the frame is squashed into the square canvas). A square stream restores the old geometry with the sharper settings. ScanPagesTest 18/18, scanner.mjs 12/12 (640×640 fake stream).
+* **Notes / Errors:** If a phone ignores the square request, the misalignment would come back; then the CSS should stop forcing `object-fit: cover` on the video.
+
+### 2026-10-19 — Claude (Opus 5.5) — T08.14: the camera couldn't read the pass code (QR density, scanner settings)
+
+* **Task:** owner's two-phone scan: "Type pass no." works, the camera doesn't (needed low brightness to see the code, still blurry)
+* **Status:** WORKING (code done and checked in the browser; owner retries on the phones; then full `./mvnw verify` with everything stopped)
+* **Files:** pass-service `config/PassProperties` (Qr: `errorCorrection` M, `logoRatio` 0.15, `minContrast` 7.0, `darkColor` #111111), `qr/QrRenderer` (level from settings; `moduleColor` WCAG contrast fallback, badge keeps the event colour; `matrix` reads each code back with ZXing's core reader and tries masks 0–7 if it fails), `application.yml`, test `QrRendererTest` (+2: 150 random tokens all decode; M smaller than H; colour fallback; badge ratio 0.15); web-portal `templates/my/pass.html` (code as a zoom button, full-screen view `#qr-zoom-view` outside the card, hint), `static/js/pass-card.js` (open/close, Escape, focus, the view follows each swap, closes on stop), `templates/scan/scan.html` (zoom row, 20–30 cm hint), `static/js/scanner.js` (QR only, `useBarCodeDetectorIfSupported`, 1080p + continuous focus with a plain retry, zoom slider from track capabilities, hidden on the manual tab), `static/css/portal.css` (code up to 300 px, narrower margins under 30rem, `.qrzoom`, `.zoomrow`, readable hint on the card), `messages*.properties` (`pass.live.enlarge`, `pass.live.close`, `pass.live.enlargeHint`, `scan.zoom`, `scan.hold`; Tamil drafted by the agent, **owner to check**), tests `PassPagesTest` (+1), `ScanPagesTest` (+1); `ui-checks/*.mjs` (`ignoreHTTPSErrors` on every context; `student.mjs` +4 checks); docs PROJECT.md §P4, DECISIONS D12 (amended), plan §18, README demo tips, archive report follow-up
+* **Details:** Measured: 467-char token → level H 113×113 modules, M 85×85, L 77×77; the card drew it 232 px (≈1.9 CSS px/module). ZXing's reader missed 2.4 % of perfectly drawn codes with the encoder's mask (any level; H 8/300), every one fixed by another mask (24/24); quiet zone and badge had no effect; 4 ms per check. First full-screen attempt stayed card-sized: the card's `backdrop-filter` makes a `position:fixed` child size to the card; moved the view outside the card. Checks: pass-service QrRendererTest 6/6 + TicketPdfRendererTest; portal PassPagesTest/ScanPagesTest/I18nTest/NoTokensInPagesTest 41/41; Playwright student.mjs 34/34 (code 278 px at 360 px; full screen 331 px on white), scanner.mjs 11/11 (real live code through a fake camera; on desktop Edge the fallback decoder and no zoom); live code from pass-service now viewBox 89 (85 + border).
+* **Notes / Errors:** The native detector and zoom only exist on real Android phones: the owner's retry is the check. New Tamil strings need the owner's look (like T34).
+
+### 2026-10-19 — Claude (Opus 5.5) — Owner: Tamil reviewed, phase 6 committed; what's left
+
+* **Task:** owner asked to mark the end of Phase 6 and what is left
+* **Status:** WORKING (waiting for the owner on the two-phone scan result)
+* **Files:** `log.md` (T34 ticked)
+* **Details:** Owner committed everything as `7d6979e` "phase 6: web portal -done & checked" (160 files; tree clean; `scripts/make-dev-cert.sh` 100755; no `.p12`, `node_modules` or firewall log tracked). Owner reviewed the Tamil text: fine (T34 done). Portal opens on the phone. Firewall: the owner removed every rule for the project's Java and every `MITPass*` rule (back to the state before the session; README step 1 b re-adds the hotspot rule for the next demo). Nothing running.
+* **Notes / Errors:** Left: (1) confirm the camera scan (criterion 1: green + name + beep + vibration, then amber); (2) push + CI (criterion 9) — owner's call; (3) docs still saying "open" (PROJECT.md §P6 status, plan §18 "Open", T08.13/T08) — a docs-only commit after (1), with the owner's permission.
 
 ### 2026-10-19 — Claude (Opus 5.5) — Phone demo works (laptop as hotspot); README section, check script, archived report
 

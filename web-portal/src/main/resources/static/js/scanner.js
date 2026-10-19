@@ -135,22 +135,97 @@
         if (!window.isSecureContext || !navigator.mediaDevices || typeof Html5Qrcode === 'undefined') {
             return noCamera(root.dataset.noSecure || 'The camera needs HTTPS. Type the pass number instead.');
         }
-        reader = new Html5Qrcode('reader', { verbose: false });
-        reader.start(
-            { facingMode: 'environment' },
-            {
-                fps: 10,
-                qrbox: function (w, h) {
-                    const side = Math.floor(Math.min(w, h) * 0.72);
-                    return { width: side, height: side };
-                },
-                aspectRatio: 1,
-            },
-            onRead,
-            function () { /* no code in this frame */ }
-        ).catch(function () {
-            noCamera(root.dataset.noCamera || 'No camera available. Type the pass number instead.');
+        // Found in the two-phone demo (2026-10-19): a pass code read off another phone's screen came out blurry. So: the
+        // browser's own detector where there is one (Chrome on Android; far better with dense codes), QR codes only,
+        // a sharp image (high resolution, continuous focus) and zoom, so the phone can stay far enough away to focus.
+        reader = new Html5Qrcode('reader', {
+            verbose: false,
+            formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         });
+        const scanConfig = {
+            fps: 12,
+            aspectRatio: 1,
+            qrbox: function (w, h) {
+                const side = Math.floor(Math.min(w, h) * 0.8);
+                return { width: side, height: side };
+            },
+        };
+        const sharp = Object.assign({}, scanConfig, {
+            videoConstraints: {
+                facingMode: 'environment',
+                // Square, like the viewfinder: html5-qrcode maps its scan box as if the video kept its own shape, so
+                // a 16:9 stream cropped by object-fit put the box (and its brackets) on the wrong part of the frame.
+                aspectRatio: { ideal: 1 },
+                width: { ideal: 1080 },
+                height: { ideal: 1080 },
+                advanced: [{ focusMode: 'continuous' }],
+            },
+        });
+        reader.start({ facingMode: 'environment' }, sharp, onRead, function () { /* no code in this frame */ })
+            .catch(function () {
+                // A camera that refuses the sharp settings: try once with the plain ones.
+                return reader.start({ facingMode: 'environment' }, scanConfig, onRead, function () { /* none */ });
+            })
+            .then(offerZoom)
+            .then(nativeDetector)
+            .catch(function () {
+                noCamera(root.dataset.noCamera || 'No camera available. Type the pass number instead.');
+            });
+    }
+
+    // html5-qrcode shrinks each frame to the scan box's on-screen size (~270 px) before decoding, so a code filling less
+    // than ~80 % of the box had under a pixel per module. Where the browser has its own detector (Chrome on Android),
+    // it also reads the video element itself, at the camera's full resolution; html5-qrcode stays the fallback.
+    function nativeDetector() {
+        if (!('BarcodeDetector' in window)) {
+            return;
+        }
+        window.BarcodeDetector.getSupportedFormats().then(function (formats) {
+            if (formats.indexOf('qr_code') < 0) {
+                return;
+            }
+            const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+            const video = document.querySelector('#reader video');
+            function loop() {
+                if (!video || video.readyState < 2 || busy || cameraPanel.hidden) {
+                    setTimeout(loop, 150);
+                    return;
+                }
+                detector.detect(video)
+                    .then(function (codes) { if (codes.length) { onRead(codes[0].rawValue); } })
+                    .catch(function () { /* a frame it couldn't read */ })
+                    .then(function () { setTimeout(loop, 100); });
+            }
+            loop();
+        }).catch(function () { /* no native detector: html5-qrcode alone */ });
+    }
+
+    // Zoom where the camera supports it (most Android phones). It starts slightly zoomed in, so the volunteer holds
+    // the phone back, where its camera can focus, instead of up against the pass.
+    function offerZoom() {
+        const row = document.getElementById('camera-zoom-row');
+        const slider = document.getElementById('camera-zoom');
+        let caps = null;
+        try { caps = reader.getRunningTrackCapabilities(); } catch (e) { return; }
+        if (caps && caps.focusMode && caps.focusMode.indexOf('continuous') >= 0) {
+            reader.applyVideoConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function () { /* fine */ });
+        }
+        if (!row || !slider || !caps || !caps.zoom || !(caps.zoom.max > caps.zoom.min)) {
+            return;
+        }
+        slider.min = String(caps.zoom.min);
+        slider.max = String(Math.min(caps.zoom.max, 5));
+        slider.step = String(caps.zoom.step || 0.1);
+        const start = Math.min(Math.max(1.5, caps.zoom.min), Number(slider.max));
+        slider.value = String(start);
+        function apply() {
+            reader.applyVideoConstraints({ advanced: [{ zoom: Number(slider.value) }] }).catch(function () { /* ignore */ });
+        }
+        slider.addEventListener('input', apply);
+        apply();
+        row.dataset.ready = 'true';
+        row.hidden = cameraPanel.hidden;
     }
 
     function noCamera(reason) {
@@ -188,6 +263,10 @@
     function show(which) {
         cameraPanel.hidden = which !== 'camera';
         manualPanel.hidden = which !== 'manual';
+        const zoomRow = document.getElementById('camera-zoom-row');
+        if (zoomRow && zoomRow.dataset.ready) {
+            zoomRow.hidden = which !== 'camera';
+        }
         tabs.querySelectorAll('[data-tab]').forEach(function (b) {
             b.setAttribute('aria-selected', String(b.dataset.tab === which));
         });

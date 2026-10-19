@@ -22,11 +22,16 @@
         </div>
 
         <div class="pass__qr" th:if="${pass.isActive()}">
+            <!--/* Tap for full screen (pass-card.js): at card size the scanning phone has to come too close to focus. */-->
             <div class="qrframe" id="pass-code" th:data-refresh-ms="${refreshMillis}"
                  th:data-src="@{/my/passes/{id}/qr.svg(id=${pass.id()})}">
-                <img id="live-qr" width="232" height="232" th:alt="#{pass.live.alt}"
-                     th:src="@{/my/passes/{id}/qr.svg(id=${pass.id()})}">
+                <button type="button" class="qrframe__zoom" data-qr-zoom aria-pressed="false"
+                        th:aria-label="#{pass.live.enlarge}">
+                    <img id="live-qr" width="300" height="300" th:alt="#{pass.live.alt}"
+                         th:src="@{/my/passes/{id}/qr.svg(id=${pass.id()})}">
+                </button>
             </div>
+            <p class="hint center mb-0" th:text="#{pass.live.enlargeHint}">Tap the code to make it bigger for the scanner.</p>
             <p class="pass__live" aria-live="off">
                 <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
                     <circle class="ring__track" cx="50" cy="50" r="40"></circle>
@@ -69,6 +74,13 @@
             <th:block th:each="line : ${@fmt.mrz(pass)}"><span th:text="${line}">MP&lt;TECHFEST26</span><br></th:block>
         </p>
     </article>
+
+    <!--/* The full-screen view of the live code (pass-card.js). Outside the card on purpose: the card's backdrop-filter
+         would make a position:fixed child fill the card, not the screen. */-->
+    <button type="button" class="qrzoom" id="qr-zoom-view" hidden th:if="${pass.isActive()}"
+            th:aria-label="#{pass.live.close}">
+        <img id="live-qr-zoom" alt="" width="600" height="600">
+    </button>
 
     <p class="ok-text center mt-4" th:if="${pass.checkedInAt() != null}">
         <span th:text="#{pass.checkedIn(${@fmt.shortWhen(pass.checkedInAt())})}">Checked in Sat 17 Oct, 09:02</span><span

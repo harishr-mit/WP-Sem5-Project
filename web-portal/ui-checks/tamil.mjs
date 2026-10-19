@@ -15,7 +15,7 @@ const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok 
 
 const browser = await chromium.launch(CHANNEL ? { channel: CHANNEL } : {});
 async function tour(email, pages) {
-    const ctx = await browser.newContext({ viewport: { width: 360, height: 780 }, deviceScaleFactor: 2 });
+    const ctx = await browser.newContext({ viewport: { width: 360, height: 780 }, deviceScaleFactor: 2, ignoreHTTPSErrors: true });
     await ctx.addCookies([{ name: 'mitpass-lang', value: 'ta', url: PORTAL }]);
     const p = await ctx.newPage();
     if (email) {

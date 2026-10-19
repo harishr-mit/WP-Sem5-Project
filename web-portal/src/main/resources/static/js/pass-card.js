@@ -25,6 +25,10 @@
     function stop() {
         stopped = true;
         img.hidden = true;
+        const view = document.getElementById('qr-zoom-view');
+        if (view) {
+            view.hidden = true;
+        }
         if (gone) {
             gone.hidden = false;
         }
@@ -34,6 +38,10 @@
         const next = new Image();
         next.onload = function () {
             img.src = next.src;
+            const viewImg = document.getElementById('live-qr-zoom');
+            if (viewImg && !viewImg.closest('[hidden]')) {
+                viewImg.src = next.src; // the full-screen view shows the new code too
+            }
         };
         next.onerror = stop;
         next.src = base + '?t=' + Date.now();
@@ -56,6 +64,35 @@
             swap();
         }
         setTimeout(tick, 1000 - (Date.now() % 1000));
+    }
+
+    // Tap the code for full screen on white, tap again (or Escape) to close: at card size a scanning phone has to come
+    // so close that its camera can't focus (found in the two-phone demo). The image keeps refreshing while zoomed.
+    // The view sits outside the card (its backdrop-filter would trap a fixed overlay inside the card).
+    const zoom = frame.querySelector('[data-qr-zoom]');
+    const view = document.getElementById('qr-zoom-view');
+    const viewImg = document.getElementById('live-qr-zoom');
+    function setZoom(on) {
+        if (!zoom || !view) {
+            return;
+        }
+        frame.classList.toggle('is-zoomed', on);
+        zoom.setAttribute('aria-pressed', String(on));
+        if (on) {
+            viewImg.src = img.src;
+            viewImg.alt = img.alt;
+        }
+        view.hidden = !on;
+        (on ? view : zoom).focus();
+    }
+    if (zoom && view) {
+        zoom.addEventListener('click', function () { setZoom(true); });
+        view.addEventListener('click', function () { setZoom(false); });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && !view.hidden) {
+                setZoom(false);
+            }
+        });
     }
 
     img.onerror = stop;

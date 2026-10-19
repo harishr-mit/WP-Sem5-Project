@@ -206,6 +206,8 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 
 **As built.** The JWK set lists the ACTIVE key first, then newest first (sorting by creation time alone shuffled two keys made in the same instant). Live tokens are minted per request and not stored; `exp − iat` is exactly 45 s (whole seconds). A holder asking for the live code just after the unlock time gets it at once (the pass is activated on the spot if the scheduler hasn't run yet).
 
+- **QR rendering, amended 2026-10-19 (owner, Phase 6 exit demo; log.md T08.14).** Error correction **M** instead of H, and the centre badge at 15 % of the width instead of 20 %. The live token is about 467 characters, so H made a version-24 code (113×113 modules; about 1.9 CSS px per module on the pass card) that a phone camera couldn't focus on and read from another phone's screen. M gives version 17 (85×85); it recovers about 15 % damage, the badge covers about 2 % of the area. Dark modules keep the event colour only when it contrasts with white by at least `min-contrast` (WCAG ratio, default 7:1), otherwise `dark-color` (near-black); the badge keeps the event colour. All three are settings (`mitpass.passes.qr.error-correction`, `logo-ratio`, `min-contrast`, `dark-color`). The token inside is unchanged, so scanners, the PDF ticket and `VerifyPassToken.java` need nothing.
+
 **Consequences.** P5 verifies with the pass JWK set, checks `knd` and the revocation list, and needs the event LIVE. Live codes for demo events with far-off dates stay locked: demos create an event starting soon (or override the config).
 
 ---

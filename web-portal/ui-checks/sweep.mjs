@@ -25,7 +25,7 @@ const tours = [
 const browser = await chromium.launch(CHANNEL ? { channel: CHANNEL } : {});
 for (const [width, label] of [[360, 'phone'], [1280, 'desktop']]) {
     for (const [email, pages] of tours) {
-        const ctx = await browser.newContext({ viewport: { width, height: 800 }, colorScheme: 'dark' });
+        const ctx = await browser.newContext({ viewport: { width, height: 800 }, colorScheme: 'dark', ignoreHTTPSErrors: true });
         const p = await ctx.newPage();
         if (email) {
             await p.goto(PORTAL + '/login');

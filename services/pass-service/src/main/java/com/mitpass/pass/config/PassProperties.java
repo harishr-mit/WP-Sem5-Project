@@ -1,5 +1,6 @@
 package com.mitpass.pass.config;
 
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import java.time.Duration;
 import java.time.ZoneId;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -40,13 +41,22 @@ public record PassProperties(
      * @param size target image width in pixels (rounded down to whole pixels per module)
      * @param margin quiet zone in modules
      * @param logo a PNG resource for the centre badge; empty = a drawn "MIT" badge
-     * @param logoRatio badge width as a share of the code width (error correction H tolerates about 30 % damage)
+     * @param logoRatio badge width as a share of the code width (it covers about its square of the area; level M
+     *     recovers about 15 % damage)
      * @param defaultColor dark-module colour when the event has none
+     * @param errorCorrection QR error-correction level. M since 2026-10-19 (D12): at H a live token made a 113-module
+     *     code that phone cameras couldn't read off a screen
+     * @param minContrast the event colour is used for the modules only if it contrasts with white at least this much
+     *     (WCAG contrast ratio, 1–21)
+     * @param darkColor the modules' colour when the event colour is too light
      */
     public record Qr(
             @DefaultValue("400") int size,
             @DefaultValue("2") int margin,
             @DefaultValue("") String logo,
-            @DefaultValue("0.2") double logoRatio,
-            @DefaultValue("#7A1F2B") String defaultColor) {}
+            @DefaultValue("0.15") double logoRatio,
+            @DefaultValue("#7A1F2B") String defaultColor,
+            @DefaultValue("M") ErrorCorrectionLevel errorCorrection,
+            @DefaultValue("7.0") double minContrast,
+            @DefaultValue("#111111") String darkColor) {}
 }

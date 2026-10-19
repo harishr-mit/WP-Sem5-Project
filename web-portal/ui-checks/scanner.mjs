@@ -82,7 +82,7 @@ const browser = await chromium.launch({
     ...(CHANNEL ? { channel: CHANNEL } : {}),
     args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${video}`],
 });
-const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, permissions: ['camera'] });
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, permissions: ['camera'], ignoreHTTPSErrors: true });
 const p = await ctx.newPage();
 p.on('console', (m) => { if (m.type() === 'error') report.consoleErrors.push(m.text()); });
 p.on('pageerror', (e) => report.consoleErrors.push(String(e)));
@@ -100,6 +100,11 @@ await Promise.all([p.waitForURL('**/events'), p.click('form.card button[type=sub
 await p.goto(PORTAL + '/scan');
 await p.selectOption('#gate', String(gate.id));
 await shot('01-scanner');
+
+// The stream must be square like the viewfinder, or html5-qrcode scans the wrong part of a cropped frame (2026-10-19)
+await p.waitForFunction(() => document.querySelector('#reader video')?.videoWidth > 0, null, { timeout: 15000 });
+const stream = await p.evaluate(() => { const v = document.querySelector('#reader video'); return [v.videoWidth, v.videoHeight]; });
+check('the camera stream is square, like the viewfinder', stream[0] === stream[1], stream.join('x'));
 
 const card = p.locator('#scan-result .result');
 await card.waitFor({ timeout: 20000 });

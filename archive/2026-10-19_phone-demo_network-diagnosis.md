@@ -68,3 +68,21 @@ next time are in README *Phone demo*; `scripts/phone-demo-check.ps1` checks all 
 | Added `MITPass portal (HTTPS 8443, laptop hotspot)`: Public, TCP 8443, `192.168.137.0/24` (any program) | present; README now ties it to the project's Java too |
 | New prompt answer created `TCP/UDP Query User…` Allow rules for the project's Java (Private, every port) | present; should be removed |
 | Firewall logging (Private) on for the tests | turned off again |
+
+## Follow-up the same day: the camera couldn't read the code
+
+With the network fixed, *Type pass no.* worked but the camera scan didn't: the owner had to turn phone A's brightness
+down to see the code at all, and it was still blurry. Measured, not guessed:
+
+| Finding | Evidence | Fix (log.md T08.14) |
+|---|---|---|
+| The code was too dense | A live token is 467 characters; at error correction **H** that is a version-24 code, **113×113 modules**, drawn 232 px wide on the card: about 1.9 CSS px per module. Phone B had to come so close that it couldn't focus | Owner: level **M** (85×85 modules), badge 15 % instead of 20 % (PROJECT.md §P4, D12) |
+| The card drew it small | 232 px, inside a card with wide margins | Up to 300 px (278 px on a 360 px phone); **tap for a full-screen white view** (331 px on a 360 px phone) |
+| The scanner asked for little | No resolution, no focus mode, the JavaScript decoder only | 1080p back camera, continuous focus, the browser's own barcode detector where there is one, QR only, a **zoom** slider (starts at 1.5×) so phone B stays 20–30 cm away |
+| ZXing misses some perfect codes | 300–1000 random tokens of the real length, drawn perfectly: ZXing's reader (the family html5-qrcode uses) failed on **2.4 %** with the encoder's mask, at every level (H included: 8/300); quiet zone and badge made no difference; another mask fixed **24 of 24** | pass-service reads each code back and switches mask when needed (about 4 ms) |
+| Light event colours | Contrast against white below 7:1 would weaken any decoder | Modules fall back to near-black; the badge keeps the event colour |
+
+Verified: `QrRendererTest` (150 random tokens all decode; M smaller than H; colour fallback), `PassPagesTest`,
+`ScanPagesTest`, Playwright `student.mjs` 34/34 (code 278 px; full screen 331 px on white; tap and Escape close it)
+and `scanner.mjs` 11/11 with a real live code through a fake camera. Brightness tip in README: about half, since full
+brightness washes the code out for a camera.

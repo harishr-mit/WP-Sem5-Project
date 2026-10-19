@@ -153,8 +153,8 @@ With *b* (or *c*) in place Windows should no longer ask "Allow access?" for the 
 **3. The demo**
 
 1. On both phones open the address from the check and accept the certificate warning once (Chrome: *Advanced → Proceed*; Safari: *Show Details → visit this website*).
-2. **Phone A:** log in as `2026509001@student.annauniv.edu` (Priya, `Passw0rd!`) → *My passes* → the new event's pass: the passport card with a rotating QR and a countdown ring.
-3. **Phone B:** log in as `volunteer@mitpass.test` (`Passw0rd!`) → **Scan** → pick the event and gate MAIN → start the camera and allow it → point it at phone A.
+2. **Phone A:** log in as `2026509001@student.annauniv.edu` (Priya, `Passw0rd!`) → *My passes* → the new event's pass: the passport card with a rotating QR and a countdown ring. **Tap the code** to show it full screen on white (tap again to close), and turn the brightness to about half: full brightness washes the code out for a camera.
+3. **Phone B:** log in as `volunteer@mitpass.test` (`Passw0rd!`) → **Scan** → pick the event and gate MAIN → start the camera and allow it → hold it **20–30 cm** from phone A, where its camera can focus, and use the **Zoom** slider (shown when the camera supports zoom) rather than moving closer.
 4. Expected: a **green** full-screen flash with Priya's name, a beep and a vibration. Scan again: amber *Already in*. A screenshot of an older code: red, expired. The *Type pass no.* tab works without the camera.
 5. On the laptop, as `organizer.a@mitpass.test`: *My events* → the event → **Reports** shows the check-in.
 

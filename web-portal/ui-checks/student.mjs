@@ -76,7 +76,8 @@ async function noHorizontalScroll(page, name) {
 }
 
 // Phone, light: the whole journey
-const phone = await browser.newContext({ viewport: PHONE, deviceScaleFactor: 2, colorScheme: 'light', locale: 'en-IN' });
+// ignoreHTTPSErrors: the lan profile's self-signed certificate (PORTAL_URL=https://localhost:8443)
+const phone = await browser.newContext({ viewport: PHONE, deviceScaleFactor: 2, colorScheme: 'light', locale: 'en-IN', ignoreHTTPSErrors: true });
 const p = await phone.newPage();
 watch(p, 'phone-light');
 
@@ -120,6 +121,26 @@ const t1 = Number(await p.textContent('#qr-left'));
 check('countdown runs', t1 < t0 && t1 > 0, `${t0} -> ${t1}`);
 await shot(p, '07-pass-phone');
 await noHorizontalScroll(p, 'pass');
+const cardSide = await p.evaluate(() => document.getElementById('live-qr').getBoundingClientRect().width);
+check('the code is drawn large on the card', cardSide >= 250, `${Math.round(cardSide)}px at ${PHONE.width}px`);
+
+// Tap the code: full screen on white for the scanner (two-phone demo, 2026-10-19), tap again / Escape closes
+await p.click('[data-qr-zoom]');
+await p.waitForFunction(() => document.getElementById('live-qr-zoom').naturalWidth > 0, null, { timeout: 5000 });
+const zoomed = await p.evaluate(() => {
+    const view = document.getElementById('qr-zoom-view');
+    const r = document.getElementById('live-qr-zoom').getBoundingClientRect();
+    return { on: !view.hidden, side: r.width, bg: getComputedStyle(view).backgroundColor,
+        pressed: document.querySelector('[data-qr-zoom]').getAttribute('aria-pressed') };
+});
+check('tapping the code shows it full screen on white', zoomed.on && zoomed.side >= PHONE.width * 0.9 && zoomed.bg === 'rgb(255, 255, 255)',
+    `${Math.round(zoomed.side)}px, ${zoomed.bg}, aria-pressed=${zoomed.pressed}`);
+await shot(p, '07b-pass-zoomed-phone');
+await p.click('#qr-zoom-view');
+check('tapping again closes it', await p.evaluate(() => document.getElementById('qr-zoom-view').hidden));
+await p.click('[data-qr-zoom]');
+await p.keyboard.press('Escape');
+check('Escape closes it too', await p.evaluate(() => document.getElementById('qr-zoom-view').hidden));
 
 for (const [path, name] of [['/my/passes', '08-wallet'], ['/my/registrations', '09-registrations'],
     ['/my/stamps', '10-stamps'], ['/my/profile', '11-profile'], ['/events/999999', '12-not-found']]) {
@@ -141,7 +162,7 @@ const state = await phone.storageState();
 // Dark mode (OS preference) and desktop width, logged in as the same session
 for (const [label, opts] of [['dark-phone', { viewport: PHONE, colorScheme: 'dark' }],
     ['desktop', { viewport: DESKTOP, colorScheme: 'light' }], ['dark-desktop', { viewport: DESKTOP, colorScheme: 'dark' }]]) {
-    const ctx = await browser.newContext({ ...opts, storageState: state, deviceScaleFactor: 1 });
+    const ctx = await browser.newContext({ ...opts, storageState: state, deviceScaleFactor: 1, ignoreHTTPSErrors: true });
     const page = await ctx.newPage();
     watch(page, label);
     for (const [path, name] of [['/events', 'explore'], [`/events/${event.id}`, 'event'],
@@ -161,7 +182,7 @@ for (const [label, opts] of [['dark-phone', { viewport: PHONE, colorScheme: 'dar
 }
 
 // Tamil
-const ta = await browser.newContext({ viewport: PHONE, storageState: state, deviceScaleFactor: 2 });
+const ta = await browser.newContext({ viewport: PHONE, storageState: state, deviceScaleFactor: 2, ignoreHTTPSErrors: true });
 const tp = await ta.newPage();
 watch(tp, 'tamil');
 await tp.goto(PORTAL + '/events?lang=ta');

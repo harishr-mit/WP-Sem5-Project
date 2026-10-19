@@ -18,7 +18,7 @@ const email = `${regNo}@student.annauniv.edu`;
 const password = 'Techfest2026';
 
 const browser = await chromium.launch(CHANNEL ? { channel: CHANNEL } : {});
-const p = await (await browser.newContext()).newPage();
+const p = await (await browser.newContext({ ignoreHTTPSErrors: true })).newPage();
 const consoleErrors = [];
 p.on('console', (m) => m.type() === 'error' && consoleErrors.push(m.text()));
 

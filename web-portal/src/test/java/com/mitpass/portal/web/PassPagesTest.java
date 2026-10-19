@@ -91,6 +91,24 @@ class PassPagesTest {
     }
 
     /**
+     * Found in the two-phone demo (2026-10-19): at card size a scanning phone had to come so close it couldn't focus.
+     * The code is a button that shows it full screen on white; without JavaScript it is still the plain image.
+     */
+    @Test
+    void theLiveCodeCanBeShownFullScreenForTheScanner() throws Exception {
+        given(gateway.pass(PASS_ID)).willReturn(pass("ACTIVE"));
+
+        mvc.perform(get("/my/passes/" + PASS_ID).with(authentication(TestTokens.login(student))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-qr-zoom")))
+                .andExpect(content().string(containsString("aria-label=\"Show the code full screen\"")))
+                .andExpect(content().string(containsString("Tap the code to make it bigger")));
+        mvc.perform(get("/js/pass-card.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("is-zoomed")));
+    }
+
+    /**
      * RL6 regression: Thymeleaf's JavaScript inlining drops the text after an inlined expression, so
      * {@code /*[[${refreshSeconds}]]*&#47; 30 * 1000} rendered as {@code 30}: the image reloaded every 30 ms. Since
      * P6 the interval is a rendered attribute (no inlining at all), and the script refuses anything under 5 s.

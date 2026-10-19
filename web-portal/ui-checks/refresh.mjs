@@ -8,7 +8,7 @@ const CHANNEL = process.env.PW_CHANNEL ?? 'msedge';
 const minutes = Number(process.argv[2] ?? 3);
 
 const browser = await chromium.launch(CHANNEL ? { channel: CHANNEL } : {});
-const ctx = await browser.newContext();
+const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
 const p = await ctx.newPage();
 await p.goto(PORTAL + '/login');
 await p.fill('#email', '2026509001@student.annauniv.edu');

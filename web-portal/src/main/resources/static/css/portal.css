@@ -284,11 +284,21 @@ dialog.confirm::backdrop { background: rgba(13, 20, 36, .55); backdrop-filter: b
 .pass__when { margin: var(--space-1) 0 0; color: rgba(255, 255, 255, .82); font-size: .9rem; }
 .pass__qr { margin: var(--space-4) var(--space-5); background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(8px); border-radius: var(--radius-l); padding: var(--space-4); display: grid; place-items: center; gap: var(--space-3); }
 .qrframe { display: grid; place-items: center; }
-.qrframe img { width: min(232px, 100%); height: auto; aspect-ratio: 1; background: #fff; border-radius: 10px; padding: 8px; }
+.qrframe img { width: min(300px, 100%); height: auto; aspect-ratio: 1; background: #fff; border-radius: 10px; padding: 8px; display: block; }
+/* The code as a button: tap for full screen on white (pass-card.js), so a scanning phone can stay far enough away to focus */
+.qrframe__zoom { all: unset; display: block; width: 100%; cursor: zoom-in; border-radius: 10px; }
+.qrframe__zoom:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.qrzoom { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; margin: 0; padding: 4vmin; border: 0; border-radius: 0; background: #fff; cursor: zoom-out; }
+.qrzoom[hidden] { display: none; }
+.qrzoom img { width: min(92vw, 92vh); max-width: none; height: auto; aspect-ratio: 1; }
+.qrzoom:focus-visible { outline: 3px solid var(--focus); outline-offset: -6px; }
+@media (max-width: 30rem) { .pass__qr { margin: var(--space-3); padding: var(--space-3); } }
 .ring { width: 1.6rem; height: 1.6rem; flex: none; transform: rotate(-90deg); }
 .ring circle { fill: none; stroke-width: 12; }
 .ring__track { stroke: rgba(255, 255, 255, .22); }
 .ring__left { stroke: var(--gold); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+/* On the dark card the muted grey is unreadable: the card's own light text colour */
+.pass__qr .hint { color: rgba(255, 255, 255, .82); }
 .pass__live { font-size: .9rem; display: flex; align-items: center; gap: var(--space-2); margin: 0; flex-wrap: wrap; justify-content: center; }
 .pass__locked { text-align: center; padding: var(--space-3); }
 .pass__locked b { display: block; font: 700 1.3rem/1.1 var(--font-display); color: var(--gold); text-transform: uppercase; }
@@ -348,6 +358,8 @@ body.scanner-body { background: var(--night); color: var(--scan-text); }
 .viewfinder { position: relative; margin: var(--space-4); border-radius: var(--radius-l); overflow: hidden; background: #050A14; aspect-ratio: 1 / 1; border: 1px solid var(--night-line); }
 .viewfinder video { width: 100% !important; height: 100% !important; object-fit: cover; }
 .viewfinder__frame { position: absolute; inset: 14%; border: 3px solid rgba(143, 211, 220, .55); border-radius: var(--radius); pointer-events: none; box-shadow: 0 0 0 999px rgba(0, 0, 0, .35); }
+.zoomrow { display: flex; align-items: center; gap: var(--space-3); margin: 0 var(--space-4) var(--space-4); color: var(--scan-cyan); font-weight: 600; }
+.zoomrow input { flex: 1; min-width: 0; accent-color: var(--scan-cyan); }
 .viewfinder__msg { position: absolute; inset: auto 0 0; padding: var(--space-3); text-align: center; color: var(--scan-cyan); font-weight: 600; background: linear-gradient(transparent, rgba(0, 0, 0, .6)); }
 .scanner__panel { background: var(--night-raised); border-top: 1px solid var(--night-line); border-radius: var(--radius-l) var(--radius-l) 0 0; padding: var(--space-4); margin-top: auto; }
 .scanner input, .scanner select { background: var(--night); color: var(--scan-text); border-color: var(--night-line); }

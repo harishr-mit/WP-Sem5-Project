@@ -35,7 +35,7 @@ async function noHorizontalScroll(page, name) {
 }
 
 const browser = await chromium.launch(CHANNEL ? { channel: CHANNEL } : {});
-const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, ignoreHTTPSErrors: true });
 const p = await ctx.newPage();
 watch(p, 'desktop');
 

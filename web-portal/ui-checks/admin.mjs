@@ -19,7 +19,7 @@ function check(name, ok, detail = '') {
 }
 
 const browser = await chromium.launch(CHANNEL ? { channel: CHANNEL } : {});
-const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, ignoreHTTPSErrors: true });
 const p = await ctx.newPage();
 p.on('console', (m) => { if (m.type() === 'error') report.consoleErrors.push(m.text()); });
 p.on('pageerror', (e) => report.consoleErrors.push(String(e)));

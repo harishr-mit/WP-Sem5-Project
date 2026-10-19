@@ -338,8 +338,22 @@ Found in the browser: after login the user landed on the favicon (its hashed URL
 
 Found live: the refresh window (above).
 
+### After the first two-phone try (2026-10-19, log.md T08.14)
+
+The network problems are in `archive/2026-10-19_phone-demo_network-diagnosis.md` (laptop as hotspot, firewall rules,
+`scripts/phone-demo-check.ps1`). Then the camera couldn't read the code: it was a 113×113-module code (level H, 467-character
+token) drawn 232 px wide. Owner decisions: error correction **M** with a 15 % badge, light event colours darkened (D12,
+PROJECT.md §P4). Also built: pass-service reads each code back and switches mask when ZXing can't find it (2.4 % of codes,
+any level); the pass page draws the code larger and shows it full screen on a tap; the scanner asks for 1080p with
+continuous focus, uses the browser's barcode detector where there is one and offers zoom. The UI-check scripts accept the
+`lan` profile's certificate (`PORTAL_URL=https://localhost:8443`).
+
+### Closed 2026-10-19
+
+- **Two-phone exit demo** (criterion 1): done by the owner, laptop as hotspot; the camera reads the code even when it fills only part of the box (native detector at full resolution).
+- **Tamil review by the owner** (log.md T34): done, including the strings added in T08.14.
+- Full `./mvnw clean verify`: 593 tests (pass-service 65, portal 158).
+
 ### Open
 
-- **Two-phone exit demo** (criterion 1): `scripts/make-dev-cert.ps1`, portal with `--spring.profiles.active=lan`, the firewall rule (README *Phone demo*), phone A opens the pass, phone B scans it.
-- **Tamil review by the owner** (log.md T34): `web-portal/src/main/resources/messages_ta.properties`; `node ui-checks/tamil.mjs <dir>` makes screenshots of the key pages.
-- **GitHub Actions** on the pushed branch.
+- **GitHub Actions** on the pushed branch (the owner pushes).
