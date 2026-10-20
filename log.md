@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-19 (Claude Opus 5.5) — **Phase 6 done** on branch `phase6` (owner commit `7d6979e` + the T08.14 changes, not yet committed). Two-phone exit demo passed (owner, laptop as hotspot); Tamil reviewed (T34). T08.14: QR level M (D12), pass-service mask read-back, full-screen code on the pass page, scanner square 1080 stream + native detector + zoom. Full `./mvnw clean verify` green: 593 tests. Next: the owner commits (ask first) and pushes for CI; then Phase 7 (T09). Nothing running; Docker Desktop off. Parked for after P8: `docs/REVIEW-LATER.md` (RL1–RL4, RL10, RL12, RL13 open; RL5–RL9, RL11 resolved).
+* **Last updated:** 2026-10-20 (Claude Opus 5.5) — **Phase 7 planned** on branch `phase7` (`docs/plans/phase-7.md`; owner decisions Q1–Q12 in PROJECT.md §P7 and D16). No code yet: waiting for the owner's pre-phase commit and go, then T09.2. Phase 6 is done and merged (PR #7, `fb04ff6`; 593 tests). Nothing running; Docker Desktop off. Parked for after P8: `docs/REVIEW-LATER.md` (RL1–RL4, RL10, RL12, RL13 open; RL5–RL9, RL11 resolved).
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
@@ -133,7 +133,19 @@ Shared context for every agent working in this directory. Read this file **befor
     * [x] T08.14b: portal pass page: the code as large as the screen allows, tap for a full-screen white view; done when PassPagesTest green + Playwright phone screenshot
     * [x] T08.14c: scanner: native BarcodeDetector where supported, high camera resolution, continuous focus, zoom control; done when scanner.mjs green (fake camera)
     * [x] T08.14d: docs (PROJECT.md §P4, D12, plan §18, README phone demo tips), full `./mvnw verify`, owner retries the two-phone scan
-* [ ] T09: **Phase 7** — Real-time dashboard, notifications & offline scanning (PROJECT.md §P7)
+* [ ] T09: **Phase 7** — Real-time dashboard, notifications & offline scanning (PROJECT.md §P7; plan and "done when" checks: `docs/plans/phase-7.md` §15). Plan written 2026-10-20; Q1–Q12 answered by the owner, Q13–Q15 defaults. Waiting for the owner's pre-phase commit and go
+  * [x] T09.1: Owner decisions recorded (PROJECT.md §3/§P7, DECISIONS D13 note + D16 draft) before code
+  * [ ] T09.2: common-messaging dead letters (list/replay/discard, WARNING health, gauge); pass/checkin adopt; gateway routes; matrix
+  * [ ] T09.3: Contracts (`RegistrationWaitlisted`, cancelled + email/name); event-service publishes; SERVICE on registrations list + static QR
+  * [ ] T09.4: notification-service skeleton (:8085, V1, inbox + DLQ, SERVICE client, gateway route + Swagger, matrix)
+  * [ ] T09.5: Emails (templates, IcsBuilder, CID QR, all triggers incl. bulk via event-service)
+  * [ ] T09.6: Reminders (ShedLock) + public `.ics` endpoint + portal "Add to calendar"
+  * [ ] T09.7: Redis in compose + checkin live counters (after commit, rebuild), `GET …/live`, `gateCheckedIn`
+  * [ ] T09.8: checkin STOMP `/ws` (handshake auth, subscribe check, throttled publisher) + gateway WebSocket route
+  * [ ] T09.9: Portal relay + live dashboard page (Chart.js, ticker, gauge, gates, fallback poll) + Playwright
+  * [ ] T09.10: checkin batch sync + manifest (V2, DUPLICATE_OFFLINE, REJECTED_OFFLINE_CLOCK)
+  * [ ] T09.11: Portal offline scanner (service worker, bundle, IndexedDB, WebCrypto, Luhn, badge, sync) + Playwright offline
+  * [ ] T09.12: Admin dead letters page + exit demo + docs
 * [ ] T10: **Phase 8** — Hardening, observability & showcase (PROJECT.md §P8)
 * [x] T11: UI mockup of the end app (visual only, no code) — https://claude.ai/artifact/WyLQJ9nh1AcMkVossG6WaH
 * [x] T12: Rename project PassPort → MITPass everywhere; point the docs at `MITPass App Screens.html` as the UI reference
@@ -187,6 +199,14 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-20 — Claude (Opus 5.5) — T09.1: Phase 7 planned, owner decisions recorded
+
+* **Task:** owner: "prepare for the implementation of phase 7. no code yet. plan everything and then wait for my command"
+* **Status:** DONE (no code; waiting for the owner's go and the pre-phase commit)
+* **Files:** created `docs/plans/phase-7.md`; edited `PROJECT.md` (§3 services table: `RegistrationWaitlisted`, notification-service recipients; §P7 bullets with the owner's decisions + plan link), `docs/DECISIONS.md` (D13 P7-completion note, new D16 draft), `log.md` (Current Status, T09 sub-tasks, this entry)
+* **Details:** 12 questions asked and answered (plan §17): portal relays the STOMP feed; offline conflicts = first synced wins (PROJECT.md wording changed from "earliest scannedAt wins"); offline check-in only; all email kinds incl. reminders; recipients read from event-service with a SERVICE token (no copy); DLQ admin page + WARNING health; dashboard for organizer/admin with first names; `.ics` from notification-service + portal button; new `RegistrationWaitlisted`; send in listener → DLQ; English emails; offline age 12 h / 2 min. Q13–Q15 are defaults. Checked against the code: event cancellation doesn't publish per-registration `RegistrationCancelled` (no double emails); checkin- and pass-service already declare DLQs; `notification_db` already exists (no `down -v`).
+* **Notes / Errors:** Current Status was stale (said Phase 6 uncommitted; it is merged as PR #7, `fb04ff6`); corrected.
 
 ### 2026-10-19 — Claude (Opus 5.5) — Phase 6 done
 

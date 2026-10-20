@@ -139,10 +139,10 @@ flowchart LR
 | Service | Owns (its own database) | Publishes | Consumes |
 |---|---|---|---|
 | `auth-service` | users, roles, refresh tokens, verification tokens | `UserRegistered` | — |
-| `event-service` | venues, events, sessions, registrations, waitlist, state history | `RegistrationConfirmed`, `RegistrationCancelled`, `WaitlistPromoted`, `EventStateChanged`, `EventRescheduled` | — |
+| `event-service` | venues, events, sessions, registrations, waitlist, state history | `RegistrationConfirmed`, `RegistrationWaitlisted` (P7), `RegistrationCancelled`, `WaitlistPromoted`, `EventStateChanged`, `EventRescheduled` | — |
 | `pass-service` | passes, signing keys, revocations | `PassIssued`, `PassRevoked` | `RegistrationConfirmed`, `RegistrationCancelled`, `EventStateChanged`, `EventRescheduled`, `AttendanceMarked` |
 | `checkin-service` | scan log, attendance, presence, device sync batches (plus a read-only copy of passes and event status for scanning) | `AttendanceMarked` | `PassIssued`, `PassRevoked`, `EventStateChanged` |
-| `notification-service` | notification log, reminder schedule | — | all of the above |
+| `notification-service` | notification log, reminder schedule | — | all of the above (recipients for bulk mails are read from event-service at send time, so it keeps no copy; owner, 2026-10-20) |
 | `web-portal` | HTTP sessions only (BFF; tokens never reach the browser) | — | — |
 
 There are no cross-service database joins. Services work together through **REST** (synchronous, for queries) and **RabbitMQ** (asynchronous, for facts that already happened).
@@ -401,16 +401,16 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 
 ### P7 — Real-time Dashboard, Notifications & Offline Scanning
 
-**Goal:** the visible "wow" layer on top of the core flow.
+**Goal:** the visible "wow" layer on top of the core flow. Plan: `docs/plans/phase-7.md` (owner decisions 2026-10-20: plan §2, §17; `docs/DECISIONS.md` D16).
 
-- [ ] **Live attendance dashboard** (UI reference screen 7): checkin-service pushes over **WebSocket/STOMP** (`/topic/events/{id}`): an animated live counter, arrivals per 5 minutes (Chart.js), per-gate throughput, a recent-scans ticker, capacity gauge. Counters live in Redis.
-- [ ] `notification-service`: consumes the domain events → HTML emails (Thymeleaf templates) to Mailpit with an inline QR and an `.ics` attachment; waitlist-promotion and cancellation emails; retry with a **dead-letter queue**.
-- [ ] **Complete the dead-letter handling started in P4** (P4 built only a minimal DLQ for pass-service): DLQs for every consumer (notification-service, checkin-service), a way to inspect and replay dead-lettered messages, and a health/metric signal when a DLQ isn't empty.
+- [ ] **Live attendance dashboard** (UI reference screen 7): checkin-service pushes over **WebSocket/STOMP** (`/topic/events/{id}`): an animated live counter, arrivals per 5 minutes (Chart.js), per-gate throughput, a recent-scans ticker (first names only), capacity gauge. Counters live in Redis (a cache rebuilt from PostgreSQL; a Redis failure never fails a scan). **The portal relays** the feed to the browser over its own STOMP endpoint, so no token reaches the browser (owner, 2026-10-20). Organizer and admin only; volunteers see their own gate's count on the scanner.
+- [ ] `notification-service`: consumes the domain events → HTML emails (Thymeleaf templates, English) to Mailpit: pass issued (inline QR + `.ics`), waitlisted (new `RegistrationWaitlisted` event), promoted, registration cancelled, event cancelled and rescheduled (updated `.ics`); sent in the listener with retry, then a **dead-letter queue** (owner, 2026-10-20). An "Add to calendar" `.ics` for the portal comes from the same service.
+- [ ] **Complete the dead-letter handling started in P4** (P4 built only a minimal DLQ for pass-service): DLQs for every consumer (notification-service, checkin-service), a way to inspect and replay dead-lettered messages (ADMIN endpoints + an Admin · Dead letters portal page), and a health/metric signal when a DLQ isn't empty (WARNING on the health overview).
 - [ ] Reminders 24 h and 1 h before the event through `@Scheduled`, with **ShedLock** so running several instances never sends duplicates.
 - [ ] **Offline scanner (PWA):** a service worker caches the app shell; the scanner prefetches the pass JWKS, the revocation list and the attendee manifest for its event.
-  - [ ] Verifies the ES256 JWS **in the browser using WebCrypto**, checks `exp` and revocations locally.
+  - [ ] Verifies the ES256 JWS **in the browser using WebCrypto**, checks `exp` and revocations locally. Check-in only while offline; check-out needs the network (owner, 2026-10-20).
   - [ ] Queues scans in IndexedDB and shows a badge such as "OFFLINE · 12 queued".
-  - [ ] `POST /scans/batch` on reconnect; server-side conflict resolution: the earliest `scannedAt` wins, others are recorded as `DUPLICATE_OFFLINE` and shown to the volunteer.
+  - [ ] `POST /scans/batch` on reconnect; server-side conflict resolution: **the first check-in recorded wins** (a batch is applied in `scannedAt` order; an existing check-in is never rewritten); later ones are recorded as `DUPLICATE_OFFLINE` and shown to the volunteer. A queued scan older than 12 h or more than 2 min in the future is refused (`REJECTED_OFFLINE_CLOCK`) (owner, 2026-10-20).
 
 **Concepts:** microservices (async choreography), state management across devices, QR verification at the edge.
 **Exit criteria / demo:** project the dashboard while scanning (the counter ticks up live); an email arrives in Mailpit with the QR; Wi-Fi off → scanning continues → Wi-Fi on → the queue syncs and conflicts are flagged.
