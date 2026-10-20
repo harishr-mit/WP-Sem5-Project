@@ -81,6 +81,22 @@ class I18nTest {
         assertThat(english).as("keys only in Tamil").containsAll(tamil);
     }
 
+    /**
+     * always-use-message-format: a lone apostrophe starts a quoted section, so "couldn't" shows as "couldnt" and a
+     * {0} after it is never filled in (found twice in P7). Every apostrophe is written ''.
+     */
+    @Test
+    void everyApostropheIsDoubled() throws IOException {
+        for (String name : List.of("messages.properties", "messages_ta.properties")) {
+            Properties bundle = bundle(name);
+            List<String> lone = bundle.stringPropertyNames().stream()
+                    .filter(key -> bundle.getProperty(key).replace("''", "").contains("'"))
+                    .sorted()
+                    .toList();
+            assertThat(lone).as("keys with a lone apostrophe in " + name).isEmpty();
+        }
+    }
+
     @Test
     void everyKeyATemplateNamesExists() throws IOException {
         Properties english = bundle("messages.properties");

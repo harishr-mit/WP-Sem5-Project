@@ -1,0 +1,8 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{mail/layout :: mail(~{::body})}">
+<body>
+<p style="margin:0 0 12px;">A reminder: your event starts <strong th:text="${startsIn}">in 24 hours</strong>.</p>
+<p style="margin:0 0 12px;">Your live pass opens 2 hours before doors open.</p>
+<p style="margin:0;"><a th:href="${passesUrl}" href="#" style="display:inline-block;background:#7A1F3D;color:#FFFFFF;padding:10px 18px;border-radius:8px;text-decoration:none;">My passes</a></p>
+</body>
+</html>

@@ -55,6 +55,8 @@ management:
   endpoint:
     health:
       show-components: always   # names and status for the admin health page (D15); details stay hidden
+      status:
+        order: DOWN,OUT_OF_SERVICE,WARNING,UP,UNKNOWN   # WARNING: a dead-letter queue holds messages (D13, P7)
 
 springdoc:
   swagger-ui:

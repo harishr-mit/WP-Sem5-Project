@@ -95,6 +95,9 @@ mitpass:
         checkin-service:
           subject: 00000000-0000-4000-8000-0000000000f1
           secret: ${MITPASS_SERVICE_SECRET_CHECKIN:dev-only-checkin-secret}
+        notification-service:   # P7 (D16): reads registrations and static QR codes for emails
+          subject: 00000000-0000-4000-8000-0000000000f2
+          secret: ${MITPASS_SERVICE_SECRET_NOTIFICATION:dev-only-notification-secret}
     signup:
       domains:
         - domain: student.annauniv.edu

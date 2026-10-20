@@ -1,6 +1,5 @@
-package com.mitpass.checkin.client;
+package com.mitpass.common.security.client;
 
-import com.mitpass.checkin.config.CheckinProperties.ServiceClient;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
@@ -14,7 +13,8 @@ import org.springframework.web.client.RestClient;
 
 /**
  * This service's own token for background calls (docs/plans/phase-5.md §4b, D7 exception): asked from auth-service with
- * the client id and secret, kept until 30 s before it expires. Also the interceptor that puts it on a request.
+ * the client id and secret, kept until 30 s before it expires. Also the interceptor that puts it on a request. Shared by
+ * every background caller (checkin-service since P5, notification-service since P7).
  */
 public class ServiceTokenProvider implements ClientHttpRequestInterceptor {
 
@@ -23,14 +23,16 @@ public class ServiceTokenProvider implements ClientHttpRequestInterceptor {
     record TokenResponse(String accessToken, long expiresIn) {}
 
     private final RestClient auth;
-    private final ServiceClient client;
+    private final String clientId;
+    private final String clientSecret;
     private final Clock clock;
     private String token;
     private Instant refreshAt = Instant.MIN;
 
-    public ServiceTokenProvider(RestClient auth, ServiceClient client, Clock clock) {
+    public ServiceTokenProvider(RestClient auth, String clientId, String clientSecret, Clock clock) {
         this.auth = auth;
-        this.client = client;
+        this.clientId = clientId;
+        this.clientSecret = clientSecret;
         this.clock = clock;
     }
 
@@ -40,7 +42,7 @@ public class ServiceTokenProvider implements ClientHttpRequestInterceptor {
             TokenResponse response = auth.post()
                     .uri("/api/auth/service-token")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(new Credentials(client.id(), client.secret()))
+                    .body(new Credentials(clientId, clientSecret))
                     .retrieve()
                     .body(TokenResponse.class);
             if (response == null || response.accessToken() == null) {

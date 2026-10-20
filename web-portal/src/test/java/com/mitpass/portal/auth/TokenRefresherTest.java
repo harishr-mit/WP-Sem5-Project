@@ -57,7 +57,9 @@ class TokenRefresherTest {
             Duration.ofSeconds(10),
             Duration.ofSeconds(15),
             Duration.ofSeconds(3),
-            List.of("en", "ta"));
+            List.of("en", "ta"),
+            new PortalProperties.Live(Duration.ofMinutes(10), Duration.ofSeconds(5)),
+            new PortalProperties.Offline(Duration.ofSeconds(4), Duration.ofSeconds(60), Duration.ofSeconds(15)));
 
     final RefreshClient refreshClient = mock(RefreshClient.class);
     final TokenRefresher refresher = new TokenRefresher(refreshClient, PROPERTIES, Clock.systemUTC());

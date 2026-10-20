@@ -53,7 +53,8 @@ public final class CheckinFixtures {
                 status,
                 reentry,
                 minSessions,
-                List.of(sessions));
+                List.of(sessions),
+                100);
     }
 
     public static GateInfo gate(String code) {

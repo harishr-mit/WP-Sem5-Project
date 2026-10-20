@@ -72,6 +72,8 @@
                    th:text="#{nav.health}">Health</a>
                 <a th:href="@{/admin/keys}" th:aria-current="${#strings.startsWith(currentPath, '/admin/keys')} ? 'page'"
                    th:text="#{nav.keys}">Keys</a>
+                <a th:href="@{/admin/dead-letters}" th:aria-current="${#strings.startsWith(currentPath, '/admin/dead-letters')} ? 'page'"
+                   th:text="#{nav.deadLetters}">Dead letters</a>
             </th:block>
         </nav>
         <div class="usermenu">

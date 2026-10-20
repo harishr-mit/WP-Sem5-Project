@@ -63,6 +63,15 @@ mitpass:
     waitlist-refresh: 15s       # a waitlisted registration asks this often whether it moved up
     scan-repeat-ignore: 3s      # the scanner ignores the same QR text this long
     supported-locales: en,ta    # the first is the default
+    # Live dashboard relay (docs/plans/phase-7.md §4-5)
+    live:
+      reconnect-every: 10m      # the upstream feed is reopened with a fresh token this often
+      fallback-poll: 5s         # snapshot polling while the socket is down
+    # Offline scanner (docs/plans/phase-7.md §7)
+    offline:
+      scan-timeout: 4s          # no answer within this: the scanner goes offline
+      bundle-refresh: 60s       # keys, revocations and manifest fetched again this often while online
+      sync-every: 15s           # queued scans are sent this often once the network is back
 
 logging:
   pattern:

@@ -22,6 +22,13 @@ spring:
     web:
       pageable:
         max-page-size: 100
+    redis:
+      host: ${REDIS_HOST:localhost}   # live dashboard counters (P7); a scan never fails because Redis is down
+      port: ${REDIS_PORT:6379}
+      timeout: 1s
+  task:
+    execution:
+      mode: force   # the STOMP broker's own executors would otherwise switch off applicationTaskExecutor (reconciler)
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     username: ${RABBITMQ_USER:mitpass}
@@ -55,6 +62,8 @@ management:
   endpoint:
     health:
       show-components: always   # names and status for the admin health page (D15); details stay hidden
+      status:
+        order: DOWN,OUT_OF_SERVICE,WARNING,UP,UNKNOWN   # WARNING: a dead-letter queue holds messages (D13, P7)
 
 springdoc:
   swagger-ui:
@@ -94,6 +103,17 @@ mitpass:
       window-ahead: 3h                   # events starting within this are in the scanning window
       page-size: 100
       on-demand-min-interval: 30s        # a manual-entry miss re-syncs its event at most this often
+    # Live dashboard (docs/plans/phase-7.md §4-5): Redis counters, pushed over STOMP
+    live:
+      rebuild-every: 60s                 # counters are rebuilt from PostgreSQL at least this often
+      recent-size: 20
+      bucket: 5m
+      key-ttl: 2d
+      throttle: 500ms                    # at most one pushed snapshot per event this often
+    # Offline scans synced later (docs/plans/phase-7.md §8)
+    offline:
+      max-age: 12h                       # older queued scans are refused (REJECTED_OFFLINE_CLOCK; owner Q12)
+      max-future: 2m                     # so are scans this far ahead of the server's clock
     # This service's identity for background calls (D7 exception). Dev secret only: set the variable anywhere real.
     service-client:
       id: checkin-service

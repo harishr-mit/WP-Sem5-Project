@@ -51,6 +51,8 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 
 **Built for now.** P4: pass-service's inbox has a DLQ; dead-lettered messages sit there (visible in the RabbitMQ UI) and are replayed by hand.
 
+**Built in P7 (2026-10-20; `docs/plans/phase-7.md` §9, D13 note).** (a) pass-, checkin- and notification-service declare their inboxes with `InboxQueues.inbox(...)`, so each has `<service>.inbox.dlq`. (b) 3 attempts, then the DLQ (`DeadLettersTest`; notification-service's SMTP failure in `SmtpFailureTest`). (c) `common-messaging` gives every consumer ADMIN endpoints to list, replay (same `messageId`, so the idempotent consumer applies it once) and discard; the gateway routes them at `/api/admin/dead-letters/<service>/**`; Admin · Dead letters in the portal. (d) Health component `deadLetters` is `WARNING` (amber on Admin · Health) while a DLQ holds messages; gauge `mitpass.dlq.messages{queue}` is registered for P8's Grafana. Not built: the exception text of a dead-lettered message (Spring retry's reject adds only `x-death`; the cause is in the consumer's log). Still to do after P8: the Grafana panel and (e) with the owner.
+
 **To check.** (a) Every consumer (pass-, checkin-, notification-service) has a DLQ declared with the `common-messaging` helper. (b) A poison message ends up in its DLQ after the retries, not lost and not looping. (c) Dead-lettered messages can be inspected and replayed, and a replay is still idempotent. (d) A non-empty DLQ shows up in health or Grafana. (e) Anything still missing is fixed or consciously accepted.
 
 ## RL5: PDF ticket file name: event name + student id

@@ -30,8 +30,9 @@ public class EventRegistrationsController {
     }
 
     @GetMapping("/registrations")
-    @PreAuthorize("hasRole('ADMIN') or (hasRole('ORGANIZER') and @eventSecurity.isOwner(#id))")
-    @Operation(summary = "The event's registrations, optionally by status (its organizer, or ADMIN)")
+    // SERVICE: notification-service reads the recipients of bulk emails at send time (P7, D16)
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SERVICE') or (hasRole('ORGANIZER') and @eventSecurity.isOwner(#id))")
+    @Operation(summary = "The event's registrations, optionally by status (its organizer, ADMIN or a service)")
     public PageResponse<RegistrationResponse> list(
             @PathVariable long id,
             @RequestParam(required = false) RegistrationStatus status,

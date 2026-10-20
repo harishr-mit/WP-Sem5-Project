@@ -153,6 +153,39 @@ class EdgeSecurityTest {
                 .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
     }
 
+    /** Phase 7: the live feed's handshake needs a token at the edge too (the portal's server sends the user's). */
+    @Test
+    void theLiveFeedNeedsAToken() {
+        web.get().uri("/ws/checkin").exchange().expectStatus().isUnauthorized();
+        web.get()
+                .uri("/ws/checkin")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtIssuer.token(Roles.ORGANIZER))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    /** Phase 7: each consumer's dead-letter tooling, routed under the gateway's ADMIN-only /api/admin/**. */
+    @Test
+    void deadLetterRoutesAreForAdminsOnly() {
+        for (String service : new String[] {"pass-service", "checkin-service"}) {
+            String path = "/api/admin/dead-letters/" + service;
+            web.get().uri(path).exchange().expectStatus().isUnauthorized();
+            web.get()
+                    .uri(path)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtIssuer.token(Roles.ORGANIZER))
+                    .exchange()
+                    .expectStatus()
+                    .isForbidden();
+            web.post()
+                    .uri(path + "/m-1/replay")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtIssuer.token(Roles.ADMIN))
+                    .exchange()
+                    .expectStatus()
+                    .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        }
+    }
+
     @Test
     void passRoutesNeedATokenExceptThePassKeys() {
         web.get()

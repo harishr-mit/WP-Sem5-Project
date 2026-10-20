@@ -39,6 +39,7 @@ public class SecurityConfig {
                                 "/",
                                 "/events",
                                 "/events/*",
+                                "/events/*/calendar.ics",
                                 "/signup",
                                 "/login",
                                 "/check-email",
@@ -49,13 +50,19 @@ public class SecurityConfig {
                                 "/error/**")
                         .permitAll()
                         .requestMatchers(
-                                "/css/**", "/js/**", "/fonts/**", "/webjars/**", "/favicon*.svg", "/favicon.ico")
+                                "/css/**",
+                                "/js/**",
+                                "/fonts/**",
+                                "/webjars/**",
+                                "/favicon*.svg",
+                                "/favicon.ico",
+                                "/scan-sw.js")
                         .permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
                         .permitAll()
                         .requestMatchers("/admin/**")
                         .hasRole("ADMIN")
-                        .requestMatchers("/organizer/**")
+                        .requestMatchers("/organizer/**", "/portal-ws", "/portal-ws/**") // the live feed (P7)
                         .hasAnyRole("ORGANIZER", "ADMIN")
                         .requestMatchers("/scan", "/scan/**")
                         .hasAnyRole("VOLUNTEER", "ORGANIZER") // organizers are volunteers too (RL11)

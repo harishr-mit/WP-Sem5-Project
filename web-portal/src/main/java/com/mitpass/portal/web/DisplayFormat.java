@@ -3,6 +3,7 @@ package com.mitpass.portal.web;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import org.springframework.context.MessageSource;
@@ -20,8 +21,16 @@ public class DisplayFormat {
     static final int MRZ_WIDTH = 30;
 
     private static final Set<String> GOOD = Set.of("CONFIRMED", "ACTIVE", "REGISTRATION_OPEN", "IN", "ACCEPTED", "UP");
-    private static final Set<String> WAITING =
-            Set.of("WAITLISTED", "PENDING", "ISSUED", "PUBLISHED", "REGISTRATION_CLOSED", "OUT", "DRAFT", "UNKNOWN");
+    private static final Set<String> WAITING = Set.of(
+            "WAITLISTED",
+            "PENDING",
+            "ISSUED",
+            "PUBLISHED",
+            "REGISTRATION_CLOSED",
+            "OUT",
+            "DRAFT",
+            "UNKNOWN",
+            "WARNING");
     private static final Set<String> BAD = Set.of("CANCELLED", "REVOKED", "EXPIRED", "DOWN", "OUT_OF_SERVICE");
 
     private final MessageSource messages;
@@ -105,6 +114,30 @@ public class DisplayFormat {
         }
         return "";
     }
+
+    /** Every scan result code (checkin-service), for pages that label codes in JavaScript (live ticker, scanner). */
+    public List<String> scanCodes() {
+        return SCAN_CODES;
+    }
+
+    private static final List<String> SCAN_CODES = List.of(
+            "ACCEPTED",
+            "CHECKED_OUT",
+            "ALREADY_CHECKED_IN",
+            "REVOKED",
+            "EXPIRED_TOKEN",
+            "WRONG_EVENT",
+            "WRONG_GATE",
+            "NOT_YET_OPEN",
+            "INVALID_SIGNATURE",
+            "UNAUTHORIZED_SCANNER",
+            "NOT_CHECKED_IN",
+            "REENTRY_NOT_ALLOWED",
+            "EVENT_CLOSED",
+            "UNKNOWN_PASS",
+            "INVALID_PASS_NUMBER",
+            "DUPLICATE_OFFLINE",
+            "REJECTED_OFFLINE_CLOCK");
 
     /** Who may register, in the page's language: "CSE, IT · years 2–4", or "Open to everyone". */
     public String eligibility(com.mitpass.portal.client.ApiModels.EventDetail event) {

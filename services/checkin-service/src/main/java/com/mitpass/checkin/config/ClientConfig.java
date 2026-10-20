@@ -6,7 +6,7 @@ import com.mitpass.checkin.client.HttpPassDirectory;
 import com.mitpass.checkin.client.PassDirectory;
 import com.mitpass.checkin.client.PassJwksCache;
 import com.mitpass.checkin.client.PassKeys;
-import com.mitpass.checkin.client.ServiceTokenProvider;
+import com.mitpass.common.security.client.ServiceTokenProvider;
 import java.time.Clock;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,7 +59,10 @@ public class ClientConfig {
             CheckinProperties properties,
             Clock clock) {
         return new ServiceTokenProvider(
-                loadBalancedRestClientBuilder.clone().baseUrl(baseUrl).build(), properties.serviceClient(), clock);
+                loadBalancedRestClientBuilder.clone().baseUrl(baseUrl).build(),
+                properties.serviceClient().id(),
+                properties.serviceClient().secret(),
+                clock);
     }
 
     /** The reconciler's view of pass-service: always with this service's own token, never a user's. */

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<!--/* Dead letters (ADMIN, P7; D13): every consuming service's dead-letter queue through the gateway. Replay one (safe:
+     the idempotent consumer skips what it already applied), replay all or discard (both ask first; without JavaScript
+     the server refuses them without confirmed=true). */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{admin.dl.title}, content=~{::main})}">
+<main id="main" class="page">
+    <div class="pagehead">
+        <p class="eyebrow" th:text="#{nav.admin}">Admin</p>
+        <h1 th:text="#{admin.dl.title}">Dead letters</h1>
+        <p class="lead" th:text="#{admin.dl.lead}">Messages a service couldn't process after 3 tries.</p>
+    </div>
+    <div th:replace="~{layout :: flash}"></div>
+
+    <section class="card mt-4" th:each="s : ${services}">
+        <div class="spread">
+            <h3 class="mb-0 mono" th:text="${s.service()}">notification-service</h3>
+            <span th:if="${s.overview() != null}" class="badge"
+                  th:classappend="${s.overview().total() == 0} ? 'badge--ok' : 'badge--warn'"
+                  th:text="${s.overview().total() == 0} ? #{admin.dl.none} : #{admin.dl.waiting(${s.overview().total()})}">2 waiting</span>
+        </div>
+        <p class="err-text" th:if="${s.error() != null}" th:text="#{admin.dl.unreachable(${s.error()})}">Couldn't ask this service.</p>
+
+        <th:block th:if="${s.overview() != null and !s.overview().messages().isEmpty()}">
+            <div class="table-wrap mt-4">
+                <table class="stacked">
+                    <thead><tr>
+                        <th th:text="#{admin.dl.type}">Type</th>
+                        <th th:text="#{admin.dl.key}">Routing key</th>
+                        <th th:text="#{admin.dl.tries}">Times dead-lettered</th>
+                        <th th:text="#{admin.dl.when}">When</th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody>
+                    <tr th:each="m, i : ${s.overview().messages()}">
+                        <td th:data-label="#{admin.dl.type}" class="mono" th:text="${m.type()}">pass.issued</td>
+                        <td th:data-label="#{admin.dl.key}" class="mono" th:text="${m.routingKey()}">pass.issued</td>
+                        <td th:data-label="#{admin.dl.tries}" th:text="${m.deaths()}">1</td>
+                        <td th:data-label="#{admin.dl.when}" th:text="${m.deadLetteredAt() == null} ? '—' : ${@fmt.shortWhen(m.deadLetteredAt())}">Sat 17 Oct, 09:14</td>
+                        <td class="actions">
+                            <form th:if="${m.messageId() != null}" method="post"
+                                  th:action="@{/admin/dead-letters/{s}/{id}/replay(s=${s.service()},id=${m.messageId()})}">
+                                <button type="submit" class="btn--secondary btn--small" th:text="#{admin.dl.replay}">Replay</button>
+                            </form>
+                            <form th:if="${m.messageId() != null}" method="post"
+                                  th:action="@{/admin/dead-letters/{s}/{id}/discard(s=${s.service()},id=${m.messageId()})}">
+                                <button type="submit" class="btn--ghost btn--small"
+                                        th:attr="data-open-dialog=|discard-${s.service()}-${i.index}|" th:text="#{admin.dl.discard}">Discard</button>
+                            </form>
+                            <dialog class="confirm" th:if="${m.messageId() != null}" th:id="|discard-${s.service()}-${i.index}|">
+                                <form method="post" th:action="@{/admin/dead-letters/{s}/{id}/discard(s=${s.service()},id=${m.messageId()})}">
+                                    <input type="hidden" name="confirmed" value="true">
+                                    <div class="confirm__body">
+                                        <h2 th:text="#{admin.dl.confirmDiscard}">Discard this message for good?</h2>
+                                        <p class="mono" th:text="${m.messageId()}">id</p>
+                                        <p class="mb-0" th:text="#{admin.dl.discardText}">It is gone after this.</p>
+                                    </div>
+                                    <div class="confirm__foot">
+                                        <button type="button" class="btn--ghost" data-close-dialog th:text="#{common.goBack}">Go back</button>
+                                        <button type="submit" class="btn--danger" th:text="#{admin.dl.discard}">Discard</button>
+                                    </div>
+                                </form>
+                            </dialog>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <form method="post" class="mt-4" th:action="@{/admin/dead-letters/{s}/replay-all(s=${s.service()})}">
+                <button type="submit" th:attr="data-open-dialog=|replay-all-${s.service()}|" th:text="#{admin.dl.replayAll}">Replay all</button>
+            </form>
+            <dialog class="confirm" th:id="|replay-all-${s.service()}|">
+                <form method="post" th:action="@{/admin/dead-letters/{s}/replay-all(s=${s.service()})}">
+                    <input type="hidden" name="confirmed" value="true">
+                    <div class="confirm__body">
+                        <h2 th:text="#{admin.dl.confirmReplayAll(${s.service()})}">Replay every message?</h2>
+                        <p class="mb-0" th:text="#{admin.dl.replayAllText}">Each goes back to the inbox.</p>
+                    </div>
+                    <div class="confirm__foot">
+                        <button type="button" class="btn--ghost" data-close-dialog th:text="#{common.goBack}">Go back</button>
+                        <button type="submit" th:text="#{admin.dl.replayAll}">Replay all</button>
+                    </div>
+                </form>
+            </dialog>
+        </th:block>
+    </section>
+</main>
+</html>

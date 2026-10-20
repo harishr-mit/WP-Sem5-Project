@@ -1,6 +1,7 @@
 package com.mitpass.portal.web;
 
 import com.mitpass.portal.auth.PortalUser;
+import com.mitpass.portal.client.ApiModels.Binary;
 import com.mitpass.portal.client.ApiModels.Department;
 import com.mitpass.portal.client.ApiModels.Eligibility;
 import com.mitpass.portal.client.ApiModels.EventDetail;
@@ -24,6 +25,9 @@ import java.util.UUID;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -138,6 +142,17 @@ public class EventPagesController {
         model.addAttribute(
                 "waitlistRefreshSeconds", properties.waitlistRefresh().toSeconds());
         return "events/detail";
+    }
+
+    /** The event's calendar invite, passed through from notification-service (BFF: the browser only talks to us). */
+    @GetMapping("/events/{id}/calendar.ics")
+    public ResponseEntity<byte[]> calendar(@PathVariable long id) {
+        Binary ics = gateway.calendar(id);
+        ResponseEntity.BodyBuilder ok = ResponseEntity.ok().contentType(MediaType.parseMediaType(ics.contentType()));
+        if (ics.contentDisposition() != null) {
+            ok.header(HttpHeaders.CONTENT_DISPOSITION, ics.contentDisposition());
+        }
+        return ok.body(ics.body());
     }
 
     /**

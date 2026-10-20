@@ -40,7 +40,9 @@ public interface EventCatalog {
             String status,
             Boolean reentryAllowed,
             Integer certificateMinSessions,
-            List<SessionInfo> sessions) {
+            List<SessionInfo> sessions,
+            /** P7: the dashboard's capacity gauge. */
+            Integer capacity) {
 
         public EventInfo {
             sessions = sessions == null ? List.of() : List.copyOf(sessions);

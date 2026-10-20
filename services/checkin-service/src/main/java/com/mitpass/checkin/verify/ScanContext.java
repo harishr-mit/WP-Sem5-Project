@@ -30,6 +30,7 @@ public class ScanContext {
     private final CurrentUser volunteer;
     private final ScanCommand command;
     private final Instant now;
+    private final boolean offline;
 
     GateInfo gate;
     EventInfo event;
@@ -39,9 +40,19 @@ public class ScanContext {
     PassRef pass;
 
     public ScanContext(CurrentUser volunteer, ScanCommand command, Instant now) {
+        this(volunteer, command, now, false);
+    }
+
+    /** {@code offline}: a queued scan synced later; {@code now} is then the phone's time of the scan (P7). */
+    public ScanContext(CurrentUser volunteer, ScanCommand command, Instant now, boolean offline) {
         this.volunteer = volunteer;
         this.command = command;
         this.now = now;
+        this.offline = offline;
+    }
+
+    public boolean offline() {
+        return offline;
     }
 
     public UUID scanId() {

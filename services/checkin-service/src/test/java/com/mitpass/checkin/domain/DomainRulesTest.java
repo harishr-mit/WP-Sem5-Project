@@ -38,7 +38,7 @@ class DomainRulesTest {
             assertThat(result.color()).as(result.name()).isNotNull();
             assertThat(result.message(java.util.Map.of())).as(result.name()).isNotBlank();
         }
-        assertThat(EnumSet.allOf(ScanResult.class)).hasSize(15);
+        assertThat(EnumSet.allOf(ScanResult.class)).hasSize(17); // 15 + DUPLICATE_OFFLINE, REJECTED_OFFLINE_CLOCK (P7)
         assertThat(ScanResult.ACCEPTED.accepted()).isTrue();
         assertThat(ScanResult.CHECKED_OUT.accepted()).isTrue();
         assertThat(ScanResult.ALREADY_CHECKED_IN.status()).isEqualTo(HttpStatus.CONFLICT);

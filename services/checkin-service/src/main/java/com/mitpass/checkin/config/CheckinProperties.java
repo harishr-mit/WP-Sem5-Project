@@ -16,7 +16,35 @@ public record CheckinProperties(
         @DefaultValue("30s") Duration jwksRefetchMinInterval,
         @DefaultValue("Asia/Kolkata") ZoneId timeZone,
         @DefaultValue Reconcile reconcile,
-        @DefaultValue ServiceClient serviceClient) {
+        @DefaultValue ServiceClient serviceClient,
+        @DefaultValue Live live,
+        @DefaultValue Offline offline) {
+
+    /**
+     * Offline scans synced later (docs/plans/phase-7.md §8).
+     *
+     * @param maxAge a queued scan older than this is refused (owner Q12)
+     * @param maxFuture a scan this far ahead of the server's clock is refused
+     */
+    public record Offline(
+            @DefaultValue("12h") Duration maxAge,
+            @DefaultValue("2m") Duration maxFuture) {}
+
+    /**
+     * The live dashboard (docs/plans/phase-7.md §4, §5).
+     *
+     * @param rebuildEvery the Redis counters are rebuilt from PostgreSQL at least this often (heals any drift)
+     * @param recentSize scans in the ticker
+     * @param bucket width of a bar in the arrivals chart
+     * @param keyTtl Redis keys of an event expire this long after their last write
+     * @param throttle at most one pushed snapshot per event this often
+     */
+    public record Live(
+            @DefaultValue("60s") Duration rebuildEvery,
+            @DefaultValue("20") int recentSize,
+            @DefaultValue("5m") Duration bucket,
+            @DefaultValue("2d") Duration keyTtl,
+            @DefaultValue("500ms") Duration throttle) {}
 
     /** The pass-copy reconciler (§4a). */
     public record Reconcile(

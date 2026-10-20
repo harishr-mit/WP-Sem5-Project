@@ -210,6 +210,7 @@ td small { color: var(--muted); }
 .flash.ok, .flash--ok { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
 .flash.err, .flash--err { background: var(--err-soft); color: var(--err); border-color: var(--err); }
 .flash--info { background: var(--info-soft); color: var(--teal); border-color: var(--teal); }
+.flash--warn { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
 .flash p { margin: 0; }
 dialog.confirm {
     border: 0; border-radius: var(--radius-l); padding: 0; width: min(30rem, calc(100vw - 2rem));
@@ -335,12 +336,26 @@ dialog.confirm::backdrop { background: rgba(13, 20, 36, .55); backdrop-filter: b
 .bars__bar { height: .7rem; background: var(--ground-deep); border-radius: 999px; overflow: hidden; }
 .bars__bar > span { display: block; height: 100%; background: var(--teal); }
 
+/* ---- live dashboard (P7) ------------------------------------------------------------------------------------ */
+.gauge { height: .6rem; background: var(--ground-deep); border-radius: 999px; overflow: hidden; margin-top: var(--space-2); }
+.gauge__fill { display: block; height: 100%; background: var(--teal); transition: width .4s ease-out; }
+.live .card { min-width: 0; } /* or the chart's canvas keeps its grid cell wider than a 360 px screen */
+.chart { position: relative; height: 14rem; }
+.ticker { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.ticker li { display: grid; grid-template-columns: auto 1fr auto auto; gap: var(--space-2); align-items: center; }
+.ticker li.is-new { animation: ticker-in .6s ease-out; }
+@keyframes ticker-in { from { background: var(--ok-soft); } to { background: transparent; } }
+.live:fullscreen { background: var(--ground); padding: var(--space-5); overflow: auto; font-size: 1.15rem; }
+.live:fullscreen .stat__value { font-size: 4rem; }
+@media (prefers-reduced-motion: reduce) { .gauge__fill { transition: none; } .ticker li.is-new { animation: none; } }
+
 /* ---- admin ------------------------------------------------------------------------------------------------ */
 .health { display: grid; gap: var(--space-3); }
 .health__item { display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-3); align-items: center; }
 .dot { width: .8rem; height: .8rem; border-radius: 50%; background: var(--muted); }
 .dot--up { background: var(--ok-bright); box-shadow: 0 0 0 4px var(--ok-soft); }
 .dot--down { background: var(--err); box-shadow: 0 0 0 4px var(--err-soft); }
+.dot--warn { background: var(--warn); box-shadow: 0 0 0 4px var(--warn-soft); }
 
 /* ---- scanner (screens 5-6, always dark, full screen) ------------------------------------------------------ */
 body.scanner-body { background: var(--night); color: var(--scan-text); }
@@ -351,6 +366,11 @@ body.scanner-body { background: var(--night); color: var(--scan-text); }
 .scanner__gate select { background: var(--night-raised); color: var(--scan-text); border-color: var(--night-line); font-weight: 700; }
 .online { font-size: .75rem; font-weight: 700; color: var(--ok-bright); white-space: nowrap; }
 .online--off { color: #F0B45A; }
+.synclist { margin: 0 var(--space-4) var(--space-4); color: #fff; }
+.synclist h2 { font-size: 1rem; margin: 0 0 var(--space-2); }
+.synclist ol { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.synclist li { display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-2); align-items: center; font-size: .9rem; }
+.synclist li.is-changed { outline: 2px solid #F0B45A; border-radius: var(--radius-s); padding: .2rem .4rem; }
 .scanner__modes { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: 0 var(--space-4); flex-wrap: wrap; }
 .scanner .segmented { background: var(--night-raised); border-color: var(--night-line); }
 .scanner .segmented label { color: var(--scan-muted); }

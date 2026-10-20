@@ -34,6 +34,10 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 @CheckinIntegrationTest
 class SecurityMatrixTest {
 
+    /** No broker in this test: the dead-letter rows check who may call, not RabbitMQ (DeadLettersTest does that). */
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.mitpass.common.messaging.DeadLetters deadLetters;
+
     static final String STUDENT = "student";
     static final String VOLUNTEER = "volunteer (assigned)";
     static final String STRANGER = "volunteer (not assigned)";
@@ -78,6 +82,20 @@ class SecurityMatrixTest {
                                 .formatted(f.token(), f.gate().main().id()),
                         scanners),
                 new Endpoint(
+                        HttpMethod.POST,
+                        "/api/scans/batch",
+                        f -> "/api/scans/batch",
+                        f ->
+                                "{\"deviceId\":\"m-1\",\"scans\":[{\"localId\":\"x\",\"token\":\"%s\",\"gateId\":%d,\"scannedAt\":\"%s\"}]}"
+                                        .formatted(f.token(), f.gate().main().id(), TestClock.START),
+                        scanners),
+                new Endpoint(
+                        HttpMethod.GET,
+                        "/api/scans/manifest",
+                        f -> "/api/scans/manifest?eventId=" + f.gate().event().id(),
+                        none,
+                        Rule.only(VOLUNTEER, OWNER)),
+                new Endpoint(
                         HttpMethod.GET,
                         "/api/scans/lookup",
                         f -> "/api/scans/lookup?passNumber=" + f.pass().passNumber() + "&gateId="
@@ -88,6 +106,12 @@ class SecurityMatrixTest {
                         HttpMethod.GET,
                         "/api/attendance/events/{id}/summary",
                         f -> "/api/attendance/events/" + f.gate().event().id() + "/summary",
+                        none,
+                        ownerAdmin),
+                new Endpoint(
+                        HttpMethod.GET,
+                        "/api/attendance/events/{id}/live",
+                        f -> "/api/attendance/events/" + f.gate().event().id() + "/live",
                         none,
                         ownerAdmin),
                 new Endpoint(
@@ -115,7 +139,15 @@ class SecurityMatrixTest {
                         none,
                         ownerAdmin),
                 new Endpoint(
-                        HttpMethod.GET, "/api/attendance/me", f -> "/api/attendance/me", none, Rule.authenticated()));
+                        HttpMethod.GET, "/api/attendance/me", f -> "/api/attendance/me", none, Rule.authenticated()),
+                // common-messaging's dead-letter tooling (D13, P7)
+                new Endpoint(HttpMethod.GET, "/api/dead-letters", f -> "/api/dead-letters", none, Rule.only(ADMIN)),
+                new Endpoint(
+                        HttpMethod.DELETE,
+                        "/api/dead-letters/{messageId}",
+                        f -> "/api/dead-letters/no-such-message",
+                        none,
+                        Rule.only(ADMIN)));
 
         List<String> callers = List.of(ANONYMOUS, STUDENT, VOLUNTEER, STRANGER, OWNER, OTHER, ADMIN, SERVICE);
         SecurityMatrix matrix = new SecurityMatrix("checkin-service", callers);

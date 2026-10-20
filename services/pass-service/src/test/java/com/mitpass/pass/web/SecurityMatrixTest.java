@@ -40,6 +40,10 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 @PassIntegrationTest
 class SecurityMatrixTest {
 
+    /** No broker in this test: the dead-letter rows check who may call, not RabbitMQ (DeadLettersTest does that). */
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.mitpass.common.messaging.DeadLetters deadLetters;
+
     static final String HOLDER = "student (holder)";
     static final String STUDENT = "student (other)";
     static final String VOLUNTEER = "volunteer";
@@ -116,7 +120,7 @@ class SecurityMatrixTest {
                         HttpMethod.GET,
                         "/api/passes/{id}/qr/static",
                         f -> "/api/passes/" + f.pass() + "/qr/static",
-                        holderOnly),
+                        Rule.only(HOLDER, SERVICE)), // SERVICE: the pass email (P7)
                 endpoint(
                         HttpMethod.GET,
                         "/api/passes/{id}/ticket.pdf",
@@ -137,7 +141,14 @@ class SecurityMatrixTest {
                         "/.well-known/pass-jwks.json",
                         f -> "/.well-known/pass-jwks.json",
                         Rule.publicEndpoint()),
-                endpoint(HttpMethod.POST, "/api/passes/keys/rotate", f -> "/api/passes/keys/rotate", Rule.only(ADMIN)));
+                endpoint(HttpMethod.POST, "/api/passes/keys/rotate", f -> "/api/passes/keys/rotate", Rule.only(ADMIN)),
+                // common-messaging's dead-letter tooling (D13, P7)
+                endpoint(HttpMethod.GET, "/api/dead-letters", f -> "/api/dead-letters", Rule.only(ADMIN)),
+                endpoint(
+                        HttpMethod.DELETE,
+                        "/api/dead-letters/{messageId}",
+                        f -> "/api/dead-letters/no-such-message",
+                        Rule.only(ADMIN)));
 
         List<String> callers = List.of(ANONYMOUS, HOLDER, STUDENT, VOLUNTEER, OWNER, OTHER, ADMIN, SERVICE);
         SecurityMatrix matrix = new SecurityMatrix("pass-service", callers);

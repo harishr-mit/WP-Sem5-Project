@@ -62,7 +62,8 @@ public class PassMediaController {
     }
 
     @GetMapping("/qr/static")
-    @PreAuthorize("@passSecurity.isHolder(#id)")
+    // SERVICE: notification-service embeds this code in the pass email (P7, D16)
+    @PreAuthorize("hasRole('SERVICE') or @passSecurity.isHolder(#id)")
     @Operation(
             summary = "Static QR (valid until the event ends + 2 h)",
             description = "The code printed on the PDF ticket. 409 `static-qr-disabled` if the event allows only "

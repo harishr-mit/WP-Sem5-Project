@@ -20,12 +20,18 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -53,8 +59,8 @@ public class ScanPagesController {
     static final String MODE = "scan.mode";
     static final String DEVICE = "scan.deviceId";
 
-    /** One choice in the gate selector. */
-    public record GateOption(long gateId, String label) {}
+    /** One choice in the gate selector; the event id tells the offline scanner which bundle it needs (P7). */
+    public record GateOption(long gateId, String label, long eventId) {}
 
     private final GatewayClient gateway;
     private final PortalProperties properties;
@@ -81,7 +87,45 @@ public class ScanPagesController {
         model.addAttribute("gateId", gateId);
         model.addAttribute("mode", session.getAttribute(MODE) == null ? "IN" : session.getAttribute(MODE));
         model.addAttribute("repeatIgnoreMillis", properties.scanRepeatIgnore().toMillis());
+        model.addAttribute("offline", properties.offline());
         return "scan/scan";
+    }
+
+    // ---- offline scanner (P7, docs/plans/phase-7.md §7) -----------------------------------------------------------
+
+    /**
+     * What the phone keeps to check passes while offline: the public pass keys and the event's manifest. No token of
+     * any kind is in it (NoTokensInPagesTest).
+     */
+    @GetMapping(value = "/scan/offline/bundle", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<String> offlineBundle(@RequestParam long eventId) {
+        String body = "{\"eventId\":" + eventId
+                + ",\"jwks\":" + gateway.passJwks()
+                + ",\"manifest\":" + gateway.scanManifest(eventId) + "}";
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body);
+    }
+
+    /** The phone's queued scans, passed to checkin-service as they are; one answer per scan comes back. */
+    @PostMapping(
+            value = "/scan/batch",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<String> offlineBatch(@RequestBody String body) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(gateway.scanBatch(body));
+    }
+
+    /**
+     * A fresh CSRF token for the sync: the page may have been loaded (or come from the offline cache) long ago. A
+     * logged-out session gets the login redirect instead, which the page reads as "log in to sync".
+     */
+    @GetMapping(value = "/scan/csrf", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<Map<String, String>> csrf(CsrfToken token) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(Map.of("header", token.getHeaderName(), "token", token.getToken()));
     }
 
     /**
@@ -231,7 +275,8 @@ public class ScanPagesController {
                 for (Gate gate : gateway.gates(event.id())) {
                     options.putIfAbsent(
                             gate.id(),
-                            new GateOption(gate.id(), event.code() + " · " + gate.name() + " " + yourEvent()));
+                            new GateOption(
+                                    gate.id(), event.code() + " · " + gate.name() + " " + yourEvent(), event.id()));
                 }
             }
         }
@@ -239,7 +284,8 @@ public class ScanPagesController {
             for (Assignment a : gateway.myAssignments()) {
                 List<Gate> gates = a.gate() != null ? List.of(a.gate()) : gateway.gates(a.eventId());
                 for (Gate gate : gates) {
-                    options.putIfAbsent(gate.id(), new GateOption(gate.id(), a.eventCode() + " · " + gate.name()));
+                    options.putIfAbsent(
+                            gate.id(), new GateOption(gate.id(), a.eventCode() + " · " + gate.name(), a.eventId()));
                 }
             }
         }

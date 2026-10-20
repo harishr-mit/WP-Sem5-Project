@@ -189,6 +189,71 @@ class AdminPagesTest {
                 .andExpect(content().string(containsString("hx-trigger=\"every 10s\"")));
     }
 
+    @Test
+    void deadLettersOfEveryConsumerWithReplayAndAConfirmedDiscard() throws Exception {
+        var letter = new com.mitpass.portal.client.ApiModels.DeadLetter(
+                "notification-service.inbox", "m-1", "pass.issued", "pass.issued", 1, "rejected", Instant.now(), 120);
+        given(gateway.deadLetters("notification-service"))
+                .willReturn(new com.mitpass.portal.client.ApiModels.DeadLetterOverview(
+                        List.of(new com.mitpass.portal.client.ApiModels.DeadLetterQueue(
+                                "notification-service.inbox", "notification-service.inbox.dlq", 1)),
+                        List.of(letter)));
+        given(gateway.deadLetters("pass-service"))
+                .willReturn(new com.mitpass.portal.client.ApiModels.DeadLetterOverview(List.of(), List.of()));
+        given(gateway.deadLetters("checkin-service"))
+                .willThrow(new org.springframework.web.client.ResourceAccessException("connection refused"));
+
+        mvc.perform(get("/admin/dead-letters").with(authentication(TestTokens.login(admin))))
+                .andExpect(content().string(containsString("notification-service")))
+                .andExpect(content().string(containsString("1 waiting")))
+                .andExpect(content().string(containsString("/admin/dead-letters/notification-service/m-1/replay")))
+                .andExpect(content().string(containsString("connection refused")))
+                .andExpect(content().string(containsString("Nothing waiting.")));
+
+        mvc.perform(post("/admin/dead-letters/notification-service/m-1/replay")
+                        .with(authentication(TestTokens.login(admin)))
+                        .with(csrf()))
+                .andExpect(flash().attribute("message", "Replayed 1 message(s)."));
+        org.mockito.Mockito.verify(gateway).replayDeadLetter("notification-service", "m-1");
+
+        mvc.perform(post("/admin/dead-letters/notification-service/m-1/discard")
+                        .with(authentication(TestTokens.login(admin)))
+                        .with(csrf()))
+                .andExpect(flash().attributeExists("error")); // not confirmed
+        org.mockito.Mockito.verify(gateway, org.mockito.Mockito.never()).discardDeadLetter(any(), any());
+        mvc.perform(post("/admin/dead-letters/notification-service/m-1/discard")
+                        .with(authentication(TestTokens.login(admin)))
+                        .with(csrf())
+                        .param("confirmed", "true"))
+                .andExpect(flash().attribute("message", "Discarded m-1."));
+
+        mvc.perform(post("/admin/dead-letters/event-service/m-1/replay")
+                        .with(authentication(TestTokens.login(admin)))
+                        .with(csrf()))
+                .andExpect(status().isNotFound()); // only the three consumers
+        mvc.perform(get("/admin/dead-letters").with(authentication(TestTokens.login(TestTokens.user("ORGANIZER")))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void aDeadLetterWarningIsAmberNotDown() throws Exception {
+        given(gateway.adminHealth())
+                .willReturn(List.of(new InstanceHealth(
+                        "pass-service",
+                        "p1",
+                        "http://h:8083",
+                        "WARNING",
+                        Map.of("db", "UP", "deadLetters", "WARNING"),
+                        null,
+                        Instant.now())));
+
+        mvc.perform(get("/admin/health").with(authentication(TestTokens.login(admin))))
+                .andExpect(content().string(containsString("flash--warn")))
+                .andExpect(content().string(containsString("dead-letter queue")))
+                .andExpect(content().string(containsString("dot--warn")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("Something is down"))));
+    }
+
     static UserProfile user(UUID id, String name, List<String> roles, boolean locked) {
         return new UserProfile(
                 id,

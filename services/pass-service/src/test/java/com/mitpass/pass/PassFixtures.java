@@ -68,7 +68,15 @@ public final class PassFixtures {
 
     public static RegistrationCancelled cancelled(TestEvent event, UUID registrationId, UUID userId, String previous) {
         return new RegistrationCancelled(
-                registrationId, event.id(), event.code(), userId, previous, TestClock.START, userId.toString());
+                registrationId,
+                event.id(),
+                event.code(),
+                userId,
+                previous,
+                TestClock.START,
+                userId.toString(),
+                "Priya Raman",
+                "priya@student.test");
     }
 
     public static EventStateChanged stateChanged(TestEvent event, String from, String to, Instant at) {
