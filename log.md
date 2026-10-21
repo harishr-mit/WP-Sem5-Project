@@ -200,6 +200,14 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Notes / Errors:** anything the next agent needs to know
 -->
 
+### 2026-10-21 — Claude (Opus 5.5) — CI: order-dependent PassKeyServiceTest (Phase 4)
+
+* **Task:** owner: after the LiveStatsTest fix, `ci / build (push)` failed and `(pull_request)` passed: the inverse.
+* **Status:** DONE (waiting for the owner's commit and push)
+* **Files:** `services/pass-service/src/test/java/com/mitpass/pass/keys/PassKeyServiceTest.java`
+* **Details:** The pasted log: `retiredKeyStaysPublishedForLiveTokensThenDisappears` expected the retired key gone 45 s + grace after a rotation, but it was still published. Cause: the test took the context's active key as "before"; all pass-service test classes share one context and database, and when a class that signs static tokens ran first, that key had a `max_token_exp` days ahead, so it rightly stayed published (D12). The service is correct; the test assumed a fresh key. It now rotates once first. Then, to flush any other order-dependent test before CI finds it: common-messaging, event, pass, checkin, notification and portal suites in reverse class order (all green: 29, 136, 65, 73, 21, 174) and pass + checkin in random order (green).
+* **Notes / Errors:** Both CI failures were order or timing assumptions in tests that passed locally by luck: LiveStatsTest (P7, equal timestamps) and PassKeyServiceTest (P4, shared active key).
+
 ### 2026-10-21 — Claude (Opus 5.5) — CI: flaky LiveStatsTest on the pull-request run
 
 * **Task:** owner: PR #8's `ci / build (pull_request)` failed while `ci / build (push)` of the same commit (`fc251bd`) passed.

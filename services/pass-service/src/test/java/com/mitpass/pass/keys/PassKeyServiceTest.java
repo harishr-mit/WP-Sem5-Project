@@ -48,6 +48,9 @@ class PassKeyServiceTest {
 
     @Test
     void retiredKeyStaysPublishedForLiveTokensThenDisappears() {
+        // A fresh key first: the context's active key may have signed static tokens in other test classes, and then
+        // it rightly stays published for days (flaky on CI, depending on class order; 2026-10-21).
+        keys.rotate();
         String before = keys.activeKey().getKeyID();
 
         String after = keys.rotate();
