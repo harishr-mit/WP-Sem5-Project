@@ -200,6 +200,14 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Notes / Errors:** anything the next agent needs to know
 -->
 
+### 2026-10-21 — Claude (Opus 5.5) — CI: flaky LiveStatsTest on the pull-request run
+
+* **Task:** owner: PR #8's `ci / build (pull_request)` failed while `ci / build (push)` of the same commit (`fc251bd`) passed.
+* **Status:** DONE (waiting for the owner's commit and push)
+* **Files:** `services/checkin-service/src/test/java/com/mitpass/checkin/service/LiveStatsTest.java`
+* **Details:** The owner pasted the log: `aRebuildFromTheDatabaseGivesTheSameNumbers` expected the ticker `[CHECKED_OUT, ACCEPTED, ACCEPTED]` and got `[ACCEPTED, CHECKED_OUT, ACCEPTED]`. Cause: the test clock never moved, so the three scans had the same `received_at`, and the rebuild's `ORDER BY received_at DESC` has no order for ties (PostgreSQL happened to keep insertion order locally). The test now moves the clock a second between scans, as real scans are. Production code unchanged: real scans sharing a timestamp would only swap two ticker lines. checkin 73 tests green (the class three times in a row).
+* **Notes / Errors:** The same log shows a harmless WARN from `LiveStatsRedisDownTest`'s context (its mocked `StringRedisTemplate` returns null to the live-feed thread; the publisher catches it). Job logs need repo admin rights through the API, so the owner pasted them.
+
 ### 2026-10-21 — Claude (Opus 5.5) — Theme switch on a dark system; two-phone run parked (RL14)
 
 * **Task:** owner: (1) the theme switch showed the moon on a dark system, the first click only turned it into a sun, the second went light; (2) park the two-phone run until after P8; (3) the Tamil text is fine.

@@ -78,8 +78,12 @@ class LiveStatsTest {
 
     @Test
     void aRebuildFromTheDatabaseGivesTheSameNumbers() {
+        // a second apart, as real scans are: the rebuild orders the ticker by time, and equal times have no order
+        // (flaky on CI with a frozen test clock, 2026-10-21)
         scan(priya, ScanMode.IN);
+        clock.advance(Duration.ofSeconds(1));
         scan(arun, ScanMode.IN);
+        clock.advance(Duration.ofSeconds(1));
         scan(priya, ScanMode.OUT);
         LiveSnapshot before = live.snapshot(gate.event().id(), 100);
 
