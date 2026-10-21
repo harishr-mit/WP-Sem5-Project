@@ -43,6 +43,15 @@ public class EventRefStore {
                 > 0;
     }
 
+    /** When the status copy last changed (the owner's time), e.g. when the event was completed. */
+    public Optional<Instant> statusChangedAt(long eventId) {
+        return jdbc.sql("SELECT status_changed_at FROM event_ref WHERE event_id = :id")
+                .param("id", eventId)
+                .query((rs, row) -> Optional.ofNullable(rs.getTimestamp(1)).map(java.sql.Timestamp::toInstant))
+                .optional()
+                .flatMap(o -> o);
+    }
+
     public Optional<String> status(long eventId) {
         return jdbc.sql("SELECT status FROM event_ref WHERE event_id = :id")
                 .param("id", eventId)

@@ -16,6 +16,8 @@
            th:aria-current="${active == 'registrations'} ? 'page'" th:text="#{org.tab.registrations}">Registrations</a>
         <a th:href="@{/organizer/events/{id}/staff(id=${event.id()})}" th:aria-current="${active == 'staff'} ? 'page'"
            th:text="#{org.tab.staff}">Volunteers</a>
+        <a th:href="@{/organizer/events/{id}/live(id=${event.id()})}" th:aria-current="${active == 'live'} ? 'page'"
+           th:text="#{org.tab.live}">Live</a>
         <a th:href="@{/organizer/events/{id}/attendance(id=${event.id()})}"
            th:aria-current="${active == 'attendance'} ? 'page'" th:text="#{org.tab.attendance}">Reports</a>
     </nav>

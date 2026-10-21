@@ -72,6 +72,8 @@
                    th:text="#{nav.health}">Health</a>
                 <a th:href="@{/admin/keys}" th:aria-current="${#strings.startsWith(currentPath, '/admin/keys')} ? 'page'"
                    th:text="#{nav.keys}">Keys</a>
+                <a th:href="@{/admin/dead-letters}" th:aria-current="${#strings.startsWith(currentPath, '/admin/dead-letters')} ? 'page'"
+                   th:text="#{nav.deadLetters}">Dead letters</a>
             </th:block>
         </nav>
         <div class="usermenu">
@@ -79,7 +81,7 @@
                 <form th:action="@{/preferences/theme}" method="post" class="inline">
                     <input type="hidden" name="back" th:value="${currentPath}">
                     <input type="hidden" name="theme" th:value="${theme == 'dark'} ? 'light' : 'dark'">
-                    <button type="submit" class="btn--small"
+                    <button type="submit" class="btn--small" th:attr="data-to-light=#{pref.theme.switchToLight}"
                             th:title="${theme == 'dark'} ? #{pref.theme.switchToLight} : #{pref.theme.switchToDark}"
                             th:aria-label="${theme == 'dark'} ? #{pref.theme.switchToLight} : #{pref.theme.switchToDark}"
                             th:text="${theme == 'dark'} ? '☀' : '☾'">☾</button>

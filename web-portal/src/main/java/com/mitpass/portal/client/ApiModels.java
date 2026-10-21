@@ -268,6 +268,61 @@ public final class ApiModels {
     /** Bytes the portal passes through to the browser (QR image, PDF ticket); never a token. */
     public record Binary(byte[] body, String contentType, String contentDisposition) {}
 
+    // ---- dead letters of one consuming service (P7, D13) -----------------------------------------------------------
+
+    public record DeadLetterOverview(List<DeadLetterQueue> queues, List<DeadLetter> messages) {
+
+        public long total() {
+            return queues == null
+                    ? 0
+                    : queues.stream().mapToLong(DeadLetterQueue::messages).sum();
+        }
+    }
+
+    public record DeadLetterQueue(String inbox, String deadLetterQueue, long messages) {}
+
+    public record DeadLetter(
+            String inbox,
+            String messageId,
+            String type,
+            String routingKey,
+            long deaths,
+            String reason,
+            Instant deadLetteredAt,
+            int bodyBytes) {}
+
+    // ---- checkin-service: the live dashboard (P7, D16) ----------------------------------------------------------
+
+    /** The snapshot checkin-service pushes over STOMP; the page's first paint uses the same. */
+    public record LiveSnapshot(
+            long eventId,
+            Instant at,
+            long confirmed,
+            long checkedIn,
+            long inside,
+            Integer capacity,
+            List<LiveGate> gates,
+            List<LiveBucket> arrivals,
+            List<LiveScan> recent) {
+
+        public long gateMax() {
+            return gates == null
+                    ? 0
+                    : gates.stream().mapToLong(LiveGate::checkedIn).max().orElse(0);
+        }
+
+        /** Inside now as a share of the capacity (0–100), for the gauge. */
+        public int insidePercent() {
+            return capacity == null || capacity == 0 ? 0 : (int) Math.min(100, inside * 100 / capacity);
+        }
+    }
+
+    public record LiveGate(String code, long checkedIn) {}
+
+    public record LiveBucket(Instant start, long count) {}
+
+    public record LiveScan(Instant at, String firstName, String gateCode, String code, String color) {}
+
     // ---- Phase 5: staffing, scans, attendance
     // ------------------------------------------------------------------------
 

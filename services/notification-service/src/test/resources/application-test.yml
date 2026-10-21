@@ -1,0 +1,25 @@
+# Active in every test (@ActiveProfiles("test")). PostgreSQL from Testcontainers; event- and pass-service are in-memory
+# fakes and SMTP is GreenMail on 3025 (NotificationTestConfig).
+eureka:
+  client:
+    enabled: false
+
+spring:
+  mail:
+    host: localhost
+    port: 3025
+
+mitpass:
+  security:
+    load-balanced: false     # tests import TestSecurityConfig (in-memory key); nothing fetches a JWK set
+  notifications:
+    portal-url: http://portal.test
+    reminders:
+      enabled: false         # tests call ReminderJob.runOnce() themselves
+    listener:
+      auto-startup: false    # tests call NotificationInboxListener.onMessage
+
+management:
+  health:
+    rabbit:
+      enabled: false         # no broker in these tests

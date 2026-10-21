@@ -89,6 +89,8 @@
 
     <div class="pass__foot" th:if="${pass.isValid()}">
         <a class="btn btn--secondary" th:href="@{/my/passes/{id}/ticket.pdf(id=${pass.id()})}" th:text="#{pass.pdf}">PDF ticket</a>
+        <a class="btn btn--secondary" th:if="${pass.eventId() != null}"
+           th:href="@{/events/{id}/calendar.ics(id=${pass.eventId()})}" th:text="#{event.addToCalendar}">Add to calendar</a>
     </div>
     <p class="hint center mt-4" th:if="${pass.isActive()}" th:text="#{pass.live.hint}">Show this screen at the gate.</p>
 

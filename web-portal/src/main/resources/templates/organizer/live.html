@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<!--/* Live dashboard (UI reference screen 7, P7). The first paint is the snapshot as of loading, so the page works
+     without JavaScript; dashboard.js follows /topic/events/{id} on /portal-ws (LiveRelay) and redraws on every
+     snapshot, falling back to polling live.json while the socket is down. */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{live.title} + ' · ' + ${event.title()}, content=~{::main})}">
+<main id="main" class="page live" th:attr="data-live-event=${event.id()},data-poll=${fallbackPollSeconds}">
+    <div th:replace="~{organizer/nav :: eventHead(${event}, 'live')}"></div>
+
+    <div class="spread">
+        <span id="live-status" class="badge" role="status" th:text="#{live.status.loaded}"
+              th:attr="data-live=#{live.status.live},data-reconnecting=#{live.status.reconnecting}">As of loading</span>
+        <button type="button" class="btn--ghost btn--small" id="live-full" hidden th:text="#{live.fullscreen}">Full screen</button>
+    </div>
+
+    <div class="grid grid--3 mt-4">
+        <div class="stat">
+            <p class="stat__label" th:text="#{att.checkedIn}">Checked in</p>
+            <p class="stat__value"><span id="live-checked" th:text="${live.checkedIn()}">513</span>
+                <small>/ <span id="live-confirmed" th:text="${live.confirmed()}">600</span></small></p>
+        </div>
+        <div class="stat">
+            <p class="stat__label" th:text="#{att.inside}">Inside now</p>
+            <p class="stat__value"><span id="live-inside" th:text="${live.inside()}">487</span>
+                <small>/ <span id="live-capacity" th:text="${live.capacity() == null} ? '—' : ${live.capacity()}">600</span></small></p>
+            <div class="gauge" id="live-gauge" role="meter" aria-valuemin="0" aria-valuemax="100"
+                 th:attr="aria-valuenow=${live.insidePercent()},aria-label=#{live.capacityGauge}">
+                <span class="gauge__fill" id="live-gauge-fill" th:style="|width:${live.insidePercent()}%|"></span></div>
+        </div>
+        <div class="stat">
+            <p class="stat__label" th:text="#{att.notYet}">Not arrived yet</p>
+            <p class="stat__value" id="live-notyet" th:text="${live.confirmed() - live.checkedIn() < 0 ? 0 : live.confirmed() - live.checkedIn()}">87</p>
+        </div>
+    </div>
+
+    <div class="grid grid--2 mt-5">
+        <section class="card">
+            <h3 th:text="#{live.arrivals}">Arrivals per 5 minutes</h3>
+            <div class="chart"><canvas id="live-chart" role="img" th:aria-label="#{live.arrivals}"></canvas></div>
+        </section>
+        <section class="card">
+            <h3 th:text="#{att.byGate}">Gates</h3>
+            <div class="bars" id="live-gates">
+                <div class="bars__row" th:each="g : ${live.gates()}">
+                    <span class="mono" th:text="${g.code()}">MAIN</span>
+                    <span class="bars__bar"><span th:style="|width:${live.gateMax() == 0 ? 0 : g.checkedIn() * 100 / live.gateMax()}%|"></span></span>
+                    <span class="right" th:text="${g.checkedIn()}">212</span>
+                </div>
+            </div>
+            <p class="hint" id="live-nogates" th:hidden="${!live.gates().isEmpty()}" th:text="#{att.noScans}">No check-ins yet.</p>
+        </section>
+    </div>
+
+    <section class="card mt-5">
+        <h3 th:text="#{live.recent}">Recent scans</h3>
+        <ol class="ticker" id="live-recent" aria-live="polite">
+            <li th:each="r : ${live.recent()}">
+                <span class="mono" th:text="${@fmt.time(r.at())}">09:14</span>
+                <strong th:text="${r.firstName() == null} ? #{live.someone} : ${r.firstName()}">Priya</strong>
+                <span class="mono hint" th:text="${r.gateCode() == null} ? '' : ${r.gateCode()}">MAIN</span>
+                <span class="badge" th:classappend="${r.color() == 'GREEN'} ? 'badge--ok' : (${r.color() == 'AMBER'} ? 'badge--warn' : 'badge--err')"
+                      th:text="#{'scan.word.' + ${r.code()}}">Admitted</span>
+            </li>
+        </ol>
+        <p class="hint" id="live-noscans" th:hidden="${!live.recent().isEmpty()}" th:text="#{live.noScans}">No scans yet.</p>
+    </section>
+
+    <ul hidden id="live-words">
+        <li th:each="c : ${@fmt.scanCodes()}" th:attr="data-code=${c}" th:text="#{'scan.word.' + ${c}}">Admitted</li>
+        <li data-code="_someone" th:text="#{live.someone}">Someone</li>
+    </ul>
+
+    <script th:src="@{/webjars/chart.js/dist/chart.umd.min.js}" defer></script>
+    <script th:src="@{/webjars/stomp__stompjs/bundles/stomp.umd.min.js}" defer></script>
+    <script th:src="@{/js/dashboard.js}" defer></script>
+</main>
+</html>

@@ -3,6 +3,7 @@ package com.mitpass.event.service;
 import com.mitpass.common.messaging.OutboxPublisher;
 import com.mitpass.common.messaging.contract.RegistrationCancelled;
 import com.mitpass.common.messaging.contract.RegistrationConfirmed;
+import com.mitpass.common.messaging.contract.RegistrationWaitlisted;
 import com.mitpass.common.messaging.contract.WaitlistPromoted;
 import com.mitpass.event.domain.Event;
 import com.mitpass.event.domain.Registration;
@@ -13,7 +14,7 @@ import org.springframework.stereotype.Component;
 /**
  * The domain events a registration change produces (docs/DECISIONS.md D11), written to the outbox in the caller's
  * transaction. One place, so every path (register, cancel, promotion, capacity increase) publishes the same facts.
- * Waitlisting publishes nothing in P3.
+ * Waitlisting publishes {@code RegistrationWaitlisted} from P7 (the email).
  */
 @Component
 public class RegistrationEvents {
@@ -60,7 +61,26 @@ public class RegistrationEvents {
                         registration.getUserId(),
                         previousStatus.name(),
                         registration.getCancelledAt(),
-                        registration.getCancelledBy()));
+                        registration.getCancelledBy(),
+                        registration.getUserName(),
+                        registration.getUserEmail()));
+    }
+
+    void waitlisted(Registration registration, int position) {
+        Event event = registration.getEvent();
+        outbox.publish(
+                AGGREGATE,
+                registration.getId().toString(),
+                new RegistrationWaitlisted(
+                        registration.getId(),
+                        event.getId(),
+                        event.getCode(),
+                        event.getTitle(),
+                        registration.getUserId(),
+                        registration.getUserName(),
+                        registration.getUserEmail(),
+                        position,
+                        registration.getWaitlistedAt()));
     }
 
     private static RegistrationConfirmed confirmedEvent(Registration registration) {

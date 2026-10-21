@@ -228,6 +228,9 @@ public final class Steps {
                 events.apply(event.id(), event.code(), event.status(), scan.now(), scan.now());
                 return event.status();
             });
+            if ("COMPLETED".equals(status) && scan.offline() && completedAfterTheScan(event.id(), scan)) {
+                return Optional.empty(); // the phone was offline when doors closed (docs/plans/phase-7.md §8)
+            }
             return switch (status == null ? "" : status) {
                 case "LIVE" -> Optional.empty();
                 case "COMPLETED", "CANCELLED" -> Rejection.of(ScanResult.EVENT_CLOSED, "event " + status);
@@ -239,6 +242,12 @@ public final class Steps {
                                     time(event.startsAt().minus(properties.doorsOpenBeforeSession()), properties)),
                             "event " + status);
             };
+        }
+
+        private boolean completedAfterTheScan(long eventId, ScanContext scan) {
+            return events.statusChangedAt(eventId)
+                    .map(at -> at.isAfter(scan.now()))
+                    .orElse(false);
         }
     }
 

@@ -12,7 +12,7 @@ Students register for campus events, get a cryptographically signed QR pass, vol
 
 ## Status
 
-**Phases 1–5 are done; Phase 6 (the finished web portal) is built**, with its two-phone exit demo still to run. Eureka, the API gateway, `auth-service`, `event-service`, `pass-service`, `checkin-service` and `web-portal` run against PostgreSQL and RabbitMQ, with Swagger UI at the gateway.
+**Phases 1–6 are done; Phase 7 (live dashboard, emails, offline scanning) is built.** Eureka, the API gateway, `auth-service`, `event-service`, `pass-service`, `checkin-service`, `notification-service` and `web-portal` run against PostgreSQL, RabbitMQ, Redis and Mailpit, with Swagger UI at the gateway.
 
 - **Identity (Phase 2):** sign-up with a `<register number>@student.annauniv.edu` or Gmail address, email verification (Mailpit), login with RS256 access tokens (15 min) and rotating refresh tokens with reuse detection, account lockout, a public JWK set.
 - **Authorization:** the catalogue is public to read; every write needs a token. Organizers change only their own events, admins manage users and roles, organizers assign volunteers to gates. The gateway and every service verify the token.
@@ -20,6 +20,7 @@ Students register for campus events, get a cryptographically signed QR pass, vol
 - **Passes (Phase 4):** every confirmed registration becomes a pass automatically (`pass-service` consumes `RegistrationConfirmed`, exactly once even when RabbitMQ redelivers). A pass number like `TECHFEST26-000042-7` with a check digit; a QR code that carries an **ES256-signed token** anyone can verify against `/.well-known/pass-jwks.json`. The live code rotates (valid 45 s) and unlocks 2 hours before doors open; the PDF ticket carries a longer-lived code if the event allows it. Organizers revoke passes, scanners get a revocation feed, and cancelling an event revokes all its passes. Messages that keep failing land in a dead-letter queue (minimal for now; Phase 7 completes it).
 - **Gate scans (Phase 5):** `checkin-service` checks what an attendee shows (a QR token or a typed pass number) through a pipeline of steps: the volunteer is assigned to this gate, the ES256 signature, expiry, right event, event LIVE, session open, pass known, not revoked. Then one transaction records attendance and presence. Every outcome has a typed result with a colour (green / amber / red). Two volunteers scanning the same pass at the same instant get exactly one `ACCEPTED`. Check-out and re-entry (per-event setting), per-session attendance, manual entry with a visual name check, CSV export and certificate eligibility. Pass data is a local copy of pass-service's, kept in step **automatically**: by messages, plus a reconciler that re-reads the revocation feed every minute and the passes of events about to start every 5 minutes, with its own internal service identity.
 - **Web portal (Phase 6):** http://localhost:8090, a server-rendered Spring MVC app (Thymeleaf + HTMX) for all four roles, styled after the [UI mockup](MITPass%20App%20Screens.html) with hand-written CSS, light and dark mode, phone-first, in **English and Tamil**. It is a BFF: your tokens stay in the server-side session and are refreshed automatically, so you're never sent to log in mid-task. Students search the catalogue live, register, watch the pass appear, and carry a passport-style pass card with a rotating QR and a countdown ring; organizers create events with sessions, run the lifecycle (only the allowed moves, critical ones confirmed), manage gates, volunteers, registrations and attendance; volunteers scan with the **phone camera** (green/amber/red flash, sound, vibration) or by pass number; admins manage users and roles, rotate signing keys and see every service's health. Draft events are visible only to their organizer and admins.
+- **Live, emails, offline (Phase 7):** the organizer's **Live** tab updates within a second of every scan (STOMP over WebSocket; counters in Redis, rebuilt from PostgreSQL; the portal relays the feed, so no token reaches the browser). `notification-service` emails every step to Mailpit: the pass with its QR inline and a calendar invite, waitlisted, promoted, cancelled, event cancelled or moved, and reminders 24 h and 1 h before (once, even with several instances: ShedLock). *Add to calendar* on the event and pass pages. The scanner keeps working **without network**: it checks the pass's signature in the browser (WebCrypto), queues the scan and syncs when the network is back, where the server has the last word (`DUPLICATE_OFFLINE` for a pass checked in meanwhile). Messages that keep failing wait in a dead-letter queue per service: Admin · Health turns amber, and Admin · Dead letters replays or discards them.
 
 ## Quick start
 
@@ -45,7 +46,7 @@ When `JAVA_HOME` is unset, the wrapper finds `.tools/jdk-21` by itself. For othe
 docker compose -f infra/docker-compose.yml up -d --wait
 ```
 
-This starts PostgreSQL 16 (one database per service), RabbitMQ and Mailpit, and waits until all three are healthy.
+This starts PostgreSQL 16 (one database per service), RabbitMQ, Redis (live dashboard counters) and Mailpit, and waits until all four are healthy.
 
 ### 3. Build
 
@@ -57,7 +58,7 @@ This starts PostgreSQL 16 (one database per service), RabbitMQ and Mailpit, and 
 
 You don't need this step before every run: the jars in `target/` and the installed libraries stay valid until the code changes. Run it again after changing code or config (or after `git pull` / `./mvnw clean`). For one service only: `./mvnw -pl services/<name> install -DskipTests`. If a run fails with *bad class file*, the IDE's Java server has touched `target/`: build again.
 
-### 4. Run the services: seven terminals, in this order
+### 4. Run the services: eight terminals, in this order
 
 ```bash
 ./mvnw -pl platform/discovery-server spring-boot:run     # 1. Eureka         :8761
@@ -65,13 +66,14 @@ You don't need this step before every run: the jars in `target/` and the install
 ./mvnw -pl services/event-service spring-boot:run        # 3. event-service  :8082
 ./mvnw -pl services/pass-service spring-boot:run         # 4. pass-service   :8083
 ./mvnw -pl services/checkin-service spring-boot:run      # 5. checkin-service :8084
-./mvnw -pl platform/api-gateway spring-boot:run          # 6. gateway        :8080
-./mvnw -pl web-portal spring-boot:run                    # 7. web portal     :8090 (https :8443 with the lan profile: see Phone demo)
+./mvnw -pl services/notification-service spring-boot:run # 6. notification-service :8085 (emails to Mailpit)
+./mvnw -pl platform/api-gateway spring-boot:run          # 7. gateway        :8080
+./mvnw -pl web-portal spring-boot:run                    # 8. web portal     :8090 (https :8443 with the lan profile: see Phone demo)
 ```
 
 Start `pass-service` before anyone registers: it declares its RabbitMQ queue on start, and a registration confirmed before the queue exists gets no pass (no backfill). checkin-service doesn't need that care: whatever its queue missed, its reconciler pulls in within 5 minutes (and at once when an event goes LIVE). For a clean demo, wipe old data first with `docker compose -f infra/docker-compose.yml down -v`.
 
-Or, after step 3, run the jars: `.tools/jdk-21/bin/java -jar <module>/target/<module>.jar` in the same order.
+Or, after step 3, run the jars: `.tools/jdk-21/bin/java -jar <module>/target/<module>.jar` in the same order. Or all of them at once, detached, with logs in `logs/`: `bash scripts/run-all.sh` (Git Bash; extra arguments go to notification-service), and `bash scripts/stop-all.sh` to stop them.
 
 On first start each service creates its schema with Flyway and loads demo data: seven events with gates (`event-service`; `MINIQUIZ26` has a single seat for the waitlist demo, `AIWS26` is open to CSE, IT and AIDS only and allows only the live code, TECHFEST26 and RANG26 have their own pass colours) and these accounts (`auth-service`), all with the password **`Passw0rd!`** (dev only):
 
@@ -97,15 +99,19 @@ Through the gateway, the API answers `503` for up to ~30 s after start, until th
 | **Phone demo** | Two phones, the laptop as hotspot: see [*Phone demo*](#phone-demo-two-phones-the-camera-scanner) below; `scripts\phone-demo-check.ps1` says when it's ready |
 | **Passes** | Register for an event, then open *My passes* in the portal: the pass appears about a second later. The live QR shows from 2 h before doors open (seed events are weeks away, so their passes say *Code unlocks …*: create an event that starts within 2 h to see the live code, as [phase-4.http](docs/http/phase-4.http) does). *Download PDF ticket* works at once. As `organizer.a@mitpass.test`, *My events* → *Registrations & passes* → **Revoke** |
 | **Verify a QR yourself** | Scan the QR with any phone app, copy the text, then `.tools/jdk-21/bin/java scripts/VerifyPassToken.java "<text>"`: it checks the ES256 signature against the gateway's `/.well-known/pass-jwks.json` with the JDK only. Change one character and it says `INVALID SIGNATURE` |
-| **Gate scans** | Run [phase-5.http](docs/http/phase-5.http): it creates an event starting in 25 min, gates, assigns the volunteer, and walks through every result code. In the portal as `volunteer@mitpass.test` → **Scan** (camera, or *Type pass no.*). As the organizer: *My events* → **Reports** (*Refresh* for new counts; live push comes in Phase 7), *Export CSV* |
+| **Gate scans** | Run [phase-5.http](docs/http/phase-5.http): it creates an event starting in 25 min, gates, assigns the volunteer, and walks through every result code. In the portal as `volunteer@mitpass.test` → **Scan** (camera, or *Type pass no.*). As the organizer: *My events* → **Live** (moves with every scan) and **Reports** (attendees, certificates, *Export CSV*) |
+| **Live dashboard** | As `organizer.a@mitpass.test`: *My events* → an event → **Live**; scan in a second window and watch the counter, the gates, the arrivals chart and the ticker move. *Full screen* for a projector |
+| **Emails** | http://localhost:8025: register → *Your pass for …* (QR inline, `.ics` attached); a full event → *You're on the waitlist*; cancel → *Registration cancelled*, and the next in line gets *You got a seat* and a pass. Reminders arrive 24 h and 1 h before an event |
+| **Offline scanner** | As the volunteer on **Scan**, load the page once with the network on, then turn it off (or DevTools → Network → Offline): the badge says *Offline · n queued*, passes are still checked on the phone (check-out is locked). Network back → the queue syncs and *Synced from this phone* lists the server's answers. Needs a secure context: `localhost`, or the `lan` profile on a phone |
+| **Dead letters** | Stop Mailpit (`docker compose -f infra/docker-compose.yml stop mailpit`), register someone, wait ~10 s: Admin · Health shows notification-service amber, Admin · Dead letters lists the message. Start Mailpit, press *Replay*: the email arrives once |
 | Race demo | `./mvnw -pl services/checkin-service verify -Dtest=DoubleScanRaceTest`: 20 simultaneous scans of one pass → 1 `ACCEPTED`, 19 `ALREADY_CHECKED_IN` |
-| Eureka dashboard | http://localhost:8761 (shows `API-GATEWAY`, `AUTH-SERVICE`, `EVENT-SERVICE`, `PASS-SERVICE`, `CHECKIN-SERVICE` and `WEB-PORTAL`) |
-| Ready-made requests | [docs/http/phase-6.http](docs/http/phase-6.http): token refresh and reuse, draft visibility, `allowedTransitions`, the portal verification link, the admin health overview. [docs/http/phase-5.http](docs/http/phase-5.http): every scan result, check-out/re-entry, manual entry, reports. [docs/http/phase-4.http](docs/http/phase-4.http): pass issuance, live/static QR, PDF, revocation and the feed, the cancellation saga, key rotation. [docs/http/phase-3.http](docs/http/phase-3.http): lifecycle and illegal moves, registration, waitlist promotion, idempotency, eligibility, optimistic locking. [phase-2.http](docs/http/phase-2.http): sign-up → verify → login, refresh-token reuse, ownership 403, volunteer assignment, lockout. [phase-1.http](docs/http/phase-1.http): catalogue CRUD and each error case |
+| Eureka dashboard | http://localhost:8761 (shows `API-GATEWAY`, `AUTH-SERVICE`, `EVENT-SERVICE`, `PASS-SERVICE`, `CHECKIN-SERVICE`, `NOTIFICATION-SERVICE` and `WEB-PORTAL`) |
+| Ready-made requests | [docs/http/phase-7.http](docs/http/phase-7.http): the emails, *Add to calendar*, the live snapshot, the offline manifest and batch sync, dead letters. [docs/http/phase-6.http](docs/http/phase-6.http): token refresh and reuse, draft visibility, `allowedTransitions`, the portal verification link, the admin health overview. [docs/http/phase-5.http](docs/http/phase-5.http): every scan result, check-out/re-entry, manual entry, reports. [docs/http/phase-4.http](docs/http/phase-4.http): pass issuance, live/static QR, PDF, revocation and the feed, the cancellation saga, key rotation. [docs/http/phase-3.http](docs/http/phase-3.http): lifecycle and illegal moves, registration, waitlist promotion, idempotency, eligibility, optimistic locking. [phase-2.http](docs/http/phase-2.http): sign-up → verify → login, refresh-token reuse, ownership 403, volunteer assignment, lockout. [phase-1.http](docs/http/phase-1.http): catalogue CRUD and each error case |
 | Log in for Swagger | `POST /api/auth/login` with a demo account, copy `accessToken`, press **Authorize** |
 | Forged-token demo | `scripts/forge-token.sh "<a student's accessToken>"` rewrites the roles to ADMIN and keeps the signature; every service answers `401` |
-| RabbitMQ UI | http://localhost:15672 (`mitpass` / `mitpass`). Queues → `mitpass.events.tap` → *Get messages* shows every domain event (dev-only tap queue, last 1000). `pass-service.inbox` and `checkin-service.inbox` are the services' queues; their `.dlq` partners hold messages that failed 3 times (replay them by hand until Phase 7) |
+| RabbitMQ UI | http://localhost:15672 (`mitpass` / `mitpass`). Queues → `mitpass.events.tap` → *Get messages* shows every domain event (dev-only tap queue, last 1000). `pass-service.inbox`, `checkin-service.inbox` and `notification-service.inbox` are the services' queues; their `.dlq` partners hold messages that failed 3 times (Admin · Dead letters in the portal replays or discards them) |
 | Concurrency demo | `./mvnw -pl services/event-service verify -Dtest=SeatClaimConcurrencyTest` prints 500 registrations for 100 seats: the real service vs. a naive version that overbooks |
-| Mailpit inbox | http://localhost:8025 (verification emails) |
+| Mailpit inbox | http://localhost:8025 (verification emails from auth-service; everything else from notification-service) |
 
 ```bash
 curl "http://localhost:8080/api/events?q=hack&category=TECHNICAL&from=2026-11-01&to=2026-11-30"

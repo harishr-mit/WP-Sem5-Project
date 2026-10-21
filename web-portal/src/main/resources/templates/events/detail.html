@@ -48,6 +48,9 @@
                 </div>
                 <p class="callout mt-4 mb-0" th:if="${event.registrationClosesAt() != null and event.status() == 'REGISTRATION_OPEN'}"
                    th:text="#{event.closes(${@fmt.when(event.registrationClosesAt())})}">Registration closes Thu 15 Oct, 23:59.</p>
+                <p class="mt-4 mb-0" th:unless="${event.status() == 'CANCELLED' or event.status() == 'DRAFT'}">
+                    <a class="btn btn--secondary" th:href="@{/events/{id}/calendar.ics(id=${event.id()})}"
+                       th:text="#{event.addToCalendar}">Add to calendar</a></p>
             </section>
             <section class="card" th:if="${event.description() != null and !#strings.isEmpty(event.description())}">
                 <h3 th:text="#{event.about}">About</h3>

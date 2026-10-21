@@ -6,6 +6,8 @@ import java.util.UUID;
 /**
  * A registration was cancelled by the student, the event's organizer or an admin. {@code previousStatus} is CONFIRMED
  * or WAITLISTED; only a CONFIRMED one held a seat (and, from P4, a pass). Contract: fields are only ever added.
+ *
+ * <p>{@code userName} and {@code userEmail} were added in P7 for the cancellation email (null in older messages).
  */
 @EventType("registration.cancelled")
 public record RegistrationCancelled(
@@ -15,4 +17,6 @@ public record RegistrationCancelled(
         UUID userId,
         String previousStatus,
         Instant cancelledAt,
-        String cancelledBy) {}
+        String cancelledBy,
+        String userName,
+        String userEmail) {}

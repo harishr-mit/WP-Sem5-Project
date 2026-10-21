@@ -1,0 +1,7 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{mail/layout :: mail(~{::body})}">
+<body>
+<p style="margin:0 0 12px;">Your registration has been cancelled. If you had a pass, it no longer works.</p>
+<p style="margin:0;" th:if="${eventUrl}">Changed your mind? <a th:href="${eventUrl}" href="#" style="color:#17606B;">Register again</a> while registration is open.</p>
+</body>
+</html>

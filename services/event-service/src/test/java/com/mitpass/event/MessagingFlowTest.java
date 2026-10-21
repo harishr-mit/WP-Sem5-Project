@@ -120,17 +120,25 @@ class MessagingFlowTest {
                         "event.state-changed", // PUBLISHED
                         "event.state-changed", // REGISTRATION_OPEN
                         "registration.confirmed", // first student
+                        "registration.waitlisted", // second student (P7)
                         "registration.cancelled",
                         "registration.waitlist-promoted",
                         "registration.confirmed"); // second student, via promotion
 
-        Message promotedConfirm = messages.get(5);
+        String waitlisted = new String(messages.get(3).getBody(), StandardCharsets.UTF_8);
+        assertThat((Integer) JsonPath.read(waitlisted, "$.payload.position")).isEqualTo(1);
+        assertThat((String) JsonPath.read(waitlisted, "$.payload.userEmail")).isEqualTo(second.userEmail());
+        String cancelled = new String(messages.get(4).getBody(), StandardCharsets.UTF_8);
+        assertThat((String) JsonPath.read(cancelled, "$.payload.userEmail")).isEqualTo(first.userEmail());
+        assertThat((String) JsonPath.read(cancelled, "$.payload.userName")).isEqualTo("Student");
+
+        Message promotedConfirm = messages.get(6);
         String body = new String(promotedConfirm.getBody(), StandardCharsets.UTF_8);
         assertThat((String) JsonPath.read(body, "$.payload.registrationId"))
                 .isEqualTo(second.id().toString());
         assertThat((Boolean) JsonPath.read(body, "$.payload.viaPromotion")).isTrue();
         assertThat((String) JsonPath.read(body, "$.aggregateType")).isEqualTo("Registration");
-        assertThat(messages.subList(3, 6))
+        assertThat(messages.subList(4, 7))
                 .allSatisfy(m -> assertThat((String) m.getMessageProperties().getHeader("correlationId"))
                         .isEqualTo("demo-corr-42"));
         String state = new String(messages.get(1).getBody(), StandardCharsets.UTF_8);
@@ -138,13 +146,13 @@ class MessagingFlowTest {
     }
 
     @Test
-    void waitlistingPublishesNothingAndARolledBackRequestLeavesNoRow() {
+    void waitlistingPublishesOneRowAndARolledBackRequestLeavesNone() {
         long event = openEvent("FLOW2", 1);
         registrations.register(student(), event);
         long before = outboxRows();
 
         registrations.register(student(), event); // waitlisted
-        assertThat(outboxRows()).isEqualTo(before);
+        assertThat(outboxRows()).isEqualTo(before + 1);
 
         lifecycle.transition(event, EventStatus.REGISTRATION_CLOSED, "test", TransitionTrigger.MANUAL, null);
         long afterClose = outboxRows();

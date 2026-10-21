@@ -92,6 +92,11 @@ class NoTokensInPagesTest {
                 .willReturn(new AttendanceSummary(
                         9L, "AIWS26", "AI Workshop", 1L, 0L, 0.0, 0L, List.of(), List.of(), null));
         given(gateway.attendees(anyLong())).willReturn(new Page<>(List.of(), 0, 100, 0, 0));
+        given(gateway.liveSnapshot(anyLong())).willReturn(LivePagesTest.snapshot());
+        given(gateway.passJwks()).willReturn("{\"keys\":[]}");
+        given(gateway.deadLetters(any()))
+                .willReturn(new com.mitpass.portal.client.ApiModels.DeadLetterOverview(List.of(), List.of()));
+        given(gateway.scanManifest(anyLong())).willReturn("{\"passes\":[]}");
         given(gateway.certificates(anyLong())).willReturn(List.of());
         given(gateway.myAssignments()).willReturn(List.of());
         given(gateway.users(any(), any(), anyInt()))
@@ -119,11 +124,15 @@ class NoTokensInPagesTest {
                 "/organizer/events/9/registrations",
                 "/organizer/events/9/staff",
                 "/organizer/events/9/attendance",
+                "/organizer/events/9/live",
+                "/organizer/events/9/live.json",
+                "/scan/offline/bundle?eventId=9",
                 "/scan",
                 "/admin/users",
                 "/admin/users/" + USER_ID,
                 "/admin/health",
                 "/admin/keys",
+                "/admin/dead-letters",
                 "/login",
                 "/signup",
                 "/check-email");

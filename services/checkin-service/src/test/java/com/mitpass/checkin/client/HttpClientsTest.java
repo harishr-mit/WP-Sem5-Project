@@ -11,7 +11,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.mitpass.checkin.TestClock;
-import com.mitpass.checkin.config.CheckinProperties.ServiceClient;
+import com.mitpass.common.security.client.ServiceTokenProvider;
 import com.mitpass.common.web.error.NotFoundException;
 import com.mitpass.common.web.error.ProblemException;
 import com.nimbusds.jose.jwk.Curve;
@@ -44,8 +44,7 @@ class HttpClientsTest {
                 .andRespond(withSuccess(
                         "{\"accessToken\":\"svc-token\",\"tokenType\":\"Bearer\",\"expiresIn\":300}",
                         MediaType.APPLICATION_JSON));
-        ServiceTokenProvider tokens =
-                new ServiceTokenProvider(authBuilder.build(), new ServiceClient("checkin-service", "s3cret"), clock);
+        ServiceTokenProvider tokens = new ServiceTokenProvider(authBuilder.build(), "checkin-service", "s3cret", clock);
 
         RestClient.Builder passBuilder =
                 RestClient.builder().baseUrl("http://pass-service").requestInterceptor(tokens);
@@ -79,7 +78,7 @@ class HttpClientsTest {
         MockRestServiceServer auth = MockRestServiceServer.bindTo(builder).build();
         auth.expect(ExpectedCount.twice(), requestTo("http://auth-service/api/auth/service-token"))
                 .andRespond(withSuccess("{\"accessToken\":\"t\",\"expiresIn\":300}", MediaType.APPLICATION_JSON));
-        ServiceTokenProvider tokens = new ServiceTokenProvider(builder.build(), new ServiceClient("c", "s"), clock);
+        ServiceTokenProvider tokens = new ServiceTokenProvider(builder.build(), "c", "s", clock);
 
         tokens.token();
         clock.advance(Duration.ofSeconds(269));

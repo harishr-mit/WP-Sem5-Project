@@ -33,6 +33,7 @@
         <module>services/event-service</module>
         <module>services/pass-service</module>
         <module>services/checkin-service</module>
+        <module>services/notification-service</module>
         <module>web-portal</module>
     </modules>
 
@@ -49,6 +50,13 @@
         <!-- Portal JS as WebJars (Phase 6, D15); npm "latest" tags on 2026-10-17 (htmx 4.0.0 is still "next") -->
         <htmx.version>2.0.11</htmx.version>
         <html5-qrcode.version>2.3.8</html5-qrcode.version>
+        <!-- Phase 7 (D16): notification-service; latest releases on Maven Central, checked 2026-10-20 -->
+        <ical4j.version>4.4.0</ical4j.version>
+        <shedlock.version>7.10.1</shedlock.version>
+        <greenmail.version>2.1.14</greenmail.version>
+        <!-- Live dashboard in the portal (Phase 7): npm "latest" on 2026-10-20 -->
+        <chartjs.version>4.5.1</chartjs.version>
+        <stompjs.version>7.3.0</stompjs.version>
 
         <spotless-maven-plugin.version>3.10.4</spotless-maven-plugin.version>
         <palantir-java-format.version>2.102.0</palantir-java-format.version>
@@ -105,6 +113,37 @@
                 <groupId>org.webjars.npm</groupId>
                 <artifactId>html5-qrcode</artifactId>
                 <version>${html5-qrcode.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.webjars.npm</groupId>
+                <artifactId>chart.js</artifactId>
+                <version>${chartjs.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.webjars.npm</groupId>
+                <artifactId>stomp__stompjs</artifactId>
+                <version>${stompjs.version}</version>
+            </dependency>
+            <!-- Calendar invites, reminder lock, test SMTP server (notification-service, Phase 7) -->
+            <dependency>
+                <groupId>org.mnode.ical4j</groupId>
+                <artifactId>ical4j</artifactId>
+                <version>${ical4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.javacrumbs.shedlock</groupId>
+                <artifactId>shedlock-spring</artifactId>
+                <version>${shedlock.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.javacrumbs.shedlock</groupId>
+                <artifactId>shedlock-provider-jdbc-template</artifactId>
+                <version>${shedlock.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.icegreen</groupId>
+                <artifactId>greenmail-junit5</artifactId>
+                <version>${greenmail.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

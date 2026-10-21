@@ -69,6 +69,24 @@ class EventPagesTest {
         given(gateway.myPasses()).willReturn(new Page<>(List.of(), 0, 50, 0, 0));
     }
 
+    // ---- add to calendar (P7) ----------------------------------------------------------------------------------
+
+    @Test
+    void anyoneCanAddTheEventToTheirCalendar() throws Exception {
+        byte[] ics = "BEGIN:VCALENDAR END:VCALENDAR".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        given(gateway.calendar(1L))
+                .willReturn(new com.mitpass.portal.client.ApiModels.Binary(
+                        ics, "text/calendar;charset=UTF-8", "attachment; filename=\"TECH1.ics\""));
+
+        mvc.perform(get("/events/1")).andExpect(content().string(containsString("/events/1/calendar.ics")));
+        mvc.perform(get("/events/1/calendar.ics"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/calendar"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Content-Disposition", "attachment; filename=\"TECH1.ics\""))
+                .andExpect(content().bytes(ics));
+    }
+
     // ---- live search -------------------------------------------------------------------------------------------
 
     @Test

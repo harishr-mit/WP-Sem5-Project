@@ -6,7 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
-/** pass-service over HTTP with this service's service token ({@link ServiceTokenProvider} on the client). */
+/** pass-service over HTTP with this service's service token ({@code ServiceTokenProvider} on the client). */
 public class HttpPassDirectory implements PassDirectory {
 
     private final RestClient rest;

@@ -48,12 +48,49 @@ spring:
               uri: lb://checkin-service
               predicates:
                 - Path=/api/scans/**,/api/attendance/**
+            # Phase 7: the live dashboard feed (STOMP over WebSocket); only the portal's server connects, with a token
+            - id: checkin-service-live
+              uri: lb:ws://checkin-service
+              predicates:
+                - Path=/ws/checkin
+              filters:
+                - SetPath=/ws
             - id: checkin-service-openapi
               uri: lb://checkin-service
               predicates:
                 - Path=/docs/checkin-service
               filters:
                 - SetPath=/v3/api-docs
+            # Phase 7: emails, reminders and calendar invites
+            - id: notification-service
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/notifications/**
+            - id: notification-service-openapi
+              uri: lb://notification-service
+              predicates:
+                - Path=/docs/notification-service
+              filters:
+                - SetPath=/v3/api-docs
+            # Phase 7: each consumer's dead-letter tooling (common-messaging, D13). ADMIN here (/api/admin/**) and there.
+            - id: pass-service-dead-letters
+              uri: lb://pass-service
+              predicates:
+                - Path=/api/admin/dead-letters/pass-service/**
+              filters:
+                - RewritePath=/api/admin/dead-letters/pass-service(?<rest>/?.*), /api/dead-letters$\{rest}
+            - id: checkin-service-dead-letters
+              uri: lb://checkin-service
+              predicates:
+                - Path=/api/admin/dead-letters/checkin-service/**
+              filters:
+                - RewritePath=/api/admin/dead-letters/checkin-service(?<rest>/?.*), /api/dead-letters$\{rest}
+            - id: notification-service-dead-letters
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/admin/dead-letters/notification-service/**
+              filters:
+                - RewritePath=/api/admin/dead-letters/notification-service(?<rest>/?.*), /api/dead-letters$\{rest}
           # Send X-Forwarded-* so services build links (Location, OpenAPI servers) that point back at the gateway.
           trusted-proxies: "127\\.0\\.0\\.1|0:0:0:0:0:0:0:1|::1"
 
@@ -78,6 +115,8 @@ springdoc:
         url: /docs/pass-service
       - name: checkin-service
         url: /docs/checkin-service
+      - name: notification-service
+        url: /docs/notification-service
     persist-authorization: true   # keep the pasted bearer token across page reloads
 
 management:
@@ -114,6 +153,7 @@ mitpass:
       - GET /api/venues
       - GET /api/venues/**
       - GET /api/categories
+      - GET /api/notifications/events/{id}/calendar.ics
       - GET /swagger-ui.html
       - GET /swagger-ui/**
       - GET /webjars/**

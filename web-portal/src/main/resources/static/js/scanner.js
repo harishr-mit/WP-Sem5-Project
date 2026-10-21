@@ -7,7 +7,9 @@
  *  - the answer's HX-Trigger "scanResult" flashes the screen green / amber / red, plays a WebAudio tone (no audio
  *    files) and vibrates; the camera stays paused until "Scan next", so the volunteer reads the result;
  *  - the device id is made once and kept in localStorage (the scan log tells devices apart; P7's offline queue too);
- *  - no camera (no permission, not a secure context, no device): the manual tab opens and says why.
+ *  - no camera (no permission, not a secure context, no device): the manual tab opens and says why;
+ *  - P7: a scan that gets no answer within data-scan-timeout-ms (or a network error) switches to offline mode
+ *    (offline.js): the phone checks the pass itself, queues it, and the answer is drawn here; check-out is locked.
  */
 (function () {
     'use strict';
@@ -24,7 +26,10 @@
     const manualPanel = document.getElementById('manual-panel');
     const tabs = document.getElementById('scan-tabs');
     const countEl = document.getElementById('scan-count');
-    const online = document.getElementById('online');
+    const offline = window.MitpassOffline || null;
+    if (window.htmx) {
+        htmx.config.timeout = parseInt(root.dataset.scanTimeoutMs, 10) || 4000;
+    }
 
     // ---- device id and remembered choices --------------------------------------------------------------------
     function store(key, value) {
@@ -46,6 +51,9 @@
         store('mitpass-device', deviceId);
     }
     document.getElementById('device-id').value = deviceId;
+    if (offline) {
+        offline.deviceId = deviceId;
+    }
 
     let count = 0;
     try {
@@ -62,16 +70,94 @@
         }, extra);
     }
 
-    // ---- online indicator ------------------------------------------------------------------------------------
-    function showOnline() {
-        const on = navigator.onLine;
-        online.classList.toggle('online--off', !on);
-        online.textContent = on ? online.dataset.on || online.textContent : (online.dataset.off || 'Offline');
+    // ---- offline mode (P7; the online badge belongs to offline.js) -------------------------------------------
+    let pending = null; // the text of the scan in flight, to check offline if it gets no answer
+    const outRadio = form.querySelector('input[name=mode][value=OUT]');
+    const inRadio = form.querySelector('input[name=mode][value=IN]');
+    function offlineChanged(isOffline) {
+        if (outRadio) {
+            outRadio.disabled = isOffline; // check-out needs the network (owner Q3)
+            outRadio.title = isOffline ? (root.dataset.outNeedsNetwork || '') : '';
+            if (isOffline && inRadio) {
+                inRadio.checked = true;
+            }
+        }
     }
-    online.dataset.on = online.textContent;
-    online.dataset.off = root.dataset.offlineLabel || 'Offline';
-    window.addEventListener('online', showOnline);
-    window.addEventListener('offline', showOnline);
+    if (offline) {
+        offline.onChange(offlineChanged);
+        offlineChanged(offline.isOffline());
+    }
+
+    function renderLocal(r) {
+        const card = document.createElement('div');
+        card.className = 'result result--' + r.color;
+        const word = document.createElement('p');
+        word.className = 'result__word';
+        word.textContent = r.word;
+        const message = document.createElement('p');
+        message.className = 'result__msg';
+        message.textContent = r.message;
+        card.append(word, message);
+        if (r.firstName || r.passNumber) {
+            const who = document.createElement('div');
+            who.className = 'result__who';
+            const name = document.createElement('p');
+            const strong = document.createElement('strong');
+            strong.textContent = r.firstName || '';
+            name.appendChild(strong);
+            const number = document.createElement('p');
+            number.className = 'pass-number';
+            number.textContent = r.passNumber || '';
+            who.append(name, number);
+            card.appendChild(who);
+        }
+        const next = document.createElement('a');
+        next.className = 'btn';
+        next.href = '/scan';
+        next.setAttribute('data-scan-next', '');
+        next.textContent = root.dataset.nextLabel || 'Scan next';
+        card.appendChild(next);
+        result.replaceChildren(card);
+        feedback(r.color);
+    }
+
+    function offlineRead(text) {
+        busy = true;
+        if (reader) { try { reader.pause(true); } catch (e) { /* already paused */ } }
+        offline.scan(text).then(renderLocal);
+    }
+
+    // No answer from the portal: the network is gone. Check the scan in flight on this phone instead.
+    function lostNetwork() {
+        if (!offline || pending === null) {
+            return;
+        }
+        const text = pending;
+        pending = null;
+        offline.goOffline();
+        offlineRead(text);
+    }
+    document.body.addEventListener('htmx:sendError', lostNetwork);
+    document.body.addEventListener('htmx:timeout', lostNetwork);
+    document.body.addEventListener('htmx:afterRequest', function (event) {
+        if (event.detail && event.detail.successful) {
+            pending = null;
+        }
+    });
+    // The manual tab while offline: check the typed number (or pasted code) here instead of asking the server.
+    document.body.addEventListener('htmx:beforeRequest', function (event) {
+        const code = document.getElementById('code');
+        const detail = event.detail || {};
+        const path = (detail.pathInfo && detail.pathInfo.requestPath) || (detail.requestConfig && detail.requestConfig.path) || '';
+        if (path && path.indexOf('/scan/check') >= 0 && code) {
+            pending = code.value;
+            if (offline && offline.isOffline()) {
+                event.preventDefault();
+                pending = null;
+                offlineRead(code.value);
+            }
+        }
+    });
 
     // ---- feedback: flash, tone, vibration --------------------------------------------------------------------
     let audio = null;
@@ -122,9 +208,14 @@
         if (busy || (text === last && now - lastAt < repeatIgnoreMs)) {
             return;
         }
-        busy = true;
         last = text;
         lastAt = now;
+        if (offline && offline.isOffline()) {
+            offlineRead(text);
+            return;
+        }
+        busy = true;
+        pending = text;
         try { reader.pause(true); } catch (e) { /* already paused */ }
         htmx.ajax('POST', form.getAttribute('data-submit') || '/scan/submit', {
             target: '#scan-result', swap: 'innerHTML', values: values({ token: text }),
@@ -298,6 +389,5 @@
     // With JavaScript: tabs on, camera first
     tabs.hidden = false;
     show('camera');
-    showOnline();
     startCamera();
 })();

@@ -26,7 +26,11 @@ public enum ScanResult {
     INVALID_SIGNATURE(HttpStatus.UNPROCESSABLE_CONTENT, Color.RED, "Not a valid MITPass code."),
     INVALID_PASS_NUMBER(HttpStatus.UNPROCESSABLE_CONTENT, Color.RED, "That pass number has a typo (check digit)."),
     UNKNOWN_PASS(HttpStatus.NOT_FOUND, Color.AMBER, "Pass not found here yet: ask the organizer."),
-    UNAUTHORIZED_SCANNER(HttpStatus.FORBIDDEN, Color.RED, "You aren't assigned to this event.");
+    UNAUTHORIZED_SCANNER(HttpStatus.FORBIDDEN, Color.RED, "You aren't assigned to this event."),
+    /** P7 offline sync: the pass was already checked in before this queued scan reached the server (Q2). */
+    DUPLICATE_OFFLINE(HttpStatus.CONFLICT, Color.RED, "Already checked in: this offline scan came later."),
+    /** P7 offline sync: the phone's time for the scan is too old or in the future (Q12). */
+    REJECTED_OFFLINE_CLOCK(HttpStatus.UNPROCESSABLE_CONTENT, Color.AMBER, "The phone's clock looks wrong: scan again.");
 
     /** Green: let them in (or out). Amber: a person should look. Red: refuse. */
     public enum Color {

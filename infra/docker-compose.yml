@@ -38,6 +38,17 @@ services:
       timeout: 5s
       retries: 12
 
+  # Phase 7: live dashboard counters in checkin-service (a cache rebuilt from PostgreSQL; nothing to persist)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   mailpit:
     image: axllent/mailpit:v1.31
     ports:

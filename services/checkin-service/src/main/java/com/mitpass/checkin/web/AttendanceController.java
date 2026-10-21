@@ -1,7 +1,9 @@
 package com.mitpass.checkin.web;
 
+import com.mitpass.checkin.client.EventCatalog;
 import com.mitpass.checkin.service.AttendanceReportService;
 import com.mitpass.checkin.service.CheckinProblems;
+import com.mitpass.checkin.service.LiveStats;
 import com.mitpass.checkin.service.PassCopyReconciler;
 import com.mitpass.checkin.service.PassCopyReconciler.SyncReport;
 import com.mitpass.checkin.web.dto.AttendanceDtos.AttendanceSummary;
@@ -44,10 +46,25 @@ public class AttendanceController {
 
     private final AttendanceReportService reports;
     private final PassCopyReconciler reconciler;
+    private final LiveStats live;
+    private final EventCatalog catalog;
 
-    public AttendanceController(AttendanceReportService reports, PassCopyReconciler reconciler) {
+    public AttendanceController(
+            AttendanceReportService reports, PassCopyReconciler reconciler, LiveStats live, EventCatalog catalog) {
         this.reports = reports;
         this.reconciler = reconciler;
+        this.live = live;
+        this.catalog = catalog;
+    }
+
+    @GetMapping("/events/{eventId}/live")
+    @PreAuthorize(OWNER_OR_ADMIN)
+    @Operation(
+            summary = "The live dashboard's snapshot (event organizer or ADMIN)",
+            description =
+                    "The same snapshot the STOMP feed pushes to /topic/events/{id} (P7): first paint and fallback.")
+    public LiveStats.LiveSnapshot live(@PathVariable Long eventId) {
+        return live.snapshot(eventId, catalog.event(eventId).capacity());
     }
 
     @GetMapping("/events/{eventId}/summary")

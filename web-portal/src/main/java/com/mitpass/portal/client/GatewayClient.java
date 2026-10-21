@@ -353,6 +353,12 @@ public class GatewayClient {
         return binary("/api/passes/{id}/ticket.pdf", passId, MediaType.APPLICATION_PDF);
     }
 
+    /** "Add to calendar" (P7, D16): notification-service's public invite for the event. */
+    public Binary calendar(long eventId) {
+        return binary(
+                "/api/notifications/events/{id}/calendar.ics", eventId, MediaType.parseMediaType("text/calendar"));
+    }
+
     // ---- event-service: an event's registrations (organizer) -------------------------------------------------------
 
     public Page<Registration> eventRegistrations(long eventId) {
@@ -436,6 +442,33 @@ public class GatewayClient {
                 .exchange((request, response) -> scanAnswer(request, response, ScanAnswer.class));
     }
 
+    // ---- offline scanner (P7): passed through as JSON, the browser keeps them ------------------------------------
+
+    /** pass-service's public keys (the same set checkin-service verifies with). */
+    public String passJwks() {
+        return http.get().uri("/.well-known/pass-jwks.json").retrieve().body(String.class);
+    }
+
+    /** checkin-service's offline manifest for one event: sessions, time rules, passes with status, first names. */
+    public String scanManifest(long eventId) {
+        return http.get()
+                .uri(uri -> uri.path("/api/scans/manifest")
+                        .queryParam("eventId", eventId)
+                        .build())
+                .retrieve()
+                .body(String.class);
+    }
+
+    /** Queued offline scans, as the phone sent them; one answer each. */
+    public String scanBatch(String body) {
+        return http.post()
+                .uri("/api/scans/batch")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(String.class);
+    }
+
     /** Manual entry, step one: the holder's name for the visual check, or the refusal. */
     public LookupAnswer lookup(String passNumber, long gateId, String deviceId) {
         return http.get()
@@ -451,6 +484,14 @@ public class GatewayClient {
                     }
                     return new LookupAnswer(null, scanAnswer(request, response, ScanAnswer.class));
                 });
+    }
+
+    /** The live dashboard's first paint, and its fallback while the socket is down (P7). */
+    public ApiModels.LiveSnapshot liveSnapshot(long eventId) {
+        return http.get()
+                .uri("/api/attendance/events/{id}/live", eventId)
+                .retrieve()
+                .body(ApiModels.LiveSnapshot.class);
     }
 
     public AttendanceSummary attendanceSummary(long eventId) {
@@ -544,6 +585,37 @@ public class GatewayClient {
     }
 
     /** The gateway's own health overview (D15): every registered instance. */
+    // ---- dead letters (P7, D13): each consumer's tooling, routed by the gateway under /api/admin/dead-letters ------
+
+    public ApiModels.DeadLetterOverview deadLetters(String service) {
+        return http.get()
+                .uri("/api/admin/dead-letters/{service}?limit=50", service)
+                .retrieve()
+                .body(ApiModels.DeadLetterOverview.class);
+    }
+
+    public void replayDeadLetter(String service, String messageId) {
+        http.post()
+                .uri("/api/admin/dead-letters/{service}/{id}/replay", service, messageId)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    public int replayAllDeadLetters(String service) {
+        Map<?, ?> body = http.post()
+                .uri("/api/admin/dead-letters/{service}/replay-all", service)
+                .retrieve()
+                .body(Map.class);
+        return body == null || !(body.get("replayed") instanceof Number n) ? 0 : n.intValue();
+    }
+
+    public void discardDeadLetter(String service, String messageId) {
+        http.delete()
+                .uri("/api/admin/dead-letters/{service}/{id}", service, messageId)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
     public List<InstanceHealth> adminHealth() {
         return http.get().uri("/api/admin/health").retrieve().body(new ParameterizedTypeReference<>() {});
     }

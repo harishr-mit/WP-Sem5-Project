@@ -19,6 +19,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param waitlistRefresh how often a waitlisted registration asks whether it moved up
  * @param scanRepeatIgnore the scanner ignores the same QR text for this long (one code stays in view for many frames)
  * @param supportedLocales languages the switch offers; the first is the default
+ * @param live the live dashboard relay (P7)
+ * @param offline the offline scanner (P7)
  */
 @ConfigurationProperties("mitpass.portal")
 public record PortalProperties(
@@ -33,7 +35,28 @@ public record PortalProperties(
         @DefaultValue("10s") Duration healthRefresh,
         @DefaultValue("15s") Duration waitlistRefresh,
         @DefaultValue("3s") Duration scanRepeatIgnore,
-        @DefaultValue({"en", "ta"}) List<String> supportedLocales) {
+        @DefaultValue({"en", "ta"}) List<String> supportedLocales,
+        @DefaultValue Live live,
+        @DefaultValue Offline offline) {
+
+    /**
+     * @param reconnectEvery an upstream feed is closed after this and the page reconnects with a fresh token, so an
+     *     organizer whose access is withdrawn loses the feed within this time
+     * @param fallbackPoll while the socket is down, the dashboard asks for a snapshot this often
+     */
+    public record Live(
+            @DefaultValue("10m") Duration reconnectEvery,
+            @DefaultValue("5s") Duration fallbackPoll) {}
+
+    /**
+     * @param scanTimeout a scan that gets no answer within this switches the scanner to offline mode
+     * @param bundleRefresh the offline bundle (keys, revocations, manifest) is fetched again this often while online
+     * @param syncEvery queued offline scans are sent this often while the network is back
+     */
+    public record Offline(
+            @DefaultValue("4s") Duration scanTimeout,
+            @DefaultValue("60s") Duration bundleRefresh,
+            @DefaultValue("15s") Duration syncEvery) {}
 
     public record Timeouts(
             @DefaultValue("2s") Duration connect,

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<!--/* One shell for every email: inline styles only (email clients drop <style>), the portal's colours (tokens.css). */-->
+<html xmlns:th="http://www.thymeleaf.org" th:fragment="mail(body)">
+<head><meta charset="UTF-8"><title th:text="${subject}">MITPass</title></head>
+<body style="margin:0;padding:0;background:#F3F5F9;font-family:Arial,Helvetica,sans-serif;color:#13203A;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3F5F9;padding:24px 0;">
+    <tr><td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#FFFFFF;border-radius:12px;overflow:hidden;">
+            <tr><td style="background:#7A1F3D;padding:18px 24px;color:#E9CF8B;font-size:20px;font-weight:bold;letter-spacing:2px;">MITPASS</td></tr>
+            <tr><td style="padding:24px;font-size:15px;line-height:1.5;">
+                <p style="margin:0 0 12px;" th:text="${name} ? 'Hi ' + ${name} + ',' : 'Hi,'">Hi Priya,</p>
+                <th:block th:replace="${body}"></th:block>
+                <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;background:#F3F5F9;border-radius:8px;width:100%;">
+                    <tr><td style="padding:12px 16px;">
+                        <strong th:text="${eventTitle}">TechFest Hackathon</strong><br>
+                        <span th:if="${when}" th:text="${when}">Sat 24 Oct 2026, 10:00 AM – 1:00 PM</span><br th:if="${when}">
+                        <span th:if="${place}" th:text="${place}">Main Auditorium</span>
+                    </td></tr>
+                </table>
+            </td></tr>
+            <tr><td style="padding:12px 24px;background:#F3F5F9;font-size:12px;color:#4A5872;">
+                Sent by MITPass, the college event pass system. <a th:href="${portalUrl}" href="#" style="color:#17606B;">Open MITPass</a>
+            </td></tr>
+        </table>
+    </td></tr>
+</table>
+</body>
+</html>

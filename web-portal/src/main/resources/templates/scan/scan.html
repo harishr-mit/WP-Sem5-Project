@@ -5,7 +5,12 @@
      fragment of this template into #scan-result, plus HX-Trigger "scanResult" for the flash, tone and vibration. */-->
 <html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: bare(title=#{nav.scan}, content=~{::main})}">
 <main id="main" class="scanner" th:data-repeat-ignore-ms="${repeatIgnoreMillis}"
-      th:data-offline-label="#{scan.offline}" th:data-no-secure="#{scan.noSecure}" th:data-no-camera="#{scan.noCamera}">
+      th:data-offline-label="#{scan.offline}" th:data-no-secure="#{scan.noSecure}" th:data-no-camera="#{scan.noCamera}"
+      th:attr="data-scan-timeout-ms=${offline.scanTimeout().toMillis()},data-bundle-refresh-ms=${offline.bundleRefresh().toMillis()},
+               data-sync-every-ms=${offline.syncEvery().toMillis()},data-queued-label=#{scan.offlineQueued},
+               data-login-label=#{scan.loginToSync},data-checked-offline=#{scan.checkedOffline},
+               data-no-offline-data=#{scan.noOfflineData},data-out-needs-network=#{scan.outNeedsNetwork},
+               data-next-label=#{scan.next}">
     <div class="flashscreen" id="flashscreen" aria-hidden="true"></div>
 
     <form id="scan-form" th:action="@{/scan}" method="post" th:attr="hx-post=@{/scan/check},data-submit=@{/scan/submit}"
@@ -17,7 +22,7 @@
             <div class="scanner__gate" th:unless="${options.isEmpty()}">
                 <label for="gate" class="visually-hidden" th:text="#{staff.gate}">Gate</label>
                 <select id="gate" name="gateId">
-                    <option th:each="o : ${options}" th:value="${o.gateId()}" th:text="${o.label()}"
+                    <option th:each="o : ${options}" th:value="${o.gateId()}" th:text="${o.label()}" th:attr="data-event=${o.eventId()}"
                             th:selected="${o.gateId() == gateId}">TECHFEST26 · Main Gate</option>
                 </select>
             </div>
@@ -72,6 +77,15 @@
         <span th:text="#{scan.countLabel}">Scanned on this device</span> <b id="scan-count">0</b>
     </div>
 
+    <!--/* Offline scans the server has answered since (P7): its answer wins over the phone's. Filled by offline.js. */-->
+    <section class="synclist" id="sync-list" hidden aria-live="polite">
+        <h2 th:text="#{scan.synced}">Synced from this phone</h2>
+        <ol id="sync-items"></ol>
+    </section>
+    <ul hidden id="scan-words">
+        <li th:each="c : ${@fmt.scanCodes()}" th:attr="data-code=${c}" th:text="#{'scan.word.' + ${c}}">Admitted</li>
+    </ul>
+
     <!--/* Fragment definitions only: never rendered on the page itself (selecting a fragment ignores this th:if). */-->
     <th:block th:if="${false}">
     <!--/* A scan's answer (screen 6): colour, word, who, and "Scan next". */-->
@@ -117,6 +131,7 @@
     </th:block>
 
     <script th:src="@{/webjars/html5-qrcode/html5-qrcode.min.js}" defer></script>
+    <script th:src="@{/js/offline.js}" defer></script>
     <script th:src="@{/js/scanner.js}" defer></script>
 </main>
 </html>

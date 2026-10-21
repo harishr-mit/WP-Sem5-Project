@@ -1,6 +1,7 @@
 package com.mitpass.portal.web;
 
 import com.mitpass.portal.auth.PortalUser;
+import com.mitpass.portal.client.ApiModels;
 import com.mitpass.portal.client.ApiModels.KeyRotation;
 import com.mitpass.portal.client.ApiModels.UserProfile;
 import com.mitpass.portal.client.ApiProblemException;
@@ -8,6 +9,7 @@ import com.mitpass.portal.client.GatewayClient;
 import com.mitpass.portal.config.PortalProperties;
 import com.mitpass.portal.web.support.Htmx;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -142,8 +144,83 @@ public class AdminPagesController {
         var instances = gateway.adminHealth();
         model.addAttribute("instances", instances);
         model.addAttribute("allUp", instances.stream().allMatch(i -> i.isUp()));
+        // WARNING (a dead-letter queue holds messages, D13) is up but needs attention: amber, not red
+        model.addAttribute("anyDown", instances.stream().anyMatch(i -> !i.isUp() && !"WARNING".equals(i.status())));
         model.addAttribute("refreshSeconds", properties.healthRefresh().toSeconds());
         return Htmx.isPartial(request) ? "admin/health :: board" : "admin/health";
+    }
+
+    // ---- dead letters (P7, D13) -------------------------------------------------------------------------------------
+
+    /** The services with an inbox (D13); the name goes into the gateway path, so only these are accepted. */
+    static final List<String> CONSUMERS = List.of("pass-service", "checkin-service", "notification-service");
+
+    /** One service's dead letters, or why it couldn't be asked. */
+    public record ServiceDeadLetters(String service, ApiModels.DeadLetterOverview overview, String error) {}
+
+    @GetMapping("/admin/dead-letters")
+    public String deadLetters(Model model) {
+        List<ServiceDeadLetters> services = new ArrayList<>();
+        for (String service : CONSUMERS) {
+            try {
+                services.add(new ServiceDeadLetters(service, gateway.deadLetters(service), null));
+            } catch (ApiProblemException | org.springframework.web.client.ResourceAccessException ex) {
+                services.add(new ServiceDeadLetters(service, null, ex.getMessage()));
+            }
+        }
+        model.addAttribute("services", services);
+        return "admin/dead-letters";
+    }
+
+    /** Replaying is safe without asking: the consumer skips a message it already applied (D13). */
+    @PostMapping("/admin/dead-letters/{service}/{messageId}/replay")
+    public String replay(@PathVariable String service, @PathVariable String messageId, RedirectAttributes redirect) {
+        return deadLetterAction(service, redirect, () -> {
+            gateway.replayDeadLetter(service, messageId);
+            return msg("admin.dl.replayed", 1);
+        });
+    }
+
+    @PostMapping("/admin/dead-letters/{service}/replay-all")
+    public String replayAll(
+            @PathVariable String service,
+            @RequestParam(defaultValue = "false") boolean confirmed,
+            RedirectAttributes redirect) {
+        if (!confirmed) {
+            redirect.addFlashAttribute("error", msg("admin.confirmFirst"));
+            return "redirect:/admin/dead-letters";
+        }
+        return deadLetterAction(
+                service, redirect, () -> msg("admin.dl.replayed", gateway.replayAllDeadLetters(service)));
+    }
+
+    @PostMapping("/admin/dead-letters/{service}/{messageId}/discard")
+    public String discard(
+            @PathVariable String service,
+            @PathVariable String messageId,
+            @RequestParam(defaultValue = "false") boolean confirmed,
+            RedirectAttributes redirect) {
+        if (!confirmed) {
+            redirect.addFlashAttribute("error", msg("admin.confirmFirst"));
+            return "redirect:/admin/dead-letters";
+        }
+        return deadLetterAction(service, redirect, () -> {
+            gateway.discardDeadLetter(service, messageId);
+            return msg("admin.dl.discarded", messageId);
+        });
+    }
+
+    private String deadLetterAction(
+            String service, RedirectAttributes redirect, java.util.function.Supplier<String> action) {
+        if (!CONSUMERS.contains(service)) {
+            throw new ApiProblemException(404, null, "Unknown service " + service, null, null);
+        }
+        try {
+            redirect.addFlashAttribute("message", action.get());
+        } catch (ApiProblemException ex) {
+            redirect.addFlashAttribute("error", ex.getStatus() == 404 ? msg("admin.dl.notFound") : ex.getMessage());
+        }
+        return "redirect:/admin/dead-letters";
     }
 
     @GetMapping("/admin/keys")

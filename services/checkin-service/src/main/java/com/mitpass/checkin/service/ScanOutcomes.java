@@ -74,4 +74,28 @@ public class ScanOutcomes {
                 firstCheckIn,
                 reentry);
     }
+
+    /** The same scan, answered with another result (an offline duplicate, P7). */
+    ScanOutcome as(ScanOutcome outcome, ScanResult result) {
+        return new ScanOutcome(
+                outcome.scanId(),
+                result,
+                result.message(
+                        outcome.attendee() == null
+                                ? Map.of()
+                                : Map.of("name", outcome.attendee().holderName())),
+                outcome.eventId(),
+                outcome.eventCode(),
+                outcome.gateCode(),
+                outcome.sessionId(),
+                outcome.sessionTitle(),
+                outcome.attendee(),
+                outcome.checkedInAt(),
+                outcome.reentry());
+    }
+
+    /** The answer a resent offline scan got the first time (only its result is kept). */
+    ScanOutcome replayed(ScanResult result) {
+        return new ScanOutcome(null, result, result.message(Map.of()), null, null, null, null, null, null, null, false);
+    }
 }

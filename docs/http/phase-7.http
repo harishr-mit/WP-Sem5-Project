@@ -1,0 +1,178 @@
+# Phase 7 demo requests (docs/plans/phase-7.md). Most of Phase 7 is seen in the portal (Live tab, offline scanner,
+# Admin · Dead letters) and in Mailpit (http://localhost:8025). These are the APIs behind it.
+# Run with the VS Code REST Client or IntelliJ's HTTP client, top to bottom. Start with Mailpit and Redis up
+# (docker compose), and every service including notification-service (README "Quick start").
+
+@gw = http://localhost:8080
+
+### --- log in ------------------------------------------------------------------------------------------------------
+
+# @name organizer
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "organizer.a@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name volunteer
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "volunteer@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name admin
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "admin@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name priya
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "2026509001@student.annauniv.edu", "password": "Passw0rd!"}
+
+###
+# @name arun
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "2026505014@student.annauniv.edu", "password": "Passw0rd!"}
+
+### --- 1. An event with one seat, starting in 25 minutes; the volunteer at MAIN ----------------------------------
+
+### 201 Change the code on a rerun
+# @name event
+POST {{gw}}/api/events
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"code": "LIVEDEMO1", "title": "Live demo", "categoryId": 1, "venueId": 1, "capacity": 1,
+ "startsAt": "{{$datetime iso8601 25 m}}", "endsAt": "{{$datetime iso8601 4 h}}",
+ "registrationClosesAt": "{{$datetime iso8601 20 m}}"}
+
+### 200 DRAFT → PUBLISHED
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "PUBLISHED"}
+
+### 200 PUBLISHED → REGISTRATION_OPEN
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "REGISTRATION_OPEN"}
+
+### 201 Gate MAIN
+# @name main
+POST {{gw}}/api/events/{{event.response.body.id}}/gates
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"code": "MAIN", "name": "Main Gate"}
+
+### 201
+POST {{gw}}/api/events/{{event.response.body.id}}/volunteers
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"email": "volunteer@mitpass.test", "gateId": {{main.response.body.id}}}
+
+### --- 2. Emails (Mailpit) -----------------------------------------------------------------------------------------
+
+### 201 CONFIRMED → Mailpit: "Your pass for Live demo" with the QR inline and LIVEDEMO1.ics attached
+# @name priyaReg
+POST {{gw}}/api/registrations
+Authorization: Bearer {{priya.response.body.accessToken}}
+Content-Type: application/json
+
+{"eventId": {{event.response.body.id}}}
+
+### 201 WAITLISTED (the one seat is taken) → Mailpit: "You're on the waitlist (#1) for Live demo"
+# @name arunReg
+POST {{gw}}/api/registrations
+Authorization: Bearer {{arun.response.body.accessToken}}
+Content-Type: application/json
+
+{"eventId": {{event.response.body.id}}}
+
+### 200 Priya cancels → Mailpit: her "Registration cancelled", Arun's "You got a seat" and then his pass email
+POST {{gw}}/api/registrations/{{priyaReg.response.body.id}}/cancel
+Authorization: Bearer {{priya.response.body.accessToken}}
+Content-Type: application/json
+
+{}
+
+### 200 "Add to calendar": the same invite as the emails (public; UID event-<id>@mitpass, SEQUENCE = version)
+GET {{gw}}/api/notifications/events/{{event.response.body.id}}/calendar.ics
+
+### --- 3. Live dashboard ---------------------------------------------------------------------------------------------
+# The browser never calls these: the portal relays /ws/checkin to its own /portal-ws (D16). The organizer's
+# dashboard is http://localhost:8090/organizer/events/{id}/live. Scans need the event LIVE (the scheduler starts it
+# 30 min before the start, i.e. at once for this event).
+
+### 200 The snapshot the feed pushes: confirmed, checkedIn, inside, capacity, gates, arrivals per 5 min, recent scans
+GET {{gw}}/api/attendance/events/{{event.response.body.id}}/live
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### 403 Only the event's organizer and admins
+GET {{gw}}/api/attendance/events/{{event.response.body.id}}/live
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+
+### --- 4. Offline scanner --------------------------------------------------------------------------------------------
+
+### 200 What the scanner phone keeps: sessions, time rules, every pass with its status, first names only
+GET {{gw}}/api/scans/manifest?eventId={{event.response.body.id}}
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+
+### 200 Arun's pass, for the typed numbers below
+# @name arunPasses
+GET {{gw}}/api/passes/me
+Authorization: Bearer {{arun.response.body.accessToken}}
+
+### 200 Two queued scans of the same pass from one phone: the earlier ACCEPTED, the later DUPLICATE_OFFLINE (red).
+### Run it again: the same answers (localId), nothing scanned twice.
+POST {{gw}}/api/scans/batch
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"deviceId": "http-offline",
+ "scans": [
+   {"localId": "q-2", "passNumber": "{{arunPasses.response.body.$.content[0].passNumber}}", "gateId": {{main.response.body.id}}, "scannedAt": "{{$datetime iso8601 -1 m}}"},
+   {"localId": "q-1", "passNumber": "{{arunPasses.response.body.$.content[0].passNumber}}", "gateId": {{main.response.body.id}}, "scannedAt": "{{$datetime iso8601 -2 m}}"}
+ ]}
+
+### 200 A phone clock 13 h behind: REJECTED_OFFLINE_CLOCK (amber)
+POST {{gw}}/api/scans/batch
+Authorization: Bearer {{volunteer.response.body.accessToken}}
+Content-Type: application/json
+
+{"deviceId": "http-offline",
+ "scans": [{"localId": "q-old", "passNumber": "{{arunPasses.response.body.$.content[0].passNumber}}", "gateId": {{main.response.body.id}}, "scannedAt": "{{$datetime iso8601 -13 h}}"}]}
+
+### --- 5. Dead letters (ADMIN, through the gateway) ---------------------------------------------------------------
+# To see one: stop Mailpit (docker compose stop mailpit), register someone, wait ~20 s (3 tries), start Mailpit again.
+
+### 200 notification-service's DLQ: depth and messages (type, routing key, times dead-lettered, when)
+# @name dead
+GET {{gw}}/api/admin/dead-letters/notification-service
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+### 204 Back to the inbox with the same messageId: sent once; replaying again is skipped by the consumer
+POST {{gw}}/api/admin/dead-letters/notification-service/{{dead.response.body.messages[0].messageId}}/replay
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+### 200 {"replayed": n}
+POST {{gw}}/api/admin/dead-letters/pass-service/replay-all
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+### 403 Admins only
+GET {{gw}}/api/admin/dead-letters/checkin-service
+Authorization: Bearer {{organizer.response.body.accessToken}}
+
+### 200 The service's health shows WARNING while a DLQ holds messages (amber on Admin · Health)
+GET http://localhost:8085/actuator/health

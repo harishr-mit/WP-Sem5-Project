@@ -74,6 +74,16 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
         </dependency>
+        <!-- Live dashboard feed: STOMP over WebSocket (Phase 7, D16) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+        <!-- Live dashboard counters (Phase 7, D16): a cache rebuilt from PostgreSQL, never the source of truth -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
         <!-- Short caches for event details, gates and assignments read from event-service (docs/plans/phase-5.md §4) -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>

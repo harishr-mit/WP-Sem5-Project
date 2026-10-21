@@ -1,11 +1,13 @@
 package com.mitpass.portal.web;
 
 import com.mitpass.portal.auth.PortalUser;
+import com.mitpass.portal.client.ApiModels;
 import com.mitpass.portal.client.ApiModels.AttendanceSummary;
 import com.mitpass.portal.client.ApiModels.Binary;
 import com.mitpass.portal.client.ApiModels.SyncResult;
 import com.mitpass.portal.client.ApiProblemException;
 import com.mitpass.portal.client.GatewayClient;
+import com.mitpass.portal.config.PortalProperties;
 import com.mitpass.portal.web.support.Htmx;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.MessageSource;
@@ -20,10 +22,12 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
- * The organizer's Reports tab (UI reference screen 7): attendance figures with a Refresh button (live push is P7), the
+ * The organizer's Live and Reports tabs (UI reference screen 7): the live dashboard (P7), attendance figures with a
+ * Refresh button, the
  * CSV passed through byte for byte, and the admin-only "sync passes now" (normally the reconciler does it by itself).
  */
 @Controller
@@ -31,10 +35,12 @@ public class AttendancePagesController {
 
     private final GatewayClient gateway;
     private final MessageSource messages;
+    private final PortalProperties properties;
 
-    public AttendancePagesController(GatewayClient gateway, MessageSource messages) {
+    public AttendancePagesController(GatewayClient gateway, MessageSource messages, PortalProperties properties) {
         this.gateway = gateway;
         this.messages = messages;
+        this.properties = properties;
     }
 
     /** Screen 7. The Refresh button (HTMX) gets only the board; the page itself also works on a plain reload. */
@@ -55,6 +61,27 @@ public class AttendancePagesController {
         // "Sync passes now" is an admin tool only: the reconciler keeps the copy in step by itself (D14).
         model.addAttribute("isAdmin", user != null && user.hasRole("ADMIN"));
         return "organizer/attendance";
+    }
+
+    /**
+     * The live dashboard (screen 7, P7): first paint from the snapshot; {@code dashboard.js} then follows
+     * {@code /topic/events/{id}} on {@code /portal-ws} (LiveRelay). Without JavaScript it is a page that shows the
+     * numbers as of loading.
+     */
+    @GetMapping("/organizer/events/{id}/live")
+    public String live(@PathVariable long id, Model model) {
+        model.addAttribute("event", gateway.event(id));
+        model.addAttribute("live", gateway.liveSnapshot(id));
+        model.addAttribute(
+                "fallbackPollSeconds", properties.live().fallbackPoll().toSeconds());
+        return "organizer/live";
+    }
+
+    /** The same snapshot as JSON, for the page's chart and its fallback polling while the socket is down. */
+    @GetMapping(value = "/organizer/events/{id}/live.json", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<ApiModels.LiveSnapshot> liveJson(@PathVariable long id) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(gateway.liveSnapshot(id));
     }
 
     @GetMapping("/organizer/events/{id}/attendance.csv")

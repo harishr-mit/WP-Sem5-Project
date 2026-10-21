@@ -57,6 +57,8 @@ class SecurityMatrixTest {
     static final String OWNER = "organizer (owner)";
     static final String OTHER = "organizer (other)";
     static final String ADMIN = "admin";
+    /** A service token (D7): notification-service reads an event's registrations for bulk emails (P7). */
+    static final String SERVICE = "service (notification)";
 
     static final UUID OWNER_ID = UUID.randomUUID();
     static final UUID STUDENT_ID = UUID.randomUUID();
@@ -71,6 +73,7 @@ class SecurityMatrixTest {
         TOKENS.put(OWNER, TestJwtIssuer.tokenFor(OWNER_ID, Roles.ORGANIZER));
         TOKENS.put(OTHER, TestJwtIssuer.token(Roles.ORGANIZER));
         TOKENS.put(ADMIN, TestJwtIssuer.token(Roles.ADMIN));
+        TOKENS.put(SERVICE, TestJwtIssuer.token(Roles.SERVICE));
     }
 
     /**
@@ -199,7 +202,10 @@ class SecurityMatrixTest {
                         f -> "{\"to\":\"PUBLISHED\"}",
                         ownerOrAdmin),
                 get("/api/events/{id}/history", f -> "/api/events/" + f.event() + "/history", ownerOrAdmin),
-                get("/api/events/{id}/registrations", f -> "/api/events/" + f.event() + "/registrations", ownerOrAdmin),
+                get(
+                        "/api/events/{id}/registrations",
+                        f -> "/api/events/" + f.event() + "/registrations",
+                        Rule.only(OWNER, ADMIN, SERVICE)),
                 get(
                         "/api/events/{id}/eligibility",
                         f -> "/api/events/" + f.event() + "/eligibility",
@@ -224,7 +230,7 @@ class SecurityMatrixTest {
                         f -> null,
                         Rule.only(STUDENT, OWNER, ADMIN)));
 
-        List<String> callers = List.of(ANONYMOUS, STUDENT, VOLUNTEER, OWNER, OTHER, ADMIN);
+        List<String> callers = List.of(ANONYMOUS, STUDENT, VOLUNTEER, OWNER, OTHER, ADMIN, SERVICE);
         SecurityMatrix matrix = new SecurityMatrix("event-service", callers);
         for (Endpoint endpoint : endpoints) {
             for (String caller : callers) {

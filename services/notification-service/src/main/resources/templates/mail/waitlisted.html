@@ -1,0 +1,7 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{mail/layout :: mail(~{::body})}">
+<body>
+<p style="margin:0 0 12px;">The event is full, so you're on the waitlist at position <strong th:text="'#' + ${position}">#3</strong>.</p>
+<p style="margin:0;">If a seat frees up, it goes to the next person in line and we'll email you straight away.</p>
+</body>
+</html>

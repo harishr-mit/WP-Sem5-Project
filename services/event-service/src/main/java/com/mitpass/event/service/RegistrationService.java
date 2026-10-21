@@ -151,6 +151,9 @@ public class RegistrationService {
                         actor,
                         TransitionTrigger.MANUAL,
                         "Event full");
+                registrations.flush(); // the position query below counts this row
+                outbox.waitlisted(
+                        registration, (int) registrations.waitlistPosition(eventId, registration.getWaitlistSeq()));
             }
         }
         registrations.flush();
