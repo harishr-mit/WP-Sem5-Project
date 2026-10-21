@@ -288,3 +288,53 @@ Order: T09.1 → T09.2 → T09.3 → T09.4 → T09.5 → T09.6 → T09.7 → T09
 14. **Q14: Redis in tests** via Testcontainers (as PostgreSQL and RabbitMQ already are). *Default: yes.*
 15. **Q15: Emails in tests** with GreenMail (a test-scoped jar, pinned in the root POM) rather than a Mailpit container. *Default: GreenMail.*
 16. **Pre-phase commit:** the owner commits this plan (and the T09.1 doc changes) before T09.2 starts.
+
+## 18. As built (2026-10-20/21)
+
+### Exit criteria
+
+Checked on the running stack (compose + the eight jars) with `web-portal/ui-checks/p7.mjs` (all checks pass) and `reminders.mjs`, plus `./mvnw clean verify` (653+ tests):
+
+1. **Live dashboard:** a scan moves the Live tab in about 1.1 s from the volunteer's confirm click (that includes the scan request and the 500 ms push throttle); a second browser follows too; a student can't open `/portal-ws` (403) and checkin-service refuses a subscription to someone else's event (`LiveFeedTest`).
+2. **Emails (Mailpit):** waitlisted (#1) → promoted → pass email with the QR inline (PNG, `cid:qr`) and `<CODE>.ics`; registration cancelled; event cancelled / rescheduled (`MailFlowTest`); the 1 h reminder once per registration with two notification-service instances (`reminders.mjs`, §18 "Closed").
+3. **Add to calendar:** the event page's button downloads `<CODE>.ics` (the pass page has the same button).
+4. **Dead letters:** a poison message reaches `notification-service.inbox.dlq` after 3 attempts; Admin · Health turns amber; Admin · Dead letters lists it; discard asks first and removes it. Replay is covered by `DeadLettersTest` and the admin page test (one click, same `messageId`).
+5. **Offline scanner:** WebCrypto verifies a real live code and refuses it with one character changed; Luhn as `PassNumber`; offline, the badge counts the queue and check-out is locked; back online the queue syncs, a pass checked in online meanwhile comes back `DUPLICATE_OFFLINE` (red, marked as changed), the dashboard counts the synced scan; the service worker serves `/scan` with no network. The real-phone run over the `lan` profile is the owner's (§18 "Open").
+6. **Security:** new rows in the checkin, pass, event (SERVICE column) and notification matrices, gateway `EdgeSecurityTest` for the WebSocket and dead-letter routes; `NoTokensInPagesTest` covers the live page, `live.json`, the offline bundle and the dead-letters page.
+7. `./mvnw verify` green; Playwright checks done (CI keeps the MockMvc tests).
+
+### Different from the plan
+
+- **No exception text on a dead letter** (§4, §9): Spring retry's reject adds only `x-death` (reason, count, time, routing key); the cause stays in the consumer's log.
+- **Emails are HTML only** (§6 mentioned a plain-text part); Mailpit and mail apps show them fine.
+- **Revocations offline come from the manifest's pass status** (§7): checkin-service's copy follows the revocation feed every minute, so a separate `/api/revocations` read in the bundle would add nothing.
+- **One upstream per browser subscription** in `LiveRelay` (§4 allowed per session + event). Refusals reach the browser as STOMP ERROR; a refused handshake or a dropped upstream as `{"reconnect": true}`, after which the page waits `fallback-poll` and polls.
+- **Offline manual entry admits at once** (the green card shows the first name for the visual check) instead of the online lookup → confirm.
+- **`ServiceTokenProvider`** moved from checkin-service to `libs/common-security` (now two users). **Redis rebuild** also runs when the counters are older than `rebuild-every` (60 s), which heals any drift.
+- **`spring.task.execution.mode: force`** in checkin-service: the STOMP broker's executors switched off Boot's `applicationTaskExecutor`, which the reconciler injects.
+
+### Bugs found and fixed during the phase
+
+1. `Notifications.base` replaced the event's times with a message's start time even without an end time (pass email lost its end time) — `MailFlowTest`.
+2. The scan that triggered a Redis rebuild was counted twice (hash and ticker) — `LiveStatsTest`.
+3. Nacks have no reply, so a DLQ count right after a peek could read 0 — a synchronous call on the channel after the nacks (`DeadLettersTest`).
+4. `admin.dl.unreachable` and four more texts had a lone apostrophe; with `always-use-message-format: true` it vanished ("couldnt") and swallowed `{0}` — fixed, and `I18nTest.everyApostropheIsDoubled` now checks every key.
+5. **Found live:** the feed never connected through the gateway. Reactor Netty sends `Origin` = the service's own address while `X-Forwarded-Host` = the gateway, so Spring's same-origin check on checkin's `/ws` answered 403 (logged as "connection prematurely closed"). The endpoint is token-authenticated, so it now accepts any origin; `LiveFeedTest` sends the gateway's headers.
+6. **Found live:** a failing upstream made the dashboard reconnect in a tight loop (~2,400 handshakes) — it now waits and polls.
+7. **Found live:** the service worker cached nothing from the first visit (page and files loaded before it existed) — `offline.js` fetches them again through it once it controls the page.
+8. **Found live:** 6 px sideways scroll on the Live tab at 360 px (the chart canvas held its grid cell open) — `.live .card { min-width: 0 }`.
+
+### Closed 2026-10-21
+
+- Reminders with two notification-service instances (:8085, :8095, 10 s interval): `reminders.mjs` → each registration got its "starts in 1 hour" email exactly once.
+- Full `./mvnw clean verify`: 654 tests green (one first attempt failed to compile event-service's tests against a `target/` the IDE build had emptied; the rerun was green, as in T04/T09.2).
+- Final `p7.mjs` run after the last fixes (ticker column, 24-hour times): all checks passed.
+
+### Open
+
+- The offline scanner and live dashboard on two real phones over the `lan` profile: parked for after P8 (owner, 2026-10-21; `docs/REVIEW-LATER.md` RL14). Service workers on a self-signed certificate are the risk (§16 gotcha 10).
+- Grafana panel for `mitpass.dlq.messages` (P8; RL4).
+
+### Fixed after the phase (2026-10-21, owner's report)
+
+- **Theme switch on a dark system:** with no saved choice the page follows the system, which the server can't see, so the switch always offered "dark": on a dark system the first click changed nothing but the icon. `portal.js` now offers "light" there (sun icon). The five gold accents of `[data-theme=dark]` in `portal.css` (active sub-tab and bottom-bar item, secondary buttons, brand badge, error code) now also apply to system dark. Checked with `ui-checks/theme.mjs`. The owner reviewed the Tamil keys: fine.

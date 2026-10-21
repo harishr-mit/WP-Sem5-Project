@@ -81,7 +81,7 @@
                 <form th:action="@{/preferences/theme}" method="post" class="inline">
                     <input type="hidden" name="back" th:value="${currentPath}">
                     <input type="hidden" name="theme" th:value="${theme == 'dark'} ? 'light' : 'dark'">
-                    <button type="submit" class="btn--small"
+                    <button type="submit" class="btn--small" th:attr="data-to-light=#{pref.theme.switchToLight}"
                             th:title="${theme == 'dark'} ? #{pref.theme.switchToLight} : #{pref.theme.switchToDark}"
                             th:aria-label="${theme == 'dark'} ? #{pref.theme.switchToLight} : #{pref.theme.switchToDark}"
                             th:text="${theme == 'dark'} ? '☀' : '☾'">☾</button>

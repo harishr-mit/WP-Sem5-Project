@@ -161,3 +161,13 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 
 **Options.** (a) Keep it. (b) Show everything, newest first. (c) Show upcoming first and past events below them, on the same page.
 
+
+## RL14: Phase 7 on two real phones
+
+*2026-10-21 · OPEN · from: owner ("put the two phone run in review later; we shall verify that after phase 8")*
+
+**Question.** Do the offline scanner and the live dashboard work on real phones over the `lan` profile (HTTPS with the self-signed certificate)?
+
+**Built for now.** Everything a desktop browser can stand in for is checked (`web-portal/ui-checks/p7.mjs`: offline queue and sync, WebCrypto, the service worker serving `/scan` offline, the dashboard moving within ~1 s). Not checked: a phone's browser accepting a service worker on a self-signed certificate (`docs/plans/phase-7.md` §16 gotcha 10), the camera reading while offline, and the badge and sync after a real Wi-Fi drop.
+
+**To check.** (a) Phone B: open the scanner online once, Wi-Fi off, scan phone A's pass: green, "Offline · 1 queued". (b) Wi-Fi on: the queue syncs, a pass checked in meanwhile comes back `DUPLICATE_OFFLINE`. (c) Reload the scanner with Wi-Fi off: the page still opens (if not, the worker was refused: offline still works while the page stays open). (d) The organizer's Live tab on the laptop moves with every scan.

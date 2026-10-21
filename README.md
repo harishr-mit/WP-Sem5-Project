@@ -73,7 +73,7 @@ You don't need this step before every run: the jars in `target/` and the install
 
 Start `pass-service` before anyone registers: it declares its RabbitMQ queue on start, and a registration confirmed before the queue exists gets no pass (no backfill). checkin-service doesn't need that care: whatever its queue missed, its reconciler pulls in within 5 minutes (and at once when an event goes LIVE). For a clean demo, wipe old data first with `docker compose -f infra/docker-compose.yml down -v`.
 
-Or, after step 3, run the jars: `.tools/jdk-21/bin/java -jar <module>/target/<module>.jar` in the same order.
+Or, after step 3, run the jars: `.tools/jdk-21/bin/java -jar <module>/target/<module>.jar` in the same order. Or all of them at once, detached, with logs in `logs/`: `bash scripts/run-all.sh` (Git Bash; extra arguments go to notification-service), and `bash scripts/stop-all.sh` to stop them.
 
 On first start each service creates its schema with Flyway and loads demo data: seven events with gates (`event-service`; `MINIQUIZ26` has a single seat for the waitlist demo, `AIWS26` is open to CSE, IT and AIDS only and allows only the live code, TECHFEST26 and RANG26 have their own pass colours) and these accounts (`auth-service`), all with the password **`Passw0rd!`** (dev only):
 

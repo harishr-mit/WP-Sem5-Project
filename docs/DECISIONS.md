@@ -228,7 +228,7 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 
 **Consequences.** checkin-service (P5) and notification-service (P7) declare their inboxes with the same helper. Until P7, a dead-lettered message just sits in the DLQ (visible in the RabbitMQ UI) and is replayed by hand.
 
-- **P7 completion (owner, 2026-10-20; planned in `docs/plans/phase-7.md` §9, D16).** `common-messaging` adds ADMIN endpoints to every consumer (`GET /api/dead-letters`, replay one or all with the same `messageId` so the idempotent consumer applies it once, discard), routed by the gateway at `/api/admin/dead-letters/<service>/**`; an Admin · Dead letters portal page; a `deadLetters` health component that reports **WARNING** (HTTP 200, amber) while a DLQ isn't empty; and a `mitpass.dlq.messages{queue}` gauge for P8.
+- **P7 completion (owner, 2026-10-20; built: `docs/plans/phase-7.md` §9, §18; D16).** `common-messaging` adds ADMIN endpoints to every consumer (`GET /api/dead-letters`, replay one or all with the same `messageId` so the idempotent consumer applies it once, discard), routed by the gateway at `/api/admin/dead-letters/<service>/**`; an Admin · Dead letters portal page; a `deadLetters` health component that reports **WARNING** (HTTP 200, amber) while a DLQ isn't empty; and a `mitpass.dlq.messages{queue}` gauge for P8.
 
 ---
 
@@ -273,7 +273,7 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 
 ## D16: Live dashboard, notifications and offline scanning (Phase 7)
 
-*2026-10-20 · draft (owner answers to `docs/plans/phase-7.md` §17 Q1–Q12; details in the plan §4–§9). To be built in Phase 7*
+*2026-10-20 · accepted (owner answers to `docs/plans/phase-7.md` §17 Q1–Q12; details in the plan §4–§9). Built in Phase 7 (as built: plan §18)*
 
 **Decision.**
 - **Live push (owner, Q1).** checkin-service pushes a full `LiveSnapshot` to `/topic/events/{id}` over STOMP (`/ws`, behind the gateway), at most every 500 ms per event. **The portal relays it:** its server subscribes upstream with the organizer's access token on the handshake, and the browser connects to the portal's own `/portal-ws` with its session. No token reaches the browser (D9/D15 BFF rule). The broker is Spring's in-memory simple broker (one checkin-service instance; shortcut).
@@ -283,5 +283,7 @@ Architecture and tooling decisions, newest last. Each entry says what was chosen
 - **Recipients (owner, Q5).** No copy of registrations in notification-service: one-recipient messages carry the address (`RegistrationCancelled` gains `userEmail`, `userName`), and bulk mails read `GET /api/events/{id}/registrations` from event-service with notification-service's SERVICE identity (D7) at send time.
 - **`.ics` (owner, Q8).** Built by notification-service (iCal4j, `UID event-<id>@mitpass`, SEQUENCE grows on reschedule) for emails and a public `GET /api/notifications/events/{id}/calendar.ics`; the portal links to it.
 - **Offline scanning (owner, Q2, Q3, Q12).** The scanner checks a pass in the browser while offline (WebCrypto ES256, `exp`, event, session window, revocation list, manifest, already accepted on this phone), check-in only, and queues every attempt in IndexedDB. `POST /api/scans/batch` re-checks each item with the full pipeline, using `scannedAt` as the clock, in `scannedAt` order, idempotent on `(device_id, local_id)`. **The first check-in recorded wins**; a later one is `DUPLICATE_OFFLINE`, and attendance rows are never rewritten. `scannedAt` older than 12 h or more than 2 min ahead → `REJECTED_OFFLINE_CLOCK`. An offline item is accepted if the event is LIVE, or COMPLETED after `scannedAt`.
+
+**As built.** checkin-service: `LiveStats` (Redis sets for checked-in and inside passes, a hash for per-gate and 5-minute counts, a list for the ticker; rebuilt from PostgreSQL when missing or older than 60 s; Redis down → the database), `LiveFeedPublisher` (500 ms throttle), `WebSocketConfig` (`/ws`, SUBSCRIBE checked with `CheckinSecurity`, clients can't SEND, any origin because the handshake is token-authenticated: the same-origin default refused the gateway's forwarded handshake), `POST /api/scans/batch`, `GET /api/scans/manifest` (organizer or assigned volunteer), V2 (`scan_log.local_id`, `offline`). web-portal: `LiveRelay` + `LiveWebSocketConfig` (`/portal-ws`, same origin, ORGANIZER/ADMIN; the token refreshed in the handshake and kept server side), Live tab, `offline.js` + `scan-sw.js` (scope `/scan`), Admin · Dead letters. notification-service (:8085): `Mailer` claims `notification_log.dedup_key` in its own transaction and then sends, `IcsBuilder` (iCal4j 4.4), `ReminderJob` under ShedLock (JDBC, DB time), recipients from event-service with the SERVICE token. Deviations and the bugs found live: plan §18.
 
 **Consequences.** Two new result codes and the added fields are contracts (only ever added). A new browser-held data set (the offline bundle) holds public keys and pass numbers with first names, never a token; `NoTokensInPagesTest` covers it. Scaling checkin-service beyond one instance needs the RabbitMQ STOMP relay first.

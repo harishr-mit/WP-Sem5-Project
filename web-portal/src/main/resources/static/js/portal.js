@@ -5,9 +5,21 @@
  *  - [data-open-dialog="id"] opens that <dialog> instead of following the link or submitting; [data-close-dialog]
  *    closes it. The dialog's own form still posts confirmed=true, and the server still checks it (RL9).
  *  - HX-Trigger "toast" messages show as a flash at the top of the page.
+ *  - The theme switch with no saved choice: the page follows the system setting, which the server can't see, so it
+ *    always offered "dark". On a dark system it now offers "light" (one click changes the theme).
  */
 (function () {
     'use strict';
+
+    const themeForm = document.querySelector('form[action$="/preferences/theme"]');
+    if (themeForm && !document.documentElement.hasAttribute('data-theme')
+            && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        const button = themeForm.querySelector('button');
+        themeForm.querySelector('input[name=theme]').value = 'light';
+        button.textContent = '☀'; // the sun, as the server renders it for a dark choice
+        button.title = button.dataset.toLight;
+        button.setAttribute('aria-label', button.dataset.toLight);
+    }
 
     function meta(name) {
         const el = document.querySelector('meta[name="' + name + '"]');

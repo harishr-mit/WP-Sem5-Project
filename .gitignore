@@ -40,3 +40,6 @@ infra/certs/*.p12
 
 # Front-end tooling (run through npx, never installed globally)
 node_modules/
+
+# scripts/run-all.sh service logs
+logs/

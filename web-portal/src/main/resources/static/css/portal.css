@@ -432,3 +432,12 @@ body.scanner-body { background: var(--night); color: var(--scan-text); }
 .mt-0 { margin-top: 0; } .mt-4 { margin-top: var(--space-4); } .mt-5 { margin-top: var(--space-5); } .mb-0 { margin-bottom: 0; }
 .right { text-align: right; } .center { text-align: center; } .nowrap { white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* Dark from the system setting (no theme chosen): the same gold accents as an explicit dark choice above. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .bottombar a[aria-current="page"] { color: var(--gold); }
+    :root:not([data-theme="light"]) .btn--secondary, :root:not([data-theme="light"]) button.secondary { color: var(--gold); border-color: var(--gold); }
+    :root:not([data-theme="light"]) .badge--brand { color: var(--gold); }
+    :root:not([data-theme="light"]) .subnav a[aria-current="page"] { color: var(--gold); border-color: var(--gold); }
+    :root:not([data-theme="light"]) .errorpage__code { color: var(--gold); }
+}

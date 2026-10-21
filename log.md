@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-20 (Claude Opus 5.5) — **Phase 7 built and checked live; closing docs left (T09.12)**, branch `phase7`, uncommitted. Full `./mvnw clean verify` green (653 tests) before the live-run fixes; checkin 73 and portal 174 green after them. `ui-checks/p7.mjs`: all checks passed on the running stack. **Resume:** see the 2026-10-20 entry "T09.12 paused" below. Everything stopped (owner's session limit); Docker Desktop off. Nothing running; Docker Desktop off. Parked for after P8: `docs/REVIEW-LATER.md` (RL1–RL4, RL10, RL12, RL13 open; RL5–RL9, RL11 resolved).
+* **Last updated:** 2026-10-21 (Claude Opus 5.5) — **Phase 7 built and checked** on branch `phase7` (owner commit `4af1213` + this session's docs/scripts, uncommitted). 654 tests green, security matrix 509/509, `ui-checks/p7.mjs` all checks passed, `reminders.mjs` passed with two instances. **Left running for the owner** (owner's request): compose infra + all 8 services via `scripts/run-all.sh` (logs in `logs/`) + a second notification-service on :8095; stop with `bash scripts/stop-all.sh` and `docker compose -f infra/docker-compose.yml down`. Two-phone run parked for after P8 (RL14, owner); Tamil reviewed by the owner (fine); theme-switch bug fixed (2026-10-21). Next: the owner commits. Parked for after P8: `docs/REVIEW-LATER.md`.
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
@@ -133,7 +133,7 @@ Shared context for every agent working in this directory. Read this file **befor
     * [x] T08.14b: portal pass page: the code as large as the screen allows, tap for a full-screen white view; done when PassPagesTest green + Playwright phone screenshot
     * [x] T08.14c: scanner: native BarcodeDetector where supported, high camera resolution, continuous focus, zoom control; done when scanner.mjs green (fake camera)
     * [x] T08.14d: docs (PROJECT.md §P4, D12, plan §18, README phone demo tips), full `./mvnw verify`, owner retries the two-phone scan
-* [ ] T09: **Phase 7** — Real-time dashboard, notifications & offline scanning (PROJECT.md §P7; plan and "done when" checks: `docs/plans/phase-7.md` §15). Plan written 2026-10-20; Q1–Q12 answered by the owner, Q13–Q15 defaults. Waiting for the owner's pre-phase commit and go
+* [x] T09: **Phase 7** — Real-time dashboard, notifications & offline scanning (PROJECT.md §P7; plan and "done when" checks: `docs/plans/phase-7.md` §15). Plan written 2026-10-20; Q1–Q12 answered by the owner, Q13–Q15 defaults. Pre-phase commit `0ef21f7`, mid-run commit `4af1213` (owner). Done 2026-10-21; the two-phone run is parked (RL14)
   * [x] T09.1: Owner decisions recorded (PROJECT.md §3/§P7, DECISIONS D13 note + D16 draft) before code
   * [x] T09.2: common-messaging dead letters (list/replay/discard, WARNING health, gauge); pass/checkin adopt; gateway routes; matrix
   * [x] T09.3: Contracts (`RegistrationWaitlisted`, cancelled + email/name); event-service publishes; SERVICE on registrations list + static QR
@@ -145,7 +145,7 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T09.9: Portal relay + live dashboard page (Chart.js, ticker, gauge, gates, fallback poll) + Playwright
   * [x] T09.10: checkin batch sync + manifest (V2, DUPLICATE_OFFLINE, REJECTED_OFFLINE_CLOCK)
   * [x] T09.11: Portal offline scanner (service worker, bundle, IndexedDB, WebCrypto, Luhn, badge, sync) + Playwright offline
-  * [~] T09.12: Admin dead letters page + exit demo + docs
+  * [x] T09.12: Admin dead letters page + exit demo + docs
 * [ ] T10: **Phase 8** — Hardening, observability & showcase (PROJECT.md §P8)
 * [x] T11: UI mockup of the end app (visual only, no code) — https://claude.ai/artifact/WyLQJ9nh1AcMkVossG6WaH
 * [x] T12: Rename project PassPort → MITPass everywhere; point the docs at `MITPass App Screens.html` as the UI reference
@@ -199,6 +199,22 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-21 — Claude (Opus 5.5) — Theme switch on a dark system; two-phone run parked (RL14)
+
+* **Task:** owner: (1) the theme switch showed the moon on a dark system, the first click only turned it into a sun, the second went light; (2) park the two-phone run until after P8; (3) the Tamil text is fine.
+* **Status:** DONE
+* **Files:** `web-portal/src/main/resources/static/js/portal.js` (no saved theme + dark system → the switch posts "light" and shows the sun), `templates/layout.html` (`data-to-light` label on the switch), `static/css/portal.css` (the five `[data-theme=dark]` gold accents also under `prefers-color-scheme: dark` without `[data-theme=light]`), `web-portal/ui-checks/theme.mjs` (new) + README, `docs/REVIEW-LATER.md` (RL14), `PROJECT.md` §P7 status, `docs/plans/phase-7.md` §18.
+* **Details:** Cause: with no cookie the page follows the OS through CSS, but the server renders the switch as "switch to dark" because it can't see the OS setting. Portal 174 tests green; `theme.mjs` 5/5 (sun → light/moon → dark/sun; sub-tab gold in system dark; no page errors). The portal was restarted detached (`logs/web-portal.log`); the rest of the stack kept running.
+* **Notes / Errors:** Without JavaScript the switch still offers "dark" first on a dark system (one extra click), as before.
+
+### 2026-10-21 — Claude (Opus 5.5) — T09.12 done: reminders with two instances, docs, stack left running
+
+* **Task:** resume T09.12 after the pause (owner: "continue. leave it running for me at the end")
+* **Status:** DONE (owner's two-phone run and Tamil review open)
+* **Files:** `docs/plans/phase-7.md` §18 (as built: exit criteria, deviations, 8 bugs, closed, open); `docs/DECISIONS.md` (D16 accepted + as built, D13 note); `PROJECT.md` §P7 ticks + Status; `docs/security-matrix.md` (regenerated: 509 cells incl. notification-service, event-service SERVICE column, Phase 7 notes, gateway dead-letter and WebSocket routes); `README.md` (run-all/stop-all); `scripts/run-all.sh`, `scripts/stop-all.sh` (new: start every jar detached with logs in `logs/`, and stop them); `.gitignore` (`logs/`).
+* **Details:** Full `./mvnw clean verify`: the first run stopped at event-service's test compile (a `target/` emptied by the IDE build; known); the rerun of event, pass, checkin, notification and portal was green. Totals: 654 tests (common-web 27, common-security 13, security-test-support 17, common-messaging 29, common-pass 14, discovery 1, gateway 25, auth 59, event 136, pass 65, checkin 73, notification 21, portal 174). `reminders.mjs` with notification-service on :8085 and :8095 (10 s interval): each registration got its 1 h reminder exactly once. Final `p7.mjs`: all checks passed.
+* **Notes / Errors:** (1) `run-all.sh` exists because services started as this session's background tasks would stop with the session; the owner wanted them left running. Stage both new scripts with `git add --chmod=+x` when committing (AGENTS.md). (2) Seen in the screenshots, not P7: with dark mode from the system setting (no theme chosen), the active sub-tab keeps the light theme's maroon on the dark ground; `portal.css` only overrides it for `[data-theme=dark]`. Left for the owner (plan §18 Open). (3) Running now: Docker Desktop, compose (postgres, rabbitmq, redis, mailpit), discovery :8761, auth :8081, event :8082, pass :8083, checkin :8084, notification :8085 + :8095, gateway :8080, portal :8090.
 
 ### 2026-10-20 — Claude (Opus 5.5) — T09.12 paused: live exit checks done, docs left
 

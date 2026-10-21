@@ -1,7 +1,7 @@
 # Security matrix
 
 Who may call what, as measured by the tests. Each cell is one real request through the real filter chain and method
-security (`SecurityMatrixTest` in auth-, event-, pass- and checkin-service; tokens from the services' own keys or the test key).
+security (`SecurityMatrixTest` in auth-, event-, pass-, checkin- and notification-service; tokens from the services' own keys or the test key).
 Regenerate with `./mvnw verify`; the tables land in `services/*/target/security-matrix/*.md`. A new endpoint belongs in
 its service's matrix test.
 
@@ -14,7 +14,7 @@ endpoint get 401, logged-in callers without the right role get 403.
 The gateway in front of both adds its own pre-check (no token or a bad token → 401 at the edge, public paths pass):
 see `platform/api-gateway/.../EdgeSecurityTest`.
 
-Last generated: 2026-10-18 (Phase 6), 410 / 410 cells as expected (auth-service 90, event-service 168, pass-service 88, checkin-service 64), plus the gateway's own admin endpoint below. Since Phase 5 a 5xx in any cell fails the matrix (it would hide whether security let the call through).
+Last generated: 2026-10-21 (Phase 7), 509 / 509 cells as expected (auth-service 90, event-service 196, pass-service 104, checkin-service 104, notification-service 15), plus the gateway's own endpoints below. Since Phase 5 a 5xx in any cell fails the matrix (it would hide whether security let the call through).
 
 **Draft events (Phase 6, owner decision Q12, D15):** the event in event-service's matrix is a DRAFT, so `GET /api/events/{id}` and `/sessions` answer 404 to everyone except its organizer (the owner column) and admins. 404 is the business answer "no such event" (a 403 would confirm that the draft exists), so those cells count as allowed.
 
@@ -27,6 +27,8 @@ pass-service; everything else is 403 for it.
 
 **checkin-service:** organizers may call the scan endpoints too (RL11: any gate of their own events). An unassigned volunteer or organizer passes security on the scan endpoints and is then refused by the
 pipeline's first step (`403 scan/unauthorized-scanner`, a business answer), so those cells count as allowed.
+
+**Phase 7:** the `/api/dead-letters` rows come from `common-messaging` in every consumer (pass-, checkin-, notification-service); the matrix stubs `DeadLetters`, so an admin's replay of a made-up id answers 404 (no such message) and a discard 204/404. event-service's `service (notification)` column: notification-service reads an event's registrations for bulk emails; pass-service's static QR now allows `SERVICE` (the pass email). checkin-service's `/api/scans/batch` behaves as `/api/scans` (an unassigned caller passes security, then each scan is refused by the pipeline inside a 200); `/api/scans/manifest` is for the event's organizer and its assigned volunteers.
 
 ### auth-service
 
@@ -55,38 +57,38 @@ pipeline's first step (`403 scan/unauthorized-scanner`, a business answer), so t
 
 ### event-service
 
-| Endpoint | Rule | anonymous | student | volunteer | organizer (owner) | organizer (other) | admin |
-|---|---|---|---|---|---|---|---|
-| `GET /api/events` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
-| `GET /api/events/{id}` | public | ✅ 404 | ✅ 404 | ✅ 404 | ✅ 200 | ✅ 404 | ✅ 200 |
-| `POST /api/events` | organizer (owner), organizer (other), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 201 | ✅ 201 |
-| `PUT /api/events/{id}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
-| `DELETE /api/events/{id}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 409 | ✅ 403 | ✅ 409 |
-| `GET /api/events/{id}/sessions` | public | ✅ 404 | ✅ 404 | ✅ 404 | ✅ 200 | ✅ 404 | ✅ 200 |
-| `POST /api/events/{id}/sessions` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 403 | ✅ 201 |
-| `PUT /api/events/{id}/sessions/{sid}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
-| `DELETE /api/events/{id}/sessions/{sid}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 204 | ✅ 403 | ✅ 204 |
-| `GET /api/venues` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
-| `POST /api/venues` | organizer (owner), organizer (other), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 201 | ✅ 201 |
-| `PUT /api/venues/{id}` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 |
-| `GET /api/categories` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
-| `GET /api/events/{id}/gates` | any logged-in user | ✅ 401 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
-| `POST /api/events/{id}/gates` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 403 | ✅ 201 |
-| `DELETE /api/events/{id}/gates/{gid}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 204 | ✅ 403 | ✅ 204 |
-| `GET /api/events/{id}/volunteers` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
-| `POST /api/events/{id}/volunteers` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 403 | ✅ 201 |
-| `DELETE /api/events/{id}/volunteers/{vid}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 204 | ✅ 403 | ✅ 204 |
-| `GET /api/volunteers/me/assignments` | volunteer | ✅ 401 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 |
-| `POST /api/events/{id}/transitions` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
-| `GET /api/events/{id}/history` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
-| `GET /api/events/{id}/registrations` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
-| `GET /api/events/{id}/eligibility` | any logged-in user | ✅ 401 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
-| `POST /api/registrations` | student, volunteer | ✅ 401 | ✅ 409 | ✅ 409 | ✅ 403 | ✅ 403 | ✅ 403 |
-| `GET /api/registrations/me` | any logged-in user | ✅ 401 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
-| `GET /api/registrations/{id}` | student, organizer (owner), admin | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 |
-| `POST /api/registrations/{id}/cancel` | student, organizer (owner), admin | ✅ 401 | ✅ 409 | ✅ 403 | ✅ 409 | ✅ 403 | ✅ 409 |
+| Endpoint | Rule | anonymous | student | volunteer | organizer (owner) | organizer (other) | admin | service (notification) |
+|---|---|---|---|---|---|---|---|---|
+| `GET /api/events` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `GET /api/events/{id}` | public | ✅ 404 | ✅ 404 | ✅ 404 | ✅ 200 | ✅ 404 | ✅ 200 | ✅ 404 |
+| `POST /api/events` | organizer (owner), organizer (other), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 201 | ✅ 201 | ✅ 403 |
+| `PUT /api/events/{id}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `DELETE /api/events/{id}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 409 | ✅ 403 | ✅ 409 | ✅ 403 |
+| `GET /api/events/{id}/sessions` | public | ✅ 404 | ✅ 404 | ✅ 404 | ✅ 200 | ✅ 404 | ✅ 200 | ✅ 404 |
+| `POST /api/events/{id}/sessions` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 403 | ✅ 201 | ✅ 403 |
+| `PUT /api/events/{id}/sessions/{sid}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `DELETE /api/events/{id}/sessions/{sid}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 204 | ✅ 403 | ✅ 204 | ✅ 403 |
+| `GET /api/venues` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `POST /api/venues` | organizer (owner), organizer (other), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 201 | ✅ 201 | ✅ 403 |
+| `PUT /api/venues/{id}` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `GET /api/categories` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `GET /api/events/{id}/gates` | any logged-in user | ✅ 401 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `POST /api/events/{id}/gates` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 403 | ✅ 201 | ✅ 403 |
+| `DELETE /api/events/{id}/gates/{gid}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 204 | ✅ 403 | ✅ 204 | ✅ 403 |
+| `GET /api/events/{id}/volunteers` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `POST /api/events/{id}/volunteers` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 201 | ✅ 403 | ✅ 201 | ✅ 403 |
+| `DELETE /api/events/{id}/volunteers/{vid}` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 204 | ✅ 403 | ✅ 204 | ✅ 403 |
+| `GET /api/volunteers/me/assignments` | volunteer | ✅ 401 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 |
+| `POST /api/events/{id}/transitions` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `GET /api/events/{id}/history` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `GET /api/events/{id}/registrations` | organizer (owner), admin, service (notification) | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 200 |
+| `GET /api/events/{id}/eligibility` | any logged-in user | ✅ 401 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `POST /api/registrations` | student, volunteer | ✅ 401 | ✅ 409 | ✅ 409 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 |
+| `GET /api/registrations/me` | any logged-in user | ✅ 401 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `GET /api/registrations/{id}` | student, organizer (owner), admin | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `POST /api/registrations/{id}/cancel` | student, organizer (owner), admin | ✅ 401 | ✅ 409 | ✅ 403 | ✅ 409 | ✅ 403 | ✅ 409 | ✅ 403 |
 
-168 / 168 cells as expected.
+196 / 196 cells as expected.
 
 ### pass-service
 
@@ -97,29 +99,46 @@ pipeline's first step (`403 scan/unauthorized-scanner`, a business answer), so t
 | `GET /api/passes/{id}` | student (holder), organizer (owner), admin, service (checkin) | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 200 |
 | `GET /api/passes/{id}/history` | student (holder), organizer (owner), admin | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `GET /api/passes/{id}/qr/live` | student (holder) | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 |
-| `GET /api/passes/{id}/qr/static` | student (holder) | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 |
+| `GET /api/passes/{id}/qr/static` | student (holder), service (checkin) | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 |
 | `GET /api/passes/{id}/ticket.pdf` | student (holder) | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 |
 | `POST /api/passes/{id}/revoke` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `GET /api/revocations` | volunteer, organizer (owner), organizer (other), admin, service (checkin) | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
 | `GET /.well-known/pass-jwks.json` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
 | `POST /api/passes/keys/rotate` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `GET /api/dead-letters` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `DELETE /api/dead-letters/{messageId}` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 404 | ✅ 403 |
 
-88 / 88 cells as expected.
+104 / 104 cells as expected.
 
 ### checkin-service
 
 | Endpoint | Rule | anonymous | student | volunteer (assigned) | volunteer (not assigned) | organizer (owner) | organizer (other) | admin | service token |
 |---|---|---|---|---|---|---|---|---|---|
 | `POST /api/scans` | volunteer (assigned), volunteer (not assigned), organizer (owner), organizer (other) | ✅ 401 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 |
+| `POST /api/scans/batch` | volunteer (assigned), volunteer (not assigned), organizer (owner), organizer (other) | ✅ 401 | ✅ 403 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 403 | ✅ 403 |
+| `GET /api/scans/manifest` | volunteer (assigned), organizer (owner) | ✅ 401 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 |
 | `GET /api/scans/lookup` | volunteer (assigned), volunteer (not assigned), organizer (owner), organizer (other) | ✅ 401 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 |
 | `GET /api/attendance/events/{id}/summary` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `GET /api/attendance/events/{id}/live` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `GET /api/attendance/events/{id}/attendees` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `GET /api/attendance/events/{id}/export.csv` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `GET /api/attendance/events/{id}/certificates` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `POST /api/attendance/events/{id}/sync` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `GET /api/attendance/me` | any logged-in user | ✅ 401 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `GET /api/dead-letters` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `DELETE /api/dead-letters/{messageId}` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 404 | ✅ 403 |
 
-64 / 64 cells as expected.
+104 / 104 cells as expected.
+
+### notification-service
+
+| Endpoint | Rule | anonymous | student | organizer | admin | service |
+|---|---|---|---|---|---|---|
+| `GET /api/notifications/events/{id}/calendar.ics` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
+| `GET /api/dead-letters` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `POST /api/dead-letters/{messageId}/replay` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 404 | ✅ 403 |
+
+15 / 15 cells as expected.
 
 ### api-gateway (its own endpoints)
 
@@ -129,3 +148,5 @@ health overview (D15), so here the gateway owns the role rule. Measured by `Admi
 | Endpoint | Rule | anonymous | student | organizer | admin |
 |---|---|---|---|---|---|
 | `GET /api/admin/health` | ADMIN | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 |
+| `/api/admin/dead-letters/{service}/**` (P7, routed to the consumer's `/api/dead-letters/**`) | ADMIN | ✅ 401 | ✅ 403 | ✅ 403 | ✅ routed |
+| `GET /ws/checkin` (P7, WebSocket to checkin-service `/ws`; only the portal's server connects) | any valid token | ✅ 401 | ✅ routed | ✅ routed | ✅ routed |
