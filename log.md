@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-21 (Claude Opus 5.5) — **Phase 7 done and merged into `main`** (PR #8, CI green on push and pull_request after two flaky-test fixes). 654 tests, security matrix 509/509. Two-phone run parked (RL14). **Next: Phase 8 (T10)** in a new session: ask the owner about a pre-phase commit, then plan `docs/plans/phase-8.md` (no code before the owner's go). The stack may still be running from the owner's check: `bash scripts/stop-all.sh` and `docker compose -f infra/docker-compose.yml down` stop it. Parked for after P8: `docs/REVIEW-LATER.md` (RL1–RL4, RL10, RL12–RL14 open).
+* **Last updated:** 2026-10-24 (Claude Opus 5.5) — **Phase 8 planned** (`docs/plans/phase-8.md`, branch `phase8`; owner answers K1–K17, defaults Q1–Q6). Next: owner's go + pre-phase commit, then T10.1 (record decisions in PROJECT.md / D17 / REVIEW-LATER) before any code. Earlier: 2026-10-21 — **Phase 7 done and merged into `main`** (PR #8, CI green on push and pull_request after two flaky-test fixes). 654 tests, security matrix 509/509. Two-phone run parked (RL14). **Next: Phase 8 (T10)** in a new session: ask the owner about a pre-phase commit, then plan `docs/plans/phase-8.md` (no code before the owner's go). The stack may still be running from the owner's check: `bash scripts/stop-all.sh` and `docker compose -f infra/docker-compose.yml down` stop it. Parked for after P8: `docs/REVIEW-LATER.md` (RL1–RL4, RL10, RL12–RL14 open).
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
@@ -146,7 +146,27 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T09.10: checkin batch sync + manifest (V2, DUPLICATE_OFFLINE, REJECTED_OFFLINE_CLOCK)
   * [x] T09.11: Portal offline scanner (service worker, bundle, IndexedDB, WebCrypto, Luhn, badge, sync) + Playwright offline
   * [x] T09.12: Admin dead letters page + exit demo + docs
-* [ ] T10: **Phase 8** — Hardening, observability & showcase (PROJECT.md §P8)
+* [ ] T10: **Phase 8** — Hardening, observability & showcase (PROJECT.md §P8; plan and "done when" checks: `docs/plans/phase-8.md` §15). Plan written 2026-10-24 on branch `phase8`; K1–K17 answered by the owner (plan §4/§17), Q1–Q6 are defaults. Owner pulled RL1, RL2, RL3, RL10, RL12, RL13 into this phase. Waiting for the owner's go + pre-phase commit
+  * [ ] T10.1: Owner decisions recorded (PROJECT.md §3/§P8, DECISIONS D17 draft, REVIEW-LATER notes) before code
+  * [ ] T10.2: Management ports (10000 + port), prometheus endpoint, probes, Eureka metadata; admin health follows
+  * [ ] T10.3: Tracing (Zipkin) + AMQP observation + outbox `traceparent`; JSON logs via env
+  * [ ] T10.4: Custom meters: scans by result, registrations, outbox lag
+  * [ ] T10.5: Resilience4j on every internal client (breaker + timeout; one retry on GETs)
+  * [ ] T10.6: Gateway Redis rate limits (login by XFF IP, scans by sub) + portal XFF + 429 ProblemDetail
+  * [ ] T10.7: Trigram search (auth V5, event V10) + EXPLAIN test
+  * [ ] T10.8: RL1 per-event waitlist setting (event V9, default off) + portal
+  * [ ] T10.9: RL3 undo LIVE refused once checked in (checkin SERVICE read, event-service client)
+  * [ ] T10.10: RL10 event-service admin edges (un-cancel, force LIVE, reopen) + admin edits in any state + portal
+  * [ ] T10.11: RL10 pass-service re-issue (V3 partial unique index, reverse saga, single re-issue)
+  * [ ] T10.12: RL10 ban/unban (auth) + portal
+  * [ ] T10.13: RL12 void check-in (checkin V3, `AttendanceVoided`, pass-service handler, portal)
+  * [ ] T10.14: Prometheus config + provisioned Grafana dashboard
+  * [ ] T10.15: Multi-stage Dockerfile, `.dockerignore`, root compose (include infra), healthchecks
+  * [ ] T10.16: `bulk-seed` profile (DataFaker, `SeedPeople`)
+  * [ ] T10.17: `e2e-tests` module + CI job
+  * [ ] T10.18: `load-tests` (Gatling) + report in `docs/load-test/`
+  * [ ] T10.19: Docs (plan §14), ARCHITECTURE.md + concept table, DEMO_SCRIPT.md, Playwright `p8.mjs`
+  * [ ] T10.20: Rehearsal on a fresh clone (agent), then the owner's live run + RL14
 * [x] T11: UI mockup of the end app (visual only, no code) — https://claude.ai/artifact/WyLQJ9nh1AcMkVossG6WaH
 * [x] T12: Rename project PassPort → MITPass everywhere; point the docs at `MITPass App Screens.html` as the UI reference
 * [x] T13: Project initialization: toolchain + repo skeleton
@@ -199,6 +219,14 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude (Opus 5.5) — T10: Phase 8 planned, owner decisions collected
+
+* **Task:** owner: "move onto phase 8, prepare and plan, no code yet, ask all decisions"
+* **Status:** DONE (planning only; T10.1+ waiting for the owner's go and the pre-phase commit)
+* **Files:** created `docs/plans/phase-8.md`; edited `log.md` (status, T10 sub-tasks, this entry). No code, no other docs yet (PROJECT.md / DECISIONS / REVIEW-LATER are T10.1, as in P7).
+* **Details:** Oriented on log, PROJECT.md §P8, REVIEW-LATER, the code (what exists: actuator, Testcontainers in all services, DLQ gauge, outbox headers JSONB, `User.enabled`, admin all-events view, `LIKE '%q%'` user search). Six question rounds; answers in plan §4 (K1–K17) and §17. The owner pulled RL1/RL2/RL3/RL10/RL12/RL13 into P8 and added admin powers (force LIVE, reopen, re-issue a pass, edit any state, ban, indexed user/event search; "remove user" dropped for ban only). RL1 answer adds a per-event waitlist setting (off by default). Confirmed the owner's assumption for RL13: My registrations shows past registrations, each linked to its event page.
+* **Notes / Errors:** The `phase8` branch already existed at `main`'s commit (`b2048f4`); work continues there. Two plan facts differ from PROJECT.md: a scan never calls pass-service over HTTP (trace crosses RabbitMQ instead, K4), and logins reach the gateway from the portal's IP (portal forwards XFF, K6).
 
 ### 2026-10-21 — Claude (Opus 5.5) — CI: order-dependent PassKeyServiceTest (Phase 4)
 
