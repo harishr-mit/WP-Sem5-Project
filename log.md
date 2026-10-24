@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-24 (Claude Sonnet 5.5, advisor Opus 5.5) — **Phase 8 built, nothing committed yet (owner: commit when ready).** Full `./mvnw verify` green (16 modules, 700 tests); stack verified from a clean copy of the committable tree; load test 0 failures (p95 104 ms); e2e + Playwright green. Left for the owner: commit/PR, the live rehearsal with the two-phone check (RL14), Tamil text review (new keys listed in the 2026-10-24 entries), then `docs/REVIEW-LATER.md` (T26; RL4 (e), RL14 open). Nothing is running; Docker images/cache from the builds are local (`docker system prune` frees ~14 GB). Earlier: **Phase 8 planned** (`docs/plans/phase-8.md`, branch `phase8`; owner answers K1–K17, defaults Q1–Q6). Next: owner's go + pre-phase commit, then T10.1 (record decisions in PROJECT.md / D17 / REVIEW-LATER) before any code. Earlier: 2026-10-21 — **Phase 7 done and merged into `main`** (PR #8, CI green on push and pull_request after two flaky-test fixes). 654 tests, security matrix 509/509. Two-phone run parked (RL14). **Next: Phase 8 (T10)** in a new session: ask the owner about a pre-phase commit, then plan `docs/plans/phase-8.md` (no code before the owner's go). The stack may still be running from the owner's check: `bash scripts/stop-all.sh` and `docker compose -f infra/docker-compose.yml down` stop it. Parked for after P8: `docs/REVIEW-LATER.md` (RL1–RL4, RL10, RL12–RL14 open).
+* **Last updated:** 2026-10-24 (Claude Sonnet 5.5, advisor Opus 5.5) — **Phase 8 done: committed (`68316c6` on `phase8`), pushed and merged by the owner; all tests passed.** All eight phases are built. Left for a later session (T37–T40 and T26 below): the live demo with two phones (RL14), the login rate-limit decision, the Tamil review of the new keys, and the REVIEW-LATER discussion. Nothing is running. Local artifacts: Docker images/cache (~14 GB, `docker system prune -a`) and, in WSL Ubuntu, `~/mitpass-linux` + `~/.m2` (~450 MB). Earlier: **Phase 8 planned** (`docs/plans/phase-8.md`, branch `phase8`; owner answers K1–K17, defaults Q1–Q6). Next: owner's go + pre-phase commit, then T10.1 (record decisions in PROJECT.md / D17 / REVIEW-LATER) before any code. Earlier: 2026-10-21 — **Phase 7 done and merged into `main`** (PR #8, CI green on push and pull_request after two flaky-test fixes). 654 tests, security matrix 509/509. Two-phone run parked (RL14). **Next: Phase 8 (T10)** in a new session: ask the owner about a pre-phase commit, then plan `docs/plans/phase-8.md` (no code before the owner's go). The stack may still be running from the owner's check: `bash scripts/stop-all.sh` and `docker compose -f infra/docker-compose.yml down` stop it. Parked for after P8: `docs/REVIEW-LATER.md` (RL1–RL4, RL10, RL12–RL14 open).
 * **Project:** MITPass — College Event Pass System. Students register for campus events, receive a cryptographically signed QR pass, volunteers scan it at the gate, and attendance is recorded live. Built as a Java / Spring microservices system to demonstrate Spring MVC, REST, JPA/Hibernate, authentication, authorization, QR generation & verification, transactional DB operations, state management and microservice architecture.
 * **Plan:** `PROJECT.md` — description, architecture, tech stack, and an 8-phase roadmap (each phase has deliverables, concepts demonstrated, and exit criteria).
 * **UI reference:** `MITPass App Screens.html` (repo root): mockup of the 7-screen flow. A rough guide for flow and look, not a spec; the owner updates it. How to use it: `PROJECT.md` §2 "UI reference".
@@ -189,6 +189,10 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T24: Plan Phase 3 → `docs/plans/phase-3.md` + T05 sub-tasks (no code)
 * [x] T25: `docs/REVIEW-LATER.md` (parked questions: RL1 waitlist after closing, RL2 manual COMPLETED, RL3 undo LIVE after check-ins) + PROJECT.md "After P8" line
 * [ ] T26: **After P8:** go through `docs/REVIEW-LATER.md` with the owner, item by item
+* [ ] T37: **Owner:** run the live demo ([docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)) with two real phones: camera scan, offline mode (RL14), the live dashboard; read Grafana and Zipkin by eye. Not run by the agent: plan §18 #8 lists exactly what was and wasn't exercised. (From the 2026-10-24 session; owner: "we'll do 3–6 later")
+* [ ] T38: **Owner decision:** the gateway's login limit (10/min, burst 5 per address, the Q1 default) vs. a presenter switching accounts on one laptop: keep, or raise the root compose default (`LOGIN_BURST_CAPACITY` / `LOGIN_REPLENISH_RATE` already override it)
+* [ ] T39: **Owner:** review the Tamil drafts of the new keys (`event.closedWaitlist`, `event.fullNoWaitlist`, `eventForm.waitlist`, the `action.*` / `consequence.*` additions, `reissue.*`, `admin.ban*` / `admin.unban*`, `void.*`; listed in the 2026-10-24 log entries for T10.8–T10.13)
+* [ ] T40: **Optional:** the full `./mvnw verify` on Linux (needs Docker Desktop's WSL integration for Ubuntu) and watching the flaky `AuthFlowTests.signUpVerifyLoginRefreshAndCatchReuse` in CI; note for Linux without `unzip`: README "Maven" row
 * [x] T27: Plan Phase 4 → `docs/plans/phase-4.md` + T06 sub-tasks (no code)
 * [x] T28: `docs/REVIEW-LATER.md` RL4: check the dead-letter handling end to end after P8 (owner request)
 
@@ -219,6 +223,14 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** what changed and how it was verified
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude (Sonnet 5.5) — Session end: Phase 8 merged, follow-ups parked
+
+* **Task:** owner: "i commited pushed and merged. all tests passed. we'll do 3-6 later. mark it and let us end this session"
+* **Status:** DONE
+* **Files:** `log.md` only (Current Status; new tasks T37–T40; T26 stays open).
+* **Details:** Phase 8 is merged by the owner (commit `68316c6`, "phase 8: the last step"; CI green per the owner). The four owner items from the finish (live two-phone demo, login-limit decision, Tamil review, REVIEW-LATER) are recorded as T37–T39 and T26; T40 is optional.
+* **End of run:** nothing running (0 containers, no listening ports, Docker Desktop and WSL stopped); no background tasks. This log edit is the only uncommitted change.
 
 ### 2026-10-24 — Claude (Sonnet 5.5) — Linux check through WSL (owner: "this has wsl, so check it")
 
