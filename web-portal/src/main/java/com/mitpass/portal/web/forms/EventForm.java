@@ -92,6 +92,8 @@ public class EventForm {
 
     private boolean reentryAllowed;
 
+    private boolean waitlistEnabled;
+
     @Min(1)
     @Max(50)
     private Integer certificateMinSessions;
@@ -134,6 +136,7 @@ public class EventForm {
             form.passColor = event.passColor();
         }
         form.reentryAllowed = Boolean.TRUE.equals(event.reentryAllowed());
+        form.waitlistEnabled = Boolean.TRUE.equals(event.waitlistEnabled());
         form.certificateMinSessions = event.certificateMinSessions();
         if (event.sessions() != null) {
             for (Session s : event.sessions()) {
@@ -172,6 +175,7 @@ public class EventForm {
         body.put("staticQrAllowed", staticQrAllowed);
         body.put("passColor", useDefaultColor || passColor == null || passColor.isBlank() ? null : passColor);
         body.put("reentryAllowed", reentryAllowed);
+        body.put("waitlistEnabled", waitlistEnabled);
         body.put("certificateMinSessions", certificateMinSessions);
         if (withSessions) {
             body.put("sessions", sessions.stream().map(SessionRow::toRequest).toList());
@@ -406,6 +410,14 @@ public class EventForm {
 
     public void setReentryAllowed(boolean reentryAllowed) {
         this.reentryAllowed = reentryAllowed;
+    }
+
+    public boolean isWaitlistEnabled() {
+        return waitlistEnabled;
+    }
+
+    public void setWaitlistEnabled(boolean waitlistEnabled) {
+        this.waitlistEnabled = waitlistEnabled;
     }
 
     public Integer getCertificateMinSessions() {

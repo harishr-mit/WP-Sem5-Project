@@ -4,6 +4,7 @@ import com.mitpass.pass.domain.Pass;
 import com.mitpass.pass.domain.PassStatus;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,7 +22,16 @@ public interface PassRepository extends JpaRepository<Pass, UUID> {
     @EntityGraph(attributePaths = "event")
     Optional<Pass> findDetailedById(UUID id);
 
-    Optional<Pass> findByRegistrationId(UUID registrationId);
+    List<Pass> findAllByRegistrationId(UUID registrationId);
+
+    /**
+     * The registration's current pass: its valid one, else the latest. A registration can have several since passes
+     * are re-issued when an admin brings an event back (RL10); only one is ever valid (uk_pass_registration_valid).
+     */
+    default Optional<Pass> findByRegistrationId(UUID registrationId) {
+        return findAllByRegistrationId(registrationId).stream()
+                .max(Comparator.comparing((Pass p) -> p.getStatus().isValid()).thenComparing(Pass::getIssuedAt));
+    }
 
     boolean existsByRegistrationId(UUID registrationId);
 

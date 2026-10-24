@@ -73,6 +73,12 @@ public class Pass extends AuditableEntity {
 
     protected Pass() {}
 
+    /** RL12: every check-in of the pass was voided, so it counts as never used. */
+    public void clearCheckIn() {
+        checkedInAt = null;
+        usedAt = null;
+    }
+
     public Pass(
             UUID id,
             String passNumber,

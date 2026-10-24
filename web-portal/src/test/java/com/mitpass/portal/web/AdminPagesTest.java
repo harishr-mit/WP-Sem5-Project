@@ -141,6 +141,43 @@ class AdminPagesTest {
                 .andExpect(flash().attribute("error", containsString("your own admin role")));
     }
 
+    /** RL10: a ban is confirmed first; the page then shows it and offers to lift it. */
+    @Test
+    void banningNeedsConfirmedAndThePageShowsTheBan() throws Exception {
+        UserProfile k = user(KARTHIK, "Karthik S", List.of("STUDENT"), false);
+        UserProfile banned = new UserProfile(
+                k.id(),
+                k.email(),
+                k.fullName(),
+                k.department(),
+                k.year(),
+                k.registerNumber(),
+                k.roles(),
+                true,
+                false,
+                k.createdAt(),
+                null,
+                true);
+        given(gateway.setBanned(KARTHIK, true)).willReturn(banned);
+
+        mvc.perform(post("/admin/users/{id}/ban", KARTHIK)
+                        .with(authentication(TestTokens.login(admin)))
+                        .with(csrf()))
+                .andExpect(flash().attribute("error", "Please confirm first."));
+        verify(gateway, never()).setBanned(KARTHIK, true);
+        mvc.perform(post("/admin/users/{id}/ban", KARTHIK)
+                        .with(authentication(TestTokens.login(admin)))
+                        .with(csrf())
+                        .param("confirmed", "true"))
+                .andExpect(flash().attribute("message", "Karthik S is banned."));
+
+        given(gateway.user(KARTHIK)).willReturn(banned);
+        mvc.perform(get("/admin/users/{id}", KARTHIK).with(authentication(TestTokens.login(admin))))
+                .andExpect(content().string(containsString(">Banned<")))
+                .andExpect(content().string(containsString(">Lift ban<")))
+                .andExpect(content().string(not(containsString(">Active<"))));
+    }
+
     @Test
     void endingSessionsAndRotatingKeysNeedConfirmed() throws Exception {
         mvc.perform(post("/admin/users/{id}/sessions/end", KARTHIK)

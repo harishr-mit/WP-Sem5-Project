@@ -185,6 +185,7 @@
             <div class="checks" style="flex-direction:column;align-items:flex-start">
                 <label><input type="checkbox" th:field="*{staticQrAllowed}"> <span th:text="#{eventForm.staticQr}">Printed ticket gets a QR</span></label>
                 <label><input type="checkbox" th:field="*{reentryAllowed}"> <span th:text="#{eventForm.reentry}">Allow re-entry</span></label>
+                <label><input type="checkbox" th:field="*{waitlistEnabled}"> <span th:text="#{eventForm.waitlist}">Keep a waitlist</span></label>
             </div>
             <div class="form__row form__row--2">
                 <div class="field" th:classappend="${#fields.hasErrors('passColor')} ? 'field--error'">

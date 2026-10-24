@@ -6,6 +6,7 @@ import com.mitpass.checkin.domain.ScanLog;
 import com.mitpass.checkin.domain.ScanResult;
 import com.mitpass.checkin.service.ScanOutcome.Attendee;
 import com.mitpass.checkin.verify.ScanContext;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -17,9 +18,17 @@ import org.springframework.stereotype.Component;
 public class ScanOutcomes {
 
     private final DateTimeFormatter clock;
+    private final MeterRegistry meters;
 
-    public ScanOutcomes(CheckinProperties properties) {
+    public ScanOutcomes(CheckinProperties properties, MeterRegistry meters) {
         this.clock = DateTimeFormatter.ofPattern("HH:mm").withZone(properties.timeZone());
+        this.meters = meters;
+    }
+
+    /** {@code mitpass_scans_total{result}}: scans/min by result on the Grafana dashboard (D17). */
+    private ScanResult counted(ScanResult result) {
+        meters.counter("mitpass.scans", "result", result.name()).increment();
+        return result;
     }
 
     String time(Instant instant) {
@@ -61,7 +70,7 @@ public class ScanOutcomes {
         boolean sessionOpen = scan.session() != null && scan.session().open();
         return new ScanOutcome(
                 scan.scanId(),
-                result,
+                counted(result),
                 result.message(values),
                 scan.event() == null ? null : scan.event().id(),
                 scan.event() == null ? null : scan.event().code(),
@@ -79,7 +88,7 @@ public class ScanOutcomes {
     ScanOutcome as(ScanOutcome outcome, ScanResult result) {
         return new ScanOutcome(
                 outcome.scanId(),
-                result,
+                counted(result),
                 result.message(
                         outcome.attendee() == null
                                 ? Map.of()

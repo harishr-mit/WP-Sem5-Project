@@ -97,13 +97,19 @@
                     <th:block th:if="${eligibility.eligible()}">
                         <p class="ok-text mt-0"
                            th:text="${currentUser.department() != null} ? #{event.eligibleAs(${currentUser.department()} + (${currentUser.year() != null} ? ' · ' + #{common.year(${currentUser.year()})} : ''))} : #{event.eligible}">You're eligible: CSE · 3rd year</p>
-                        <p class="callout callout--warn" th:if="${eligibility.seatsLeft() == 0}"
+                        <th:block th:with="full=${eligibility.seatsLeft() == 0}, waits=${eligibility.onlyWaitlist() or (full and event.hasWaitlist())}">
+                        <p class="callout callout--warn" th:if="${eligibility.onlyWaitlist()}"
+                           th:text="#{event.closedWaitlist(${eligibility.waitlistCount()})}">Registration has closed, but you can join the waitlist.</p>
+                        <p class="callout callout--warn" th:if="${!eligibility.onlyWaitlist() and full and event.hasWaitlist()}"
                            th:text="#{event.fullWaitlist(${eligibility.waitlistCount()})}">Full: you'll join the waitlist.</p>
-                        <form th:action="@{/events/{id}/register(id=${event.id()})}" method="post">
+                        <p class="callout callout--warn" th:if="${!eligibility.onlyWaitlist() and full and !event.hasWaitlist()}"
+                           th:text="#{event.fullNoWaitlist}">This event is full and has no waitlist.</p>
+                        <form th:unless="${full and !waits}" th:action="@{/events/{id}/register(id=${event.id()})}" method="post">
                             <input type="hidden" name="idempotencyKey" th:value="${idempotencyKey}">
                             <button type="submit" class="btn--block"
-                                    th:text="${eligibility.seatsLeft() == 0} ? #{event.joinWaitlist} : #{event.register}">Register</button>
+                                    th:text="${waits} ? #{event.joinWaitlist} : #{event.register}">Register</button>
                         </form>
+                        </th:block>
                     </th:block>
                     <th:block th:if="${!eligibility.eligible()}">
                         <p class="err-text mt-0" th:text="#{event.notEligible}">You can't register:</p>

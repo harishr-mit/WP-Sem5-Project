@@ -15,6 +15,8 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 
 *2026-10-15 · OPEN · from: Phase 3 plan §10, owner asked to park it here*
 
+**Owner, 2026-10-24: pulled into P8 (T10.8).** Option (b) with a twist: a per-event `waitlistEnabled` setting, off by default. With it on, joining the waitlist works after closing until LIVE; with it off, a full or closed event refuses. Turning it off while anyone waits → 422. Existing events: on only where someone is waitlisted. D17.
+
 **Question.** The mockup's event screen (screen 2) says "Registration closes Thu 15 Oct, 23:59. After that, you can join the waitlist." In the plan, the waitlist exists only while registration is open and the event is full. After closing, nobody can register or join the waitlist.
 
 **Built for now.** The plan's rule. The portal's event page says "Full: you'll join the waitlist" while registration is open, and "Registration closed" after that.
@@ -23,7 +25,9 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 
 ## RL2: Can an organizer end an event early by hand?
 
-*2026-10-15 · OPEN · from: owner's answer on scheduler scope (Phase 3)*
+*2026-10-15 · **RESOLVED 2026-10-24** · from: owner's answer on scheduler scope (Phase 3)*
+
+**Outcome (owner, 2026-10-24).** (a) Keep the *End event* button (with its confirmation, RL9). Nothing to build.
 
 **Question.** The owner decided that events go LIVE only through the scheduler (a LIVE button would be redundant), and that an organizer can undo an accidental early LIVE. The answer didn't cover COMPLETED.
 
@@ -34,6 +38,8 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 ## RL3: Undoing LIVE after check-ins have started
 
 *2026-10-15 · OPEN · from: owner's answer on scheduler scope (Phase 3)*
+
+**Owner, 2026-10-24: pulled into P8 (T10.9).** Option (a): the undo is refused (409) once any check-in exists; event-service asks checkin-service with its SERVICE identity and refuses (503) if it can't reach it. D17.
 
 **Question.** In P3 an organizer can move LIVE → REGISTRATION_CLOSED to undo an accidental early start. Once check-in exists (P5), attendance rows may already exist when the organizer does that.
 
@@ -51,7 +57,7 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 
 **Built for now.** P4: pass-service's inbox has a DLQ; dead-lettered messages sit there (visible in the RabbitMQ UI) and are replayed by hand.
 
-**Built in P7 (2026-10-20; `docs/plans/phase-7.md` §9, D13 note).** (a) pass-, checkin- and notification-service declare their inboxes with `InboxQueues.inbox(...)`, so each has `<service>.inbox.dlq`. (b) 3 attempts, then the DLQ (`DeadLettersTest`; notification-service's SMTP failure in `SmtpFailureTest`). (c) `common-messaging` gives every consumer ADMIN endpoints to list, replay (same `messageId`, so the idempotent consumer applies it once) and discard; the gateway routes them at `/api/admin/dead-letters/<service>/**`; Admin · Dead letters in the portal. (d) Health component `deadLetters` is `WARNING` (amber on Admin · Health) while a DLQ holds messages; gauge `mitpass.dlq.messages{queue}` is registered for P8's Grafana. Not built: the exception text of a dead-lettered message (Spring retry's reject adds only `x-death`; the cause is in the consumer's log). Still to do after P8: the Grafana panel and (e) with the owner.
+**Built in P7 (2026-10-20; `docs/plans/phase-7.md` §9, D13 note).** (a) pass-, checkin- and notification-service declare their inboxes with `InboxQueues.inbox(...)`, so each has `<service>.inbox.dlq`. (b) 3 attempts, then the DLQ (`DeadLettersTest`; notification-service's SMTP failure in `SmtpFailureTest`). (c) `common-messaging` gives every consumer ADMIN endpoints to list, replay (same `messageId`, so the idempotent consumer applies it once) and discard; the gateway routes them at `/api/admin/dead-letters/<service>/**`; Admin · Dead letters in the portal. (d) Health component `deadLetters` is `WARNING` (amber on Admin · Health) while a DLQ holds messages; gauge `mitpass.dlq.messages{queue}` is registered for P8's Grafana. Not built: the exception text of a dead-lettered message (Spring retry's reject adds only `x-death`; the cause is in the consumer's log). **P8 (2026-10-24):** the Grafana panel *Dead-letter queue sizes* and the *Dead-lettered messages* tile (from `mitpass_dlq_messages`) exist, and the bulk-seed run showed the tooling at work: a "pass issued" mail dead-lettered because event-service was not yet discoverable, and the seed now waits for that. Still to do with the owner: (e).
 
 **To check.** (a) Every consumer (pass-, checkin-, notification-service) has a DLQ declared with the `common-messaging` helper. (b) A poison message ends up in its DLQ after the retries, not lost and not looping. (c) Dead-lettered messages can be inspected and replayed, and a replay is still idempotent. (d) A non-empty DLQ shows up in health or Grafana. (e) Anything still missing is fixed or consciously accepted.
 
@@ -121,6 +127,8 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 
 *2026-10-16 · OPEN · from: owner, after trying the portal ("admin can revoke a cancelled event; admin can do pretty much anything")*
 
+**Owner, 2026-10-24: pulled into P8 (T10.10–T10.12).** (a) Back to the state recorded before CANCELLED. (b) Re-issue new passes (REVOKED stays final). (d) Also: force LIVE, reopen COMPLETED → LIVE, re-issue one revoked pass, edit any event in any state (capacity rules kept), ban/unban a user (no removal), a user list with an indexed search (trigram, users and events). Each audited and confirmed. D17.
+
 **Request.** An admin should be able to reverse a cancellation (bring a CANCELLED event back), and in general be able to do almost anything.
 
 **Built for now.** CANCELLED is a final state for everyone, admins included (enum table, PROJECT.md §3; D10). Cancelling starts the saga: every valid pass becomes REVOKED, which is also final (D12). Registrations stay as they were. Admins already pass every ownership check (they can edit any event and move it through the same transitions as its organizer), but they can't leave a final state.
@@ -145,6 +153,8 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 
 *2026-10-16 · OPEN · from: owner's question on RL11 ("volunteers cannot revoke a scanned ticket themselves, right?")*
 
+**Owner, 2026-10-24: pulled into P8 (T10.13).** Option (a), by the event's organizer or an admin; reason required. D17.
+
 **Question.** If a pass is checked in by mistake (wrong person, wrong session, a test scan), who can correct it, and how?
 
 **Built for now.** Nobody can undo a check-in. Revoking a pass (organizer of the event or admin only, pass-service) is something else: it makes the whole pass invalid from then on, and it does not remove the check-in. A check-out (any assigned scanner) only moves presence to OUT; the attendance row stays, so it still counts for reports and certificates. Every scan is in `scan_log`.
@@ -153,7 +163,9 @@ Add an item when a question doesn't need an answer now. Give it the next free id
 
 ## RL13: Explore opens on upcoming events only
 
-*2026-10-19 · OPEN · from: Phase 6 browser check (T08.4/T08.13), decided by the agent without asking*
+*2026-10-19 · **RESOLVED 2026-10-24** · from: Phase 6 browser check (T08.4/T08.13), decided by the agent without asking*
+
+**Outcome (owner, 2026-10-24).** (a) Keep upcoming-only. Students still reach past events they registered for through *My registrations* (a test pins it in T10.8).
 
 **Question.** Should the student catalogue (*Explore*) show past events by default?
 

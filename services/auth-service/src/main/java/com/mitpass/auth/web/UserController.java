@@ -102,6 +102,23 @@ public class UserController {
         users.unlock(id);
     }
 
+    @PostMapping("/{id}/ban")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+            summary = "Ban a user (ADMIN, RL10)",
+            description = "The account can't log in or refresh, and its sessions end now; an access token already "
+                    + "issued runs out within 15 min. 422 for yourself or the last admin.")
+    public UserResponse ban(@PathVariable UUID id, CurrentUser admin) {
+        return UserResponse.from(users.setBanned(id, true, admin.id()), clock.instant());
+    }
+
+    @PostMapping("/{id}/unban")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Lift a ban (ADMIN, RL10)")
+    public UserResponse unban(@PathVariable UUID id, CurrentUser admin) {
+        return UserResponse.from(users.setBanned(id, false, admin.id()), clock.instant());
+    }
+
     @DeleteMapping("/{id}/sessions")
     @PreAuthorize("hasRole('ADMIN')")
     @ResponseStatus(HttpStatus.NO_CONTENT)

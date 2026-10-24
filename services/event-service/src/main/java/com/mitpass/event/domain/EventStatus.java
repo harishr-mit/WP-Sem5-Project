@@ -9,8 +9,8 @@ import java.util.Set;
 
 /**
  * Event lifecycle (PROJECT.md §3, docs/DECISIONS.md D10). {@link #allowedNext()} is the whole table;
- * {@link #manualNext()} and {@link #scheduledNext()} narrow it to what an organizer may press and what the scheduler
- * may do. LIVE is entered only by the scheduler; organizers may undo an accidental early start (LIVE →
+ * {@link #manualNext()}, {@link #adminNext()} and {@link #scheduledNext()} narrow it to what an organizer may press,
+ * what an admin may override (RL10, D17) and what the scheduler may do. LIVE is entered only by the scheduler; organizers may undo an accidental early start (LIVE →
  * REGISTRATION_CLOSED).
  */
 public enum EventStatus implements LifecycleState<EventStatus> {
@@ -24,6 +24,7 @@ public enum EventStatus implements LifecycleState<EventStatus> {
 
     private static final Map<EventStatus, Set<EventStatus>> NEXT = new EnumMap<>(EventStatus.class);
     private static final Map<EventStatus, Set<EventStatus>> SCHEDULED = new EnumMap<>(EventStatus.class);
+    private static final Map<EventStatus, Set<EventStatus>> ADMIN_ONLY = new EnumMap<>(EventStatus.class);
 
     static {
         NEXT.put(DRAFT, EnumSet.of(PUBLISHED));
@@ -38,11 +39,20 @@ public enum EventStatus implements LifecycleState<EventStatus> {
         SCHEDULED.put(REGISTRATION_OPEN, EnumSet.of(REGISTRATION_CLOSED));
         SCHEDULED.put(REGISTRATION_CLOSED, EnumSet.of(LIVE));
         SCHEDULED.put(LIVE, EnumSet.of(COMPLETED));
+
+        // RL10 (D17): admin overrides. Un-cancel goes back only to the state the event was cancelled from (Event).
+        ADMIN_ONLY.put(CANCELLED, EnumSet.of(PUBLISHED, REGISTRATION_OPEN, REGISTRATION_CLOSED));
+        ADMIN_ONLY.put(REGISTRATION_CLOSED, EnumSet.of(LIVE)); // start now
+        ADMIN_ONLY.put(COMPLETED, EnumSet.of(LIVE)); // reopen
     }
 
+    /** The whole table, the admin overrides (RL10) included; who may make which move is narrowed below. */
     @Override
     public Set<EventStatus> allowedNext() {
-        return Collections.unmodifiableSet(NEXT.get(this));
+        Set<EventStatus> next = EnumSet.noneOf(EventStatus.class);
+        next.addAll(NEXT.get(this));
+        next.addAll(ADMIN_ONLY.getOrDefault(this, EnumSet.noneOf(EventStatus.class)));
+        return Collections.unmodifiableSet(next);
     }
 
     /** What an organizer or admin may do from here: the table without LIVE. */
@@ -50,6 +60,14 @@ public enum EventStatus implements LifecycleState<EventStatus> {
         Set<EventStatus> next = EnumSet.noneOf(EventStatus.class);
         next.addAll(NEXT.get(this));
         next.remove(LIVE);
+        return Collections.unmodifiableSet(next);
+    }
+
+    /** What an admin may do from here: everything an organizer may, plus the overrides (RL10). */
+    public Set<EventStatus> adminNext() {
+        Set<EventStatus> next = EnumSet.noneOf(EventStatus.class);
+        next.addAll(manualNext());
+        next.addAll(ADMIN_ONLY.getOrDefault(this, EnumSet.noneOf(EventStatus.class)));
         return Collections.unmodifiableSet(next);
     }
 

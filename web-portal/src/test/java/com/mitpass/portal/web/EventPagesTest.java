@@ -257,6 +257,31 @@ class EventPagesTest {
                 .andExpect(content().string(not(containsString("hx-trigger"))));
     }
 
+    /** RL13: Explore lists upcoming events only, but past registrations stay here, each linked to its event. */
+    @Test
+    void pastRegistrationsStayListedAndLinkToTheirEvent() throws Exception {
+        Instant past = Instant.parse("2025-01-10T04:30:00Z");
+        Registration old = new Registration(
+                PortalPagesTest.REG_ID,
+                1L,
+                "MINIQUIZ26",
+                "Tech Quiz",
+                past,
+                "CONFIRMED",
+                null,
+                false,
+                past,
+                null,
+                "Priya Raman",
+                "priya@student.test");
+        given(gateway.myRegistrations()).willReturn(new Page<>(List.of(old), 0, 50, 1, 1));
+
+        mvc.perform(get("/my/registrations").with(authentication(TestTokens.login(student))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("href=\"/events/1\"")))
+                .andExpect(content().string(containsString("Tech Quiz")));
+    }
+
     @Test
     void myRegistrationsStopRefreshingWhenNothingIsWaiting() throws Exception {
         given(gateway.myRegistrations())

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jayway.jsonpath.JsonPath;
 import com.mitpass.common.messaging.TestApplication.TestHappened;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -88,6 +90,9 @@ class OutboxRelayTest {
     @Autowired
     JdbcClient jdbc;
 
+    @Autowired
+    javax.sql.DataSource dataSource;
+
     TransactionTemplate tx;
 
     @BeforeEach
@@ -101,6 +106,8 @@ class OutboxRelayTest {
     @Test
     void publishesInOrderWithIdTypeAndCorrelationId() {
         MDC.put("correlationId", "corr-relay");
+        MDC.put("traceId", "4bf92f3577b34da6a3ce929d0e0e4736");
+        MDC.put("spanId", "00f067aa0ba902b7");
         List<UUID> ids = publish(3);
         MDC.clear();
 
@@ -116,11 +123,31 @@ class OutboxRelayTest {
             assertThat(message.getMessageProperties().getContentType()).isEqualTo("application/json");
             assertThat((String) message.getMessageProperties().getHeader("correlationId"))
                     .isEqualTo("corr-relay");
+            assertThat((String) message.getMessageProperties().getHeader("traceparent"))
+                    .isEqualTo("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
             String body = new String(message.getBody(), StandardCharsets.UTF_8);
             assertThat((String) JsonPath.read(body, "$.payload.note")).isEqualTo("n" + i);
         }
         assertThat(unpublished()).isZero();
         assertThat(relay.pollOnce()).as("nothing left").isZero();
+    }
+
+    @Test
+    void lagGaugeShowsTheOldestUnpublishedRowAndZeroWhenCaughtUp() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        new MessagingAutoConfiguration.OutboxMetrics()
+                .outboxLagGauge(dataSource)
+                .bindTo(registry);
+        Gauge lag = registry.get("mitpass.outbox.lag").gauge();
+        assertThat(lag.value()).isZero();
+
+        publish(1);
+        jdbc.sql("UPDATE outbox_message SET occurred_at = now() - interval '30 seconds'")
+                .update();
+        assertThat(lag.value()).isGreaterThanOrEqualTo(30);
+
+        relay.pollOnce();
+        assertThat(lag.value()).isZero();
     }
 
     @Test

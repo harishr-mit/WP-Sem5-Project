@@ -47,6 +47,8 @@ import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.util.UriBuilder;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -96,9 +98,18 @@ public class GatewayClient {
 
     // ---- auth-service --------------------------------------------------------------------------------------------
 
+    /** Sends the browser's IP along: every login comes from the portal, so the gateway limits by this one (D17). */
     public TokenResponse login(String email, String password) {
+        String browserIp = RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes page
+                ? page.getRequest().getRemoteAddr()
+                : null;
         return http.post()
                 .uri("/api/auth/login")
+                .headers(h -> {
+                    if (browserIp != null) {
+                        h.set("X-Forwarded-For", browserIp);
+                    }
+                })
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("email", email, "password", password))
                 .retrieve()
@@ -339,6 +350,21 @@ public class GatewayClient {
                 .body(Pass.class);
     }
 
+    /** RL12: the event's organizer or an admin voids a pass's wrong check-ins (all sessions); the reason is audited. */
+    public void voidCheckIn(long eventId, UUID passId, String reason) {
+        http.post()
+                .uri("/api/attendance/events/{id}/void", eventId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("passId", passId, "reason", reason))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    /** ADMIN (RL10): a new pass for a revoked pass's registration; the revoked one stays revoked. */
+    public Pass reissuePass(UUID id) {
+        return http.post().uri("/api/passes/{id}/reissue", id).retrieve().body(Pass.class);
+    }
+
     /** The live QR as a PNG (a fresh 45 s token each time); the token itself stays inside the image. */
     public Binary liveQrPng(UUID passId) {
         return binary("/api/passes/{id}/qr/live", passId, MediaType.IMAGE_PNG);
@@ -570,6 +596,14 @@ public class GatewayClient {
 
     public void unlock(UUID id) {
         http.post().uri("/api/users/{id}/unlock", id).retrieve().toBodilessEntity();
+    }
+
+    /** RL10: ban or lift a ban (ADMIN). */
+    public UserProfile setBanned(UUID id, boolean banned) {
+        return http.post()
+                .uri(banned ? "/api/users/{id}/ban" : "/api/users/{id}/unban", id)
+                .retrieve()
+                .body(UserProfile.class);
     }
 
     public void endSessions(UUID id) {

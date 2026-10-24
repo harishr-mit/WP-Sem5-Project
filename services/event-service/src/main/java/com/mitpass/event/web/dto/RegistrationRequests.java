@@ -29,5 +29,7 @@ public final class RegistrationRequests {
             List<String> reasons,
             int seatsLeft,
             long waitlistCount,
-            RegistrationResponse myRegistration) {}
+            RegistrationResponse myRegistration,
+            /** Phase 8 (RL1): registration has closed, but students can still join the waitlist until LIVE. */
+            boolean waitlistOnly) {}
 }

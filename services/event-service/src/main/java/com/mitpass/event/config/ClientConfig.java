@@ -1,7 +1,10 @@
 package com.mitpass.event.config;
 
 import com.mitpass.common.security.client.BearerTokenRelayInterceptor;
+import com.mitpass.common.security.client.ServiceTokenProvider;
 import com.mitpass.event.client.AuthServiceClient;
+import com.mitpass.event.client.CheckinClient;
+import java.time.Clock;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
@@ -23,11 +26,36 @@ public class ClientConfig {
 
     @Bean(defaultCandidate = false)
     @LoadBalanced
-    RestClient.Builder loadBalancedRestClientBuilder() {
+    RestClient.Builder loadBalancedRestClientBuilder(RestClient.Builder boot) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(2));
         factory.setReadTimeout(Duration.ofSeconds(3));
-        return RestClient.builder().requestFactory(factory);
+        // Boot's (prototype) builder: tracing and the circuit breaker (common-resilience) come with it (D17).
+        return boot.requestFactory(factory);
+    }
+
+    @Bean
+    ServiceTokenProvider serviceTokenProvider(
+            @LoadBalanced RestClient.Builder loadBalancedRestClientBuilder,
+            @Value("${mitpass.clients.auth-service:http://auth-service}") String baseUrl,
+            @Value("${mitpass.service-client.id:event-service}") String clientId,
+            @Value("${mitpass.service-client.secret}") String secret,
+            Clock clock) {
+        return new ServiceTokenProvider(
+                loadBalancedRestClientBuilder.clone().baseUrl(baseUrl).build(), clientId, secret, clock);
+    }
+
+    /** With this service's own token: the question is event-service's, not the organizer's (RL3). */
+    @Bean
+    CheckinClient checkinClient(
+            @LoadBalanced RestClient.Builder loadBalancedRestClientBuilder,
+            @Value("${mitpass.clients.checkin-service:http://checkin-service}") String baseUrl,
+            ServiceTokenProvider serviceTokens) {
+        return new CheckinClient(loadBalancedRestClientBuilder
+                .clone()
+                .baseUrl(baseUrl)
+                .requestInterceptor(serviceTokens)
+                .build());
     }
 
     @Bean

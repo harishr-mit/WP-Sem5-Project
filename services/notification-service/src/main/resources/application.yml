@@ -23,6 +23,7 @@ spring:
     password: ${RABBITMQ_PASSWORD:mitpass}
     listener:
       simple:
+        observation-enabled: true   # continues the trace from the message's traceparent (D17)
         concurrency: 1
         max-concurrency: 1
         prefetch: 20
@@ -41,13 +42,24 @@ eureka:
     hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
 
 management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true   # Grafana's p95 latency panel (D17)
+  tracing:
+    sampling:
+      probability: 1.0   # every request is traced (a demo; Zipkin at localhost:9411 by default, D17)
+  server:
+    port: 18085   # 10000 + server port: actuator only here, never published or routed (D17)
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       show-components: always   # names and status for the admin health page (D15); details stay hidden
+      probes:
+        enabled: true   # /actuator/health/liveness and /readiness for the compose healthchecks
       status:
         order: DOWN,OUT_OF_SERVICE,WARNING,UP,UNKNOWN   # WARNING: a dead-letter queue holds messages (D13, P7)
 

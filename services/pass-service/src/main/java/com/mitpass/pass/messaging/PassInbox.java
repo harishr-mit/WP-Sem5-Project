@@ -3,6 +3,7 @@ package com.mitpass.pass.messaging;
 import com.mitpass.common.messaging.InboxQueues;
 import com.mitpass.common.messaging.MessagingProperties;
 import com.mitpass.common.messaging.contract.AttendanceMarked;
+import com.mitpass.common.messaging.contract.AttendanceVoided;
 import com.mitpass.common.messaging.contract.EventRescheduled;
 import com.mitpass.common.messaging.contract.EventStateChanged;
 import com.mitpass.common.messaging.contract.EventType;
@@ -27,10 +28,12 @@ public class PassInbox {
     static final String STATE_CHANGED = type(EventStateChanged.class);
     static final String RESCHEDULED = type(EventRescheduled.class);
     static final String ATTENDANCE = type(AttendanceMarked.class);
+    static final String VOIDED = type(AttendanceVoided.class);
 
     @Bean
     Declarables passInboxQueues(MessagingProperties properties) {
-        return InboxQueues.inbox(properties, QUEUE, CONFIRMED, CANCELLED, STATE_CHANGED, RESCHEDULED, ATTENDANCE);
+        return InboxQueues.inbox(
+                properties, QUEUE, CONFIRMED, CANCELLED, STATE_CHANGED, RESCHEDULED, ATTENDANCE, VOIDED);
     }
 
     private static String type(Class<?> contract) {

@@ -141,6 +141,14 @@ class OutboxPublisherTest {
     }
 
     @Test
+    void traceparentComesFromTheLogContextAndPadsShortTraceIds() {
+        assertThat(OutboxPublisher.traceparent()).isNull();
+        MDC.put("traceId", "a3ce929d0e0e4736");
+        MDC.put("spanId", "00f067aa0ba902b7");
+        assertThat(OutboxPublisher.traceparent()).isEqualTo("00-0000000000000000a3ce929d0e0e4736-00f067aa0ba902b7-01");
+    }
+
+    @Test
     void relayIsNotCreatedWhenDisabled() {
         assertThat(context.getBeansOfType(OutboxRelay.class)).isEmpty();
         assertThat(context.getBean("mitpassEventsExchange")).isNotNull();

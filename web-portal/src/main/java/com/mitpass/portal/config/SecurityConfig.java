@@ -58,7 +58,8 @@ public class SecurityConfig {
                                 "/favicon.ico",
                                 "/scan-sw.js")
                         .permitAll()
-                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
+                        .requestMatchers(
+                                "/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus")
                         .permitAll()
                         .requestMatchers("/admin/**")
                         .hasRole("ADMIN")

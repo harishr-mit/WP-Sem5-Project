@@ -214,6 +214,26 @@ class PortalPagesTest {
     }
 
     @Test
+    void aFullEventWithoutAWaitlistSaysSoAndOffersNoButton() throws Exception {
+        given(gateway.event(1L))
+                .willReturn(detail(1, List.of(), "REGISTRATION_OPEN", List.of("REGISTRATION_CLOSED"), false));
+        given(gateway.eligibility(1L)).willReturn(new Eligibility(true, true, List.of(), 0, 0L, null));
+
+        mvc.perform(get("/events/1").with(authentication(TestTokens.login(student))))
+                .andExpect(content().string(containsString("full and has no waitlist")))
+                .andExpect(content().string(not(containsString("name=\"idempotencyKey\""))));
+    }
+
+    @Test
+    void afterClosingTheWaitlistStaysOpenUntilTheEventStarts() throws Exception {
+        given(gateway.eligibility(1L)).willReturn(new Eligibility(true, true, List.of(), 3, 1L, null, true));
+
+        mvc.perform(get("/events/1").with(authentication(TestTokens.login(student))))
+                .andExpect(content().string(containsString("Registration has closed, but you can still join")))
+                .andExpect(content().string(containsString("Join the waitlist")));
+    }
+
+    @Test
     void ineligibleStudentSeesTheReasons() throws Exception {
         given(gateway.eligibility(1L))
                 .willReturn(
@@ -346,6 +366,19 @@ class PortalPagesTest {
         organizerList("DRAFT", List.of("PUBLISHED"));
         mvc.perform(get("/organizer/events").with(authentication(TestTokens.login(organizer))))
                 .andExpect(content().string(containsString(">Publish</button>")));
+
+        // RL10: an admin's overrides, each behind a confirmation
+        organizerList("CANCELLED", List.of("PUBLISHED"));
+        mvc.perform(get("/organizer/events").with(authentication(TestTokens.login(organizer))))
+                .andExpect(content().string(containsString(">Reinstate event</button>")))
+                .andExpect(content().string(containsString("get a new pass")))
+                .andExpect(content().string(not(containsString(">Publish</button>"))));
+        organizerList("REGISTRATION_CLOSED", List.of("LIVE", "CANCELLED"));
+        mvc.perform(get("/organizer/events").with(authentication(TestTokens.login(organizer))))
+                .andExpect(content().string(containsString(">Start now</button>")));
+        organizerList("COMPLETED", List.of("LIVE"));
+        mvc.perform(get("/organizer/events").with(authentication(TestTokens.login(organizer))))
+                .andExpect(content().string(containsString(">Reopen event</button>")));
         // D9 row replaced: the list carries the allowed moves, so no detail call per event
         verify(gateway, never()).event(anyLong());
     }
@@ -388,7 +421,7 @@ class PortalPagesTest {
                         .with(authentication(TestTokens.login(organizer))))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Cancel event")))
-                .andExpect(content().string(containsString("be undone")))
+                .andExpect(content().string(containsString("Only an admin can bring it back")))
                 .andExpect(content().string(containsString("name=\"code\"")));
 
         mvc.perform(post("/organizer/events/1/transitions")
@@ -506,6 +539,11 @@ class PortalPagesTest {
     }
 
     static EventDetail detail(long id, List<String> departments, String status, List<String> allowed) {
+        return detail(id, departments, status, allowed, true);
+    }
+
+    static EventDetail detail(
+            long id, List<String> departments, String status, List<String> allowed, boolean waitlist) {
         return new EventDetail(
                 id,
                 "MINIQUIZ26",
@@ -533,7 +571,8 @@ class PortalPagesTest {
                 true,
                 null,
                 false,
-                null);
+                null,
+                waitlist);
     }
 
     static Registration registration(String status, Integer position, UUID promoted) {

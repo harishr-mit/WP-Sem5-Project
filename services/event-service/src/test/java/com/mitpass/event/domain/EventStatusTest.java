@@ -25,8 +25,12 @@ class EventStatusTest {
         assertThat(REGISTRATION_OPEN.allowedNext()).containsExactly(REGISTRATION_CLOSED, CANCELLED);
         assertThat(REGISTRATION_CLOSED.allowedNext()).containsExactly(LIVE, CANCELLED);
         assertThat(LIVE.allowedNext()).containsExactly(REGISTRATION_CLOSED, COMPLETED);
-        assertThat(COMPLETED.allowedNext()).isEmpty();
-        assertThat(CANCELLED.allowedNext()).isEmpty();
+        // RL10: only an admin leaves these (un-cancel, reopen); for organizers and the scheduler they stay final.
+        assertThat(COMPLETED.allowedNext()).containsExactly(LIVE);
+        assertThat(CANCELLED.allowedNext()).containsExactly(PUBLISHED, REGISTRATION_OPEN, REGISTRATION_CLOSED);
+        assertThat(COMPLETED.manualNext()).isEmpty();
+        assertThat(CANCELLED.manualNext()).isEmpty();
+        assertThat(CANCELLED.scheduledNext()).isEmpty();
     }
 
     @Test

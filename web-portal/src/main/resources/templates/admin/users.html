@@ -39,9 +39,10 @@
                         <br><small th:text="${u.email()}">p@x</small></td>
                     <td th:data-label="#{profile.roles}"><span class="badge badge--brand" th:each="r : ${u.roles()}" th:text="#{'role.' + ${r}}" style="margin:0 .25rem .25rem 0">Student</span></td>
                     <td th:data-label="#{registrations.status}">
+                        <span class="badge badge--err" th:if="${u.isBanned()}" th:text="#{admin.banned}">Banned</span>
                         <span class="badge badge--err" th:if="${u.locked()}" th:text="#{admin.locked}">Locked</span>
                         <span class="badge badge--warn" th:if="${!u.emailVerified()}" th:text="#{admin.unverified}">Unverified</span>
-                        <span class="badge badge--ok" th:if="${!u.locked() and u.emailVerified()}" th:text="#{admin.active}">Active</span>
+                        <span class="badge badge--ok" th:if="${!u.isBanned() and !u.locked() and u.emailVerified()}" th:text="#{admin.active}">Active</span>
                     </td>
                 </tr>
                 </tbody>

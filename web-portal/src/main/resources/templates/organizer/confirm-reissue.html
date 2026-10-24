@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<!--/* RL10 + RL9 without JavaScript: an admin confirms a re-issue here first (a dialog does it with JS). */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{reissue.title}, content=~{::main})}">
+<main id="main" class="page page--narrow">
+    <a class="back" th:href="@{/organizer/events/{id}/registrations(id=${eventId})}" th:text="'← ' + #{org.tab.registrations}">← Registrations</a>
+    <h1 th:text="#{reissue.title}">Issue a new pass?</h1>
+    <section class="card card--warn">
+        <dl class="facts">
+            <dt th:text="#{pass.holder}">Holder</dt><dd><strong th:text="${pass.holderName()}">Priya Raman</strong></dd>
+            <dt th:text="#{pass.number}">Pass</dt><dd class="pass-number" th:text="${pass.passNumber()}">TECHFEST26-000042-7</dd>
+            <dt th:text="#{registrations.event}">Event</dt><dd th:text="${pass.eventTitle()}">TechFest Hackathon</dd>
+        </dl>
+        <p class="mb-0 mt-4" th:text="#{reissue.consequence}">A new pass is issued; this one stays revoked.</p>
+    </section>
+    <form th:action="@{/organizer/passes/{id}/reissue(id=${pass.id()})}" method="post" class="card form">
+        <input type="hidden" name="eventId" th:value="${eventId}">
+        <input type="hidden" name="confirmed" value="true">
+        <div class="actions">
+            <button type="submit" th:text="#{reissue.button}">Issue a new pass</button>
+            <a class="btn btn--ghost" th:href="@{/organizer/events/{id}/registrations(id=${eventId})}" th:text="#{common.goBack}">Go back</a>
+        </div>
+    </form>
+</main>
+</html>

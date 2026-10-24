@@ -103,6 +103,7 @@ class EligibilityPolicyTest {
 
     @Test
     void closingTimeCountsEvenBeforeTheSchedulerRuns() {
+        event.setWaitlistEnabled(false);
         Instant afterClose = event.getRegistrationClosesAt();
 
         Eligibility result = policy.check(event, student("CSE", 1), afterClose);
@@ -113,12 +114,31 @@ class EligibilityPolicyTest {
 
     @Test
     void withoutAClosingTimeRegistrationEndsAtTheStart() {
+        event.setWaitlistEnabled(false);
         event.setRegistrationClosesAt(null);
 
         assertThat(policy.check(event, student("CSE", 1), START.minusSeconds(1)).eligible())
                 .isTrue();
         assertThat(policy.check(event, student("CSE", 1), START).registrationOpen())
                 .isFalse();
+    }
+
+    @Test
+    void withAWaitlistClosingLeavesTheWaitlistOpenUntilLive() throws Exception {
+        event.setWaitlistEnabled(true);
+        Eligibility afterTime = policy.check(event, student("CSE", 1), event.getRegistrationClosesAt());
+        assertThat(afterTime.eligible()).isTrue();
+        assertThat(afterTime.waitlistOnly()).isTrue();
+
+        setStatus(EventStatus.REGISTRATION_CLOSED);
+        assertThat(policy.check(event, student("CSE", 1), START.minusSeconds(60))
+                        .waitlistOnly())
+                .isTrue();
+
+        setStatus(EventStatus.LIVE);
+        Eligibility live = policy.check(event, student("CSE", 1), START);
+        assertThat(live.registrationOpen()).isFalse();
+        assertThat(live.waitlistOnly()).isFalse();
     }
 
     @Test

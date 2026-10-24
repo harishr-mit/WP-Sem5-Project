@@ -325,6 +325,34 @@ class PassPagesTest {
                 .andExpect(content().string(containsString("value=\"Fake ID\"")));
     }
 
+    /** RL10: an admin re-issues a revoked pass, after a confirmation (RL9). */
+    @Test
+    void anAdminReissuesARevokedPassAfterConfirming() throws Exception {
+        PortalUser admin = TestTokens.user("ADMIN");
+        given(gateway.pass(PASS_ID)).willReturn(pass("REVOKED"));
+        given(gateway.reissuePass(PASS_ID)).willReturn(pass("ISSUED"));
+
+        mvc.perform(post("/organizer/passes/" + PASS_ID + "/reissue")
+                        .with(csrf())
+                        .with(authentication(TestTokens.login(admin)))
+                        .param("eventId", "1"))
+                .andExpect(redirectedUrl("/organizer/passes/" + PASS_ID + "/reissue/confirm?eventId=1"));
+        verify(gateway, never()).reissuePass(any());
+
+        mvc.perform(get("/organizer/passes/" + PASS_ID + "/reissue/confirm")
+                        .param("eventId", "1")
+                        .with(authentication(TestTokens.login(admin))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("stays revoked")));
+        mvc.perform(post("/organizer/passes/" + PASS_ID + "/reissue")
+                        .with(csrf())
+                        .with(authentication(TestTokens.login(admin)))
+                        .param("eventId", "1")
+                        .param("confirmed", "true"))
+                .andExpect(redirectedUrl("/organizer/events/1/registrations"));
+        verify(gateway).reissuePass(PASS_ID);
+    }
+
     static Pass pass(String status) {
         return pass(status, null, null);
     }

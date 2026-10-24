@@ -1,0 +1,15 @@
+# The build context is the working tree, so keep out everything the image build doesn't need.
+**/target
+**/node_modules
+.git
+.tools
+.idea
+.vscode
+logs
+archive
+infra/certs
+docs
+load-tests/target
+*.html
+*.md
+!**/src/**

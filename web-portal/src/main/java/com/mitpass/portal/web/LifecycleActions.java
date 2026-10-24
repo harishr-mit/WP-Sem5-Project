@@ -23,9 +23,16 @@ public class LifecycleActions {
         return msg("action." + key(from, to), to);
     }
 
-    /** Moves an accidental click must not trigger: they stop the event or can't be taken back (RL9). */
+    /**
+     * Moves an accidental click must not trigger: they stop the event, can't be taken back by its organizer (RL9), or
+     * are an admin's override (RL10).
+     */
     public boolean isCritical(String from, String to) {
-        return "CANCELLED".equals(to) || "COMPLETED".equals(to) || isUndoStart(from, to);
+        return "CANCELLED".equals(to)
+                || "COMPLETED".equals(to)
+                || isUndoStart(from, to)
+                || "CANCELLED".equals(from)
+                || "LIVE".equals(to);
     }
 
     /** Cancelling is the most destructive move: the organizer types the event code to confirm. */
@@ -39,6 +46,12 @@ public class LifecycleActions {
     }
 
     private static String key(String from, String to) {
+        if ("CANCELLED".equals(from)) {
+            return "REINSTATE"; // admin only (RL10)
+        }
+        if ("LIVE".equals(to)) {
+            return "COMPLETED".equals(from) ? "REOPEN" : "START_NOW"; // admin only (RL10)
+        }
         return isUndoStart(from, to) ? "UNDO_START" : to;
     }
 

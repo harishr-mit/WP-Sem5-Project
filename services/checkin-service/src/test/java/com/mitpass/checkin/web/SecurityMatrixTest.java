@@ -107,7 +107,7 @@ class SecurityMatrixTest {
                         "/api/attendance/events/{id}/summary",
                         f -> "/api/attendance/events/" + f.gate().event().id() + "/summary",
                         none,
-                        ownerAdmin),
+                        Rule.only(OWNER, ADMIN, SERVICE)),
                 new Endpoint(
                         HttpMethod.GET,
                         "/api/attendance/events/{id}/live",
@@ -137,6 +137,14 @@ class SecurityMatrixTest {
                         "/api/attendance/events/{id}/sync",
                         f -> "/api/attendance/events/" + f.gate().event().id() + "/sync",
                         none,
+                        ownerAdmin),
+                // RL12: a valid body, because validation runs before method security (a bad body would hide the 403)
+                new Endpoint(
+                        HttpMethod.POST,
+                        "/api/attendance/events/{id}/void",
+                        f -> "/api/attendance/events/" + f.gate().event().id() + "/void",
+                        f -> "{\"passId\":\"%s\",\"reason\":\"matrix\"}"
+                                .formatted(f.pass().id()),
                         ownerAdmin),
                 new Endpoint(
                         HttpMethod.GET, "/api/attendance/me", f -> "/api/attendance/me", none, Rule.authenticated()),

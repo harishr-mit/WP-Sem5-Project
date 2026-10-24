@@ -2,6 +2,7 @@ package com.mitpass.pass.messaging;
 
 import com.mitpass.common.messaging.IdempotentConsumer;
 import com.mitpass.common.messaging.contract.AttendanceMarked;
+import com.mitpass.common.messaging.contract.AttendanceVoided;
 import com.mitpass.common.messaging.contract.EventRescheduled;
 import com.mitpass.common.messaging.contract.EventStateChanged;
 import com.mitpass.common.messaging.contract.RegistrationCancelled;
@@ -67,6 +68,12 @@ public class PassInboxListener {
                     PassInbox.CONSUMER,
                     AttendanceMarked.class,
                     envelope -> lifecycle.attendanceMarked(envelope.payload()));
+        } else if (PassInbox.VOIDED.equals(type)) {
+            consumer.handle(
+                    message,
+                    PassInbox.CONSUMER,
+                    AttendanceVoided.class,
+                    envelope -> lifecycle.attendanceVoided(envelope.payload()));
         } else {
             log.warn("Ignoring message of unexpected type {}", type);
         }

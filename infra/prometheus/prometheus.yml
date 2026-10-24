@@ -1,0 +1,26 @@
+# Scrapes every service's management port (10000 + its port; docs/DECISIONS.md D17). The management ports are open
+# inside the compose network only. Static targets: Eureka's service discovery would give the main port, not this one.
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  - job_name: mitpass
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: [discovery-server:18761]
+        labels: {application: discovery-server}
+      - targets: [api-gateway:18080]
+        labels: {application: api-gateway}
+      - targets: [auth-service:18081]
+        labels: {application: auth-service}
+      - targets: [event-service:18082]
+        labels: {application: event-service}
+      - targets: [pass-service:18083]
+        labels: {application: pass-service}
+      - targets: [checkin-service:18084]
+        labels: {application: checkin-service}
+      - targets: [notification-service:18085]
+        labels: {application: notification-service}
+      - targets: [web-portal:18090]
+        labels: {application: web-portal}

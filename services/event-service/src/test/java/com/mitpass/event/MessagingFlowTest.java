@@ -151,13 +151,14 @@ class MessagingFlowTest {
         registrations.register(student(), event);
         long before = outboxRows();
 
-        registrations.register(student(), event); // waitlisted
+        var waiting = student();
+        registrations.register(waiting, event); // waitlisted
         assertThat(outboxRows()).isEqualTo(before + 1);
 
-        lifecycle.transition(event, EventStatus.REGISTRATION_CLOSED, "test", TransitionTrigger.MANUAL, null);
-        long afterClose = outboxRows();
-        assertThatThrownBy(() -> registrations.register(student(), event)).isInstanceOf(ProblemException.class);
-        assertThat(outboxRows()).isEqualTo(afterClose);
+        long afterWaitlist = outboxRows();
+        // A request that fails (already registered) leaves no row.
+        assertThatThrownBy(() -> registrations.register(waiting, event)).isInstanceOf(ProblemException.class);
+        assertThat(outboxRows()).isEqualTo(afterWaitlist);
     }
 
     private long openEvent(String code, int capacity) {

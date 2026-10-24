@@ -55,7 +55,8 @@ public class OrganizerController {
     public String registrations(
             @PathVariable long id, @RequestParam(required = false) String q, HttpServletRequest request, Model model) {
         Map<UUID, Pass> passes = gateway.eventPasses(id).content().stream()
-                .collect(Collectors.toMap(Pass::registrationId, pass -> pass, (a, b) -> a));
+                // After a re-issue (RL10) a registration has an old revoked pass and a new one: show the valid one.
+                .collect(Collectors.toMap(Pass::registrationId, pass -> pass, (a, b) -> b.isValid() ? b : a));
         List<Row> all = gateway.eventRegistrations(id).content().stream()
                 .map(registration -> new Row(registration, passes.get(registration.id())))
                 .toList();
@@ -115,6 +116,33 @@ public class OrganizerController {
             redirect.addFlashAttribute("error", ex.getMessage());
         }
         return "redirect:/organizer/events/" + eventId + "/registrations";
+    }
+
+    /** RL10, admins: a new pass for a revoked one. Confirmed first (RL9), on a page without JavaScript. */
+    @PostMapping("/organizer/passes/{passId}/reissue")
+    public String reissue(
+            @PathVariable UUID passId,
+            @RequestParam long eventId,
+            @RequestParam(defaultValue = "false") boolean confirmed,
+            RedirectAttributes redirect) {
+        if (!confirmed) {
+            redirect.addAttribute("eventId", eventId);
+            return "redirect:/organizer/passes/" + passId + "/reissue/confirm";
+        }
+        try {
+            Pass pass = gateway.reissuePass(passId);
+            redirect.addFlashAttribute("message", msg("reissue.done", pass.passNumber()));
+        } catch (ApiProblemException ex) {
+            redirect.addFlashAttribute("error", ex.getMessage());
+        }
+        return "redirect:/organizer/events/" + eventId + "/registrations";
+    }
+
+    @GetMapping("/organizer/passes/{passId}/reissue/confirm")
+    public String confirmReissue(@PathVariable UUID passId, @RequestParam long eventId, Model model) {
+        model.addAttribute("pass", gateway.pass(passId));
+        model.addAttribute("eventId", eventId);
+        return "organizer/confirm-reissue";
     }
 
     @GetMapping("/organizer/passes/{passId}/revoke/confirm")

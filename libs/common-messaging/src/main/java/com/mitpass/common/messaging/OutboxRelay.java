@@ -35,7 +35,8 @@ public class OutboxRelay implements SmartLifecycle {
     private static final Logger log = LoggerFactory.getLogger(OutboxRelay.class);
 
     private static final String SELECT_BATCH = """
-            SELECT id, event_type, payload::text AS payload, headers ->> 'correlationId' AS correlation_id, occurred_at
+            SELECT id, event_type, payload::text AS payload, headers ->> 'correlationId' AS correlation_id,
+                   headers ->> 'traceparent' AS traceparent, occurred_at
             FROM outbox_message
             WHERE published_at IS NULL
             ORDER BY seq
@@ -72,7 +73,8 @@ public class OutboxRelay implements SmartLifecycle {
         }
     }
 
-    record Row(UUID id, String eventType, String payload, String correlationId, Instant occurredAt) {}
+    record Row(
+            UUID id, String eventType, String payload, String correlationId, String traceparent, Instant occurredAt) {}
 
     /** Publishes one batch; returns how many rows were published (0 when there was nothing to do or it failed). */
     public int pollOnce() {
@@ -84,6 +86,7 @@ public class OutboxRelay implements SmartLifecycle {
                             rs.getString("event_type"),
                             rs.getString("payload"),
                             rs.getString("correlation_id"),
+                            rs.getString("traceparent"),
                             rs.getTimestamp("occurred_at").toInstant()))
                     .list();
             if (rows.isEmpty()) {
@@ -142,6 +145,9 @@ public class OutboxRelay implements SmartLifecycle {
         props.setTimestamp(Date.from(row.occurredAt()));
         if (row.correlationId() != null) {
             props.setHeader("correlationId", row.correlationId());
+        }
+        if (row.traceparent() != null) {
+            props.setHeader("traceparent", row.traceparent()); // the listener's observation continues this trace
         }
         return new Message(row.payload().getBytes(StandardCharsets.UTF_8), props);
     }

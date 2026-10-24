@@ -1,6 +1,7 @@
 package com.mitpass.event.web;
 
 import com.mitpass.common.security.CurrentUser;
+import com.mitpass.common.security.Roles;
 import com.mitpass.event.domain.TransitionTrigger;
 import com.mitpass.event.service.EventLifecycleService;
 import com.mitpass.event.web.dto.EventDetailResponse;
@@ -34,12 +35,15 @@ public class LifecycleController {
     @Operation(
             summary = "Move an event to another state (its organizer, or ADMIN)",
             description = "Allowed targets are listed in the event's `allowedTransitions`. LIVE is set only by the "
-                    + "scheduler; an organizer can undo an early start (LIVE → REGISTRATION_CLOSED). Anything else "
+                    + "scheduler; an organizer can undo an early start (LIVE → REGISTRATION_CLOSED). An ADMIN can "
+                    + "also un-cancel, start an event now and reopen a completed one (RL10). Anything else "
                     + "gives 409 `illegal-transition` with `allowedStates`.")
     public EventDetailResponse transition(
             @PathVariable long id, @Valid @RequestBody TransitionRequest request, CurrentUser caller) {
-        return lifecycle.transition(
-                id, request.to(), caller.id().toString(), TransitionTrigger.MANUAL, request.reason());
+        // An admin's move beyond the organizer's buttons is an override, recorded as such (RL10).
+        TransitionTrigger trigger =
+                caller.hasRole(Roles.ADMIN) ? lifecycle.triggerForAdmin(id, request.to()) : TransitionTrigger.MANUAL;
+        return lifecycle.transition(id, request.to(), caller.id().toString(), trigger, request.reason());
     }
 
     @GetMapping("/history")

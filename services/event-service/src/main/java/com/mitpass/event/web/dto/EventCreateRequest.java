@@ -75,5 +75,10 @@ public record EventCreateRequest(
         Boolean reentryAllowed,
 
         @Schema(example = "2", description = "Sessions needed for a certificate; empty = all sessions") @Min(1) @Max(50)
-        Integer certificateMinSessions)
+        Integer certificateMinSessions,
+
+        @Schema(
+                example = "false",
+                description = "Waitlist when full, and after registration closes until LIVE (RL1); default false")
+        Boolean waitlistEnabled)
         implements TimeWindow {}

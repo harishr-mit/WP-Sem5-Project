@@ -18,6 +18,8 @@ import com.mitpass.checkin.client.PassDirectory.PassRecord;
 import com.mitpass.checkin.repository.PassCopyStore;
 import com.mitpass.common.security.Roles;
 import com.mitpass.security.test.TestJwtIssuer;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -60,6 +62,9 @@ class ScanVerificationTest {
     @Autowired
     JdbcClient jdbc;
 
+    @Autowired
+    MeterRegistry meters;
+
     Gate gate;
     PassRecord pass;
 
@@ -97,6 +102,21 @@ class ScanVerificationTest {
                 .query(String.class)
                 .single();
         assertThat(method).isEqualTo("QR_LIVE");
+    }
+
+    @Test
+    void everyAnswerIsCountedByResult() throws Exception {
+        double accepted = scans("ACCEPTED");
+        double again = scans("ALREADY_CHECKED_IN");
+        scan(gate, scenario.liveToken(pass), null, gate.main().id(), "IN").andExpect(status().isOk());
+        scan(gate, scenario.liveToken(pass), null, gate.main().id(), "IN").andExpect(status().isConflict());
+        assertThat(scans("ACCEPTED")).isEqualTo(accepted + 1);
+        assertThat(scans("ALREADY_CHECKED_IN")).isEqualTo(again + 1);
+    }
+
+    private double scans(String result) {
+        Counter counter = meters.find("mitpass.scans").tag("result", result).counter();
+        return counter == null ? 0 : counter.count();
     }
 
     @Test

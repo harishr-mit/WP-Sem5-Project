@@ -118,6 +118,36 @@ public class AdminPagesController {
         return "redirect:/admin/users/" + id;
     }
 
+    /** RL10: a ban is confirmed first (RL9), lifting it isn't (it gives access back, nothing is lost). */
+    @PostMapping("/admin/users/{id}/ban")
+    public String ban(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "false") boolean confirmed,
+            RedirectAttributes redirect) {
+        if (!confirmed) {
+            redirect.addFlashAttribute("error", msg("admin.confirmFirst"));
+            return "redirect:/admin/users/" + id;
+        }
+        try {
+            UserProfile user = gateway.setBanned(id, true);
+            redirect.addFlashAttribute("message", msg("admin.bannedDone", user.fullName()));
+        } catch (ApiProblemException ex) {
+            redirect.addFlashAttribute("error", ex.getMessage());
+        }
+        return "redirect:/admin/users/" + id;
+    }
+
+    @PostMapping("/admin/users/{id}/unban")
+    public String unban(@PathVariable UUID id, RedirectAttributes redirect) {
+        try {
+            UserProfile user = gateway.setBanned(id, false);
+            redirect.addFlashAttribute("message", msg("admin.unbannedDone", user.fullName()));
+        } catch (ApiProblemException ex) {
+            redirect.addFlashAttribute("error", ex.getMessage());
+        }
+        return "redirect:/admin/users/" + id;
+    }
+
     @PostMapping("/admin/users/{id}/sessions/end")
     public String endSessions(
             @PathVariable UUID id,

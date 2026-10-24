@@ -51,6 +51,8 @@ services:
 
   mailpit:
     image: axllent/mailpit:v1.31
+    environment:
+      MP_MAX_MESSAGES: 10000   # the bulk seed (P8) sends ~3,000 mails; the default keeps only the newest few hundred
     ports:
       - "1025:1025"
       - "8025:8025"

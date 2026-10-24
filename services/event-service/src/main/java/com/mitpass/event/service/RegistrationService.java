@@ -15,6 +15,7 @@ import com.mitpass.event.repository.RegistrationChangeRepository;
 import com.mitpass.event.repository.RegistrationRepository;
 import com.mitpass.event.web.dto.RegistrationRequests.EligibilityResponse;
 import com.mitpass.event.web.dto.RegistrationResponse;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.time.Clock;
@@ -50,6 +51,7 @@ public class RegistrationService {
     private final IdempotencyStore idempotency;
     private final JsonMapper json;
     private final Clock clock;
+    private final MeterRegistry meters;
 
     public RegistrationService(
             RegistrationRepository registrations,
@@ -61,7 +63,8 @@ public class RegistrationService {
             EntityManager entityManager,
             IdempotencyStore idempotency,
             JsonMapper json,
-            Clock clock) {
+            Clock clock,
+            MeterRegistry meters) {
         this.registrations = registrations;
         this.history = history;
         this.events = events;
@@ -72,6 +75,7 @@ public class RegistrationService {
         this.idempotency = idempotency;
         this.json = json;
         this.clock = clock;
+        this.meters = meters;
     }
 
     /** The result of {@link #register(CurrentUser, long, String)}; {@code replayed} = stored earlier, nothing done now. */
@@ -131,7 +135,10 @@ public class RegistrationService {
         String actor = student.id().toString();
         record(registration, null, RegistrationStatus.PENDING, actor, TransitionTrigger.MANUAL, null);
 
-        if (events.claimSeat(eventId) == 1) {
+        if (check.waitlistOnly()) {
+            // RL1: registration has closed, the waitlist stays open until LIVE; a freed seat comes by promotion.
+            waitlist(registration, now, actor, "Registration closed: waitlist only");
+        } else if (events.claimSeat(eventId) == 1) {
             confirm(registration, now, actor);
         } else {
             // Slow path: lock the event row, then look again with fresh state.
@@ -142,21 +149,19 @@ public class RegistrationService {
             }
             if (events.claimSeat(eventId) == 1) {
                 confirm(registration, now, actor);
+            } else if (!event.isWaitlistEnabled()) {
+                throw RegistrationProblems.eventFull(eventId);
             } else {
-                registration.waitlist(now, registrations.nextWaitlistSeq());
-                record(
-                        registration,
-                        RegistrationStatus.PENDING,
-                        RegistrationStatus.WAITLISTED,
-                        actor,
-                        TransitionTrigger.MANUAL,
-                        "Event full");
-                registrations.flush(); // the position query below counts this row
-                outbox.waitlisted(
-                        registration, (int) registrations.waitlistPosition(eventId, registration.getWaitlistSeq()));
+                waitlist(registration, now, actor, "Event full");
             }
         }
         registrations.flush();
+        // Counted before commit: a rare commit failure over-counts by one (Grafana registration rate, D17).
+        meters.counter(
+                        "mitpass.registrations",
+                        "status",
+                        registration.getStatus().name())
+                .increment();
         return toResponse(registration, null);
     }
 
@@ -224,7 +229,22 @@ public class RegistrationService {
                 check.reasons(),
                 event.getSeatsLeft(),
                 registrations.countByEventAndStatus(eventId, RegistrationStatus.WAITLISTED),
-                mine);
+                mine,
+                check.waitlistOnly());
+    }
+
+    private void waitlist(Registration registration, Instant now, String actor, String note) {
+        registration.waitlist(now, registrations.nextWaitlistSeq());
+        record(
+                registration,
+                RegistrationStatus.PENDING,
+                RegistrationStatus.WAITLISTED,
+                actor,
+                TransitionTrigger.MANUAL,
+                note);
+        registrations.flush(); // the position query below counts this row
+        outbox.waitlisted(registration, (int)
+                registrations.waitlistPosition(registration.getEvent().getId(), registration.getWaitlistSeq()));
     }
 
     private void confirm(Registration registration, Instant now, String actor) {

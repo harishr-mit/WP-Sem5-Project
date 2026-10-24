@@ -22,11 +22,13 @@
 
     <modules>
         <!-- Modules are added phase by phase (docs/plans/). Libraries first. -->
+        <module>libs/common-resilience</module>
         <module>libs/common-web</module>
         <module>libs/common-security</module>
         <module>libs/security-test-support</module>
         <module>libs/common-messaging</module>
         <module>libs/common-pass</module>
+        <module>libs/seed-data</module>
         <module>platform/discovery-server</module>
         <module>platform/api-gateway</module>
         <module>services/auth-service</module>
@@ -54,6 +56,10 @@
         <ical4j.version>4.4.0</ical4j.version>
         <shedlock.version>7.10.1</shedlock.version>
         <greenmail.version>2.1.14</greenmail.version>
+        <datafaker.version>2.4.2</datafaker.version>
+        <!-- Load tests (Phase 8, load profile only) -->
+        <gatling.version>3.14.3</gatling.version>
+        <gatling-maven-plugin.version>4.18.0</gatling-maven-plugin.version>
         <!-- Live dashboard in the portal (Phase 7): npm "latest" on 2026-10-20 -->
         <chartjs.version>4.5.1</chartjs.version>
         <stompjs.version>7.3.0</stompjs.version>
@@ -141,12 +147,33 @@
                 <version>${shedlock.version}</version>
             </dependency>
             <dependency>
+                <groupId>net.datafaker</groupId>
+                <artifactId>datafaker</artifactId>
+                <version>${datafaker.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>com.icegreen</groupId>
                 <artifactId>greenmail-junit5</artifactId>
                 <version>${greenmail.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <profiles>
+        <!-- Modules that need a running stack (docker compose up): not part of a plain `./mvnw verify`. -->
+        <profile>
+            <id>e2e</id>
+            <modules>
+                <module>e2e-tests</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>load</id>
+            <modules>
+                <module>load-tests</module>
+            </modules>
+        </profile>
+    </profiles>
 
     <build>
         <pluginManagement>

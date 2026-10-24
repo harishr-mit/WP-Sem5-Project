@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<!--/* RL12 + RL9: voiding a check-in is confirmed here, with the reason the audit trail keeps. */-->
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: page(title=#{void.title}, content=~{::main})}">
+<main id="main" class="page page--narrow">
+    <a class="back" th:href="@{/organizer/events/{id}/attendance(id=${eventId})}" th:text="'← ' + #{org.tab.attendance}">← Reports</a>
+    <h1 th:text="#{void.title}">Void this check-in?</h1>
+    <section class="card card--warn">
+        <dl class="facts">
+            <dt th:text="#{pass.holder}">Holder</dt><dd><strong th:text="${attendee.holderName()}">Priya Raman</strong></dd>
+            <dt th:text="#{pass.number}">Pass</dt><dd class="pass-number" th:text="${attendee.passNumber()}">TECHFEST26-000042-7</dd>
+        </dl>
+        <p class="mb-0 mt-4" th:text="#{void.consequence}">The check-in stops counting. The pass can be scanned in again.</p>
+    </section>
+    <form th:action="@{/organizer/events/{id}/attendance/{pass}/void(id=${eventId},pass=${attendee.passId()})}" method="post" class="card form">
+        <input type="hidden" name="confirmed" value="true">
+        <div class="field">
+            <label for="reason" th:text="#{void.reason}">Why? (kept in the audit trail)</label>
+            <input id="reason" type="text" name="reason" maxlength="200" required>
+        </div>
+        <div class="actions">
+            <button type="submit" class="btn--danger" th:text="#{void.button}">Void check-in</button>
+            <a class="btn btn--ghost" th:href="@{/organizer/events/{id}/attendance(id=${eventId})}" th:text="#{common.goBack}">Go back</a>
+        </div>
+    </form>
+</main>
+</html>

@@ -140,8 +140,8 @@ flowchart LR
 |---|---|---|---|
 | `auth-service` | users, roles, refresh tokens, verification tokens | `UserRegistered` | — |
 | `event-service` | venues, events, sessions, registrations, waitlist, state history | `RegistrationConfirmed`, `RegistrationWaitlisted` (P7), `RegistrationCancelled`, `WaitlistPromoted`, `EventStateChanged`, `EventRescheduled` | — |
-| `pass-service` | passes, signing keys, revocations | `PassIssued`, `PassRevoked` | `RegistrationConfirmed`, `RegistrationCancelled`, `EventStateChanged`, `EventRescheduled`, `AttendanceMarked` |
-| `checkin-service` | scan log, attendance, presence, device sync batches (plus a read-only copy of passes and event status for scanning) | `AttendanceMarked` | `PassIssued`, `PassRevoked`, `EventStateChanged` |
+| `pass-service` | passes, signing keys, revocations | `PassIssued`, `PassRevoked` | `RegistrationConfirmed`, `RegistrationCancelled`, `EventStateChanged`, `EventRescheduled`, `AttendanceMarked`, `AttendanceVoided` (P8) |
+| `checkin-service` | scan log, attendance, presence, device sync batches (plus a read-only copy of passes and event status for scanning) | `AttendanceMarked`, `AttendanceVoided` (P8) | `PassIssued`, `PassRevoked`, `EventStateChanged` |
 | `notification-service` | notification log, reminder schedule | — | all of the above (recipients for bulk mails are read from event-service at send time, so it keeps no copy; owner, 2026-10-20) |
 | `web-portal` | HTTP sessions only (BFF; tokens never reach the browser) | — | — |
 
@@ -195,9 +195,9 @@ stateDiagram-v2
 
 | Aggregate | States | Notes |
 |---|---|---|
-| **Event** | DRAFT → PUBLISHED → REGISTRATION_OPEN → REGISTRATION_CLOSED → LIVE → COMPLETED; CANCELLED from any pre-LIVE state; LIVE → REGISTRATION_CLOSED (undo an accidental early start) | Time-based transitions happen through `@Scheduled`. **LIVE is entered only by the scheduler** (owner decision, 2026-10-15); organizers can open/close registration early, complete, cancel, and undo LIVE. Each transition is written to `event_state_history`. |
-| **Registration** | PENDING → CONFIRMED / WAITLISTED → CANCELLED; WAITLISTED → CONFIRMED (promotion) | Promotion happens in the same transaction as the cancellation that freed the seat. One *active* registration per student per event; after cancelling, a student may register again (new row). |
-| **Pass** | ISSUED → ACTIVE → EXPIRED; ISSUED → EXPIRED; ISSUED/ACTIVE → REVOKED | Owned by `pass-service` (is the pass *valid*?). **ACTIVE means the live code is unlocked**: 2 h before doors open (configurable), as in the UI mockup's wallet (owner decision, 2026-10-16). Before that only the static QR / PDF exists, if the event allows it. ISSUED → EXPIRED covers a pass whose event ended before it unlocked. |
+| **Event** | DRAFT → PUBLISHED → REGISTRATION_OPEN → REGISTRATION_CLOSED → LIVE → COMPLETED; CANCELLED from any pre-LIVE state; LIVE → REGISTRATION_CLOSED (undo an accidental early start) | Time-based transitions happen through `@Scheduled`. **LIVE is entered only by the scheduler** (owner decision, 2026-10-15); organizers can open/close registration early, complete, cancel, and undo LIVE (refused once anyone has checked in; P8, RL3). **Admin-only (P8, RL10):** un-cancel (back to the state before CANCELLED), force LIVE, reopen COMPLETED → LIVE. Each transition is written to `event_state_history`. |
+| **Registration** | PENDING → CONFIRMED / WAITLISTED → CANCELLED; WAITLISTED → CONFIRMED (promotion) | Promotion happens in the same transaction as the cancellation that freed the seat. One *active* registration per student per event; after cancelling, a student may register again (new row). **Waitlist is a per-event setting, off by default (P8, RL1):** with it on, a full event waitlists, and after registration closes (until LIVE) every new registration is WAITLISTED; with it off, a full or closed event refuses. |
+| **Pass** | ISSUED → ACTIVE → EXPIRED; ISSUED → EXPIRED; ISSUED/ACTIVE → REVOKED | Owned by `pass-service` (is the pass *valid*?). **ACTIVE means the live code is unlocked**: 2 h before doors open (configurable), as in the UI mockup's wallet (owner decision, 2026-10-16). Before that only the static QR / PDF exists, if the event allows it. ISSUED → EXPIRED covers a pass whose event ended before it unlocked. REVOKED and EXPIRED are final; when an admin un-cancels or reopens an event, a **new pass** is issued instead (P8, RL10). |
 | **Presence** | NOT_ARRIVED → IN ⇄ OUT | Owned by `checkin-service` (where is the attendee?). Re-entry is allowed only if the event allows it. |
 
 All transitions go through one `transition(from, to)` method backed by an enum transition table. An illegal move returns `409` with a `ProblemDetail` that lists the allowed next states.
@@ -227,7 +227,7 @@ All transitions go through one `transition(from, to)` method backed by an enum t
 | Resilience | **Resilience4j** | Circuit breaker, retry, timeouts |
 | Observability | Micrometer → **Prometheus + Grafana**, Micrometer Tracing → **Zipkin** | Dashboards and request traces across services |
 | Testing | JUnit Jupiter 6, Mockito, `@WebMvcTest`/`@DataJpaTest`, **Testcontainers 2**, **Gatling** (Java DSL) | Unit, slice, integration and load tests |
-| Ops | Docker Compose, `spring-boot:build-image`, GitHub Actions CI | One-command startup |
+| Ops | Docker Compose, a multi-stage `Dockerfile` (owner, 2026-10-24: no host JDK needed), GitHub Actions CI | One-command startup |
 
 ### Repository layout (target)
 
@@ -420,18 +420,20 @@ P1 Foundation ─► P2 Auth ─► P3 Registration/TX ─► P4 Pass+QR ─► 
 
 ### P8 — Hardening, Observability & Showcase
 
-**Goal:** make it robust, measurable and presentable.
+**Goal:** make it robust, measurable and presentable, and close the review-later items the owner pulled in. Plan: `docs/plans/phase-8.md` (owner decisions 2026-10-24: plan §4, §17; `docs/DECISIONS.md` D17).
 
-- [ ] **Observability:** Micrometer → Prometheus; provisioned Grafana dashboards (requests/s, p95 latency, scans/min, registration rate, outbox lag); **Zipkin traces** that follow one scan through gateway → checkin → pass; JSON logs with trace and correlation IDs.
-- [ ] **Resilience:** Resilience4j circuit breakers, retries and timeouts on service-to-service calls (for example, the scan falls back to the cached revocation list if pass-service is down); gateway rate limiting on `/login` and `/scans` backed by Redis.
-- [ ] **Testing:** Testcontainers integration tests (PostgreSQL, RabbitMQ) for each service; one cross-service end-to-end test (register → pass → scan → attendance).
-- [ ] **Load test:** a Gatling (Java DSL) simulation of "1,000 students arriving in 10 minutes across 4 gates", with an HTML report kept in `docs/`.
-- [ ] **Ops:** container images through `spring-boot:build-image`; the full stack (services included) with one `docker compose up`; health and readiness probes; a seed-data generator (DataFaker) that creates a realistic college fest (events, 2,000 students, volunteers).
-- [ ] **Docs:** README quick start, architecture write-up, `DEMO_SCRIPT.md` (a 10-minute walkthrough), `DECISIONS.md`, and the concept-coverage table from §1 with links to code.
-- [ ] Final rehearsal: run the demo script end to end on a clean clone.
+- [x] **Observability:** Micrometer → Prometheus (actuator on a separate management port); provisioned Grafana dashboards (requests/s, p95 latency, scans/min, registration rate, outbox lag, DLQ size, breaker state); **Zipkin traces** that follow one scan through portal → gateway → checkin → RabbitMQ → pass (a scan never calls pass-service over HTTP, so the trace crosses the outbox: `traceparent` in the outbox headers); JSON logs with trace and correlation IDs.
+- [x] **Resilience:** Resilience4j circuit breakers, timeouts and (GET only) retries on every service-to-service call (known passes keep scanning from the local copy when pass-service is down; unknown-pass fetches fail fast); gateway rate limiting on `/login` (by the browser's IP, forwarded by the portal) and `/scans` (by user), backed by Redis.
+- [x] **Testing:** Testcontainers integration tests already cover every service; add one cross-service end-to-end test (register → pass → scan → attendance) in an `e2e-tests` module with its own CI job.
+- [x] **Load test:** a Gatling (Java DSL) simulation of "1,000 students arriving in 10 minutes across 4 gates" plus a doors-open peak, with an HTML report kept in `docs/load-test/` (0 failures, p95 104 ms, p99 833 ms).
+- [x] **Ops:** container images from one multi-stage `Dockerfile`; the full stack (services included) with one `docker compose up --build` at the repo root; health and readiness probes; a seed-data generator (DataFaker, `bulk-seed` profile) that creates a realistic college fest (events, 2,000 students, volunteers) through the real registration flow.
+- [x] **Review-later items (owner, 2026-10-24):** RL1 per-event waitlist setting (off by default; waitlist after closing until LIVE); RL3 undo LIVE refused once checked in; RL10 admin powers (un-cancel with re-issued passes, force LIVE, reopen a completed event, re-issue one pass, edit any event in any state, ban/unban users, indexed user and event search); RL12 void a wrong check-in (organizer or admin). RL2 and RL13 stay as built.
+- [x] **Docs:** README quick start, `docs/ARCHITECTURE.md` (with the concept-coverage table from §1 linked to code), `docs/DEMO_SCRIPT.md` (a 10-minute walkthrough), `DECISIONS.md`.
+- [x] Final rehearsal (agent part): the stack came up from a clean copy of the committable tree and the API journey, the admin/organizer demo steps (Playwright) and scanning without pass-service were run (2026-10-24; plan §18 lists what was *not* run). The owner's live run, with the two-phone check (RL14), is still to do; a true clean-clone check on Linux is the first pull request's `e2e` CI job.
 
 **Concepts:** microservice operations (observability, resilience), verification of everything above.
-**Exit criteria / demo:** a clean clone runs `docker compose up`, the seed loads and the demo script runs start to finish; stopping pass-service during scanning degrades gracefully, as the Grafana and Zipkin views show.
+**Exit criteria / demo:** a clean clone runs `docker compose up --build`, the seed loads and the demo script runs start to finish; stopping pass-service during scanning degrades gracefully, as the Grafana and Zipkin views show.
+**Status:** built 2026-10-24; the owner's live rehearsal and RL14 (two phones) are pending, then the REVIEW-LATER discussion. Clean-copy start verified (15 containers healthy, seed, 8/8 Prometheus targets, Grafana, one scan = one Zipkin trace across RabbitMQ), pass-service-down scanning verified, e2e test green, load test (1,000 arrivals in 10 min: 0 failures, p95 104 ms) in `docs/load-test/`. As-built notes in `docs/plans/phase-8.md` §18, decisions in `docs/DECISIONS.md` D17, demo requests in `docs/http/phase-8.http`.
 
 ---
 

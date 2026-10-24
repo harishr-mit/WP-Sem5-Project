@@ -73,6 +73,9 @@ public class GatewayAuthenticationProvider implements AuthenticationProvider {
         if (ex.is("account-locked") || ex.getStatus() == 423) {
             return new LockedException(ex.getMessage());
         }
+        if (ex.getStatus() == 429) {
+            return new AuthenticationServiceException("Too many login attempts. Please wait a minute and try again.");
+        }
         if (ex.getStatus() == 401 || ex.getStatus() == 400) {
             return new BadCredentialsException("Email or password is wrong.");
         }

@@ -75,6 +75,12 @@
                                 </form>
                             </dialog>
                         </th:block>
+                        <!--/* RL10: an admin can issue a new pass for a revoked one; the first click only asks (RL9). */-->
+                        <form th:if="${p != null and p.status() == 'REVOKED' and currentUser.hasRole('ADMIN')}"
+                              th:action="@{/organizer/passes/{id}/reissue(id=${p.id()})}" method="post" class="inline">
+                            <input type="hidden" name="eventId" th:value="${event.id()}">
+                            <button type="submit" class="btn--small" th:text="#{reissue.button}">Issue a new pass</button>
+                        </form>
                     </td>
                 </tr>
                 </tbody>

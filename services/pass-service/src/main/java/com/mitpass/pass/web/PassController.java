@@ -18,6 +18,7 @@ import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -85,5 +87,18 @@ public class PassController {
             @PathVariable UUID id, @Valid @RequestBody(required = false) RevokeRequest request, CurrentUser actor) {
         String note = request == null ? null : request.note();
         return queries.toResponse(lifecycle.revokeByStaff(id, actor.id().toString(), actor.hasRole(Roles.ADMIN), note));
+    }
+
+    @PostMapping("/{id}/reissue")
+    @PreAuthorize("hasRole('ADMIN')")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(
+            summary = "Issue a new pass for a revoked pass's registration (ADMIN, RL10)",
+            description =
+                    "The revoked pass stays revoked (D12); the new one has a new number and publishes PassIssued. "
+                            + "409 if the pass isn't REVOKED or the registration already has a valid pass; 422 if the "
+                            + "registration was cancelled or the event is cancelled or over.")
+    public PassResponse reissue(@PathVariable UUID id, CurrentUser actor) {
+        return queries.toResponse(lifecycle.reissueByAdmin(id, actor.id().toString()));
     }
 }

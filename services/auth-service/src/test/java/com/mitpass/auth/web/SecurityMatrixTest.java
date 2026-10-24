@@ -119,6 +119,18 @@ class SecurityMatrixTest {
                         ids -> null,
                         Rule.only(ADMIN)),
                 new Endpoint(
+                        HttpMethod.POST,
+                        "/api/users/{id}/ban",
+                        ids -> "/api/users/" + ids.target() + "/ban",
+                        ids -> null,
+                        Rule.only(ADMIN)),
+                new Endpoint(
+                        HttpMethod.POST,
+                        "/api/users/{id}/unban",
+                        ids -> "/api/users/" + ids.target() + "/unban",
+                        ids -> null,
+                        Rule.only(ADMIN)),
+                new Endpoint(
                         HttpMethod.DELETE,
                         "/api/users/{id}/sessions",
                         ids -> "/api/users/" + ids.target() + "/sessions",

@@ -43,12 +43,13 @@ public final class EventSpecifications {
         return specs.isEmpty() ? Specification.unrestricted() : Specification.allOf(specs);
     }
 
-    /** Case-insensitive substring of title or description; {@code %} and {@code _} in the input are literal. */
+    /**
+     * Case-insensitive substring of title, code or description, through {@code search_text} and its trigram index
+     * (V9, D17); {@code %} and {@code _} in the input are literal.
+     */
     public static Specification<Event> textContains(String text) {
         String pattern = "%" + escapeLike(text.trim().toLowerCase(Locale.ROOT)) + "%";
-        return (root, query, cb) -> cb.or(
-                cb.like(cb.lower(root.get("title")), pattern, '\\'),
-                cb.like(cb.lower(root.get("description")), pattern, '\\'));
+        return (root, query, cb) -> cb.like(root.get("searchText"), pattern, '\\');
     }
 
     public static Specification<Event> inCategory(String categoryCode) {

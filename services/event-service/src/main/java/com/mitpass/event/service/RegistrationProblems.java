@@ -12,6 +12,7 @@ public final class RegistrationProblems {
     public static final String ALREADY_REGISTERED = "already-registered";
     public static final String REGISTRATION_CLOSED = "registration-closed";
     public static final String NOT_ELIGIBLE = "not-eligible";
+    public static final String EVENT_FULL = "event-full";
 
     private RegistrationProblems() {}
 
@@ -27,6 +28,15 @@ public final class RegistrationProblems {
     static ProblemException registrationClosed(String detail) {
         return new ProblemException(
                 HttpStatus.CONFLICT, ProblemTypes.of(REGISTRATION_CLOSED), "Registration closed", detail);
+    }
+
+    /** No seat left and the event keeps no waitlist (RL1). */
+    static ProblemException eventFull(long eventId) {
+        return new ProblemException(
+                HttpStatus.CONFLICT,
+                ProblemTypes.of(EVENT_FULL),
+                "Event full",
+                "Event %d is full and has no waitlist.".formatted(eventId));
     }
 
     static ProblemException notEligible(List<String> reasons) {

@@ -120,7 +120,72 @@ public final class ApiModels {
             Boolean staticQrAllowed,
             String passColor,
             Boolean reentryAllowed,
-            Integer certificateMinSessions) {
+            Integer certificateMinSessions,
+            Boolean waitlistEnabled) {
+
+        public EventDetail(
+                Long id,
+                String code,
+                String title,
+                String description,
+                Category category,
+                Venue venue,
+                String department,
+                Integer capacity,
+                Instant startsAt,
+                Instant endsAt,
+                Instant registrationOpensAt,
+                Instant registrationClosesAt,
+                String status,
+                UUID organizerId,
+                String organizerName,
+                List<String> eligibleDepartments,
+                Integer minYear,
+                Integer maxYear,
+                List<String> allowedTransitions,
+                Integer seatsTaken,
+                Integer seatsLeft,
+                Long version,
+                List<Session> sessions,
+                Boolean staticQrAllowed,
+                String passColor,
+                Boolean reentryAllowed,
+                Integer certificateMinSessions) {
+            this(
+                    id,
+                    code,
+                    title,
+                    description,
+                    category,
+                    venue,
+                    department,
+                    capacity,
+                    startsAt,
+                    endsAt,
+                    registrationOpensAt,
+                    registrationClosesAt,
+                    status,
+                    organizerId,
+                    organizerName,
+                    eligibleDepartments,
+                    minYear,
+                    maxYear,
+                    allowedTransitions,
+                    seatsTaken,
+                    seatsLeft,
+                    version,
+                    sessions,
+                    staticQrAllowed,
+                    passColor,
+                    reentryAllowed,
+                    certificateMinSessions,
+                    null);
+        }
+
+        /** RL1: absent (an event-service from before P8) means the old behaviour, a waitlist. */
+        public boolean hasWaitlist() {
+            return !Boolean.FALSE.equals(waitlistEnabled);
+        }
 
         public int fillPercent() {
             return percent(seatsTaken, capacity);
@@ -178,7 +243,24 @@ public final class ApiModels {
             List<String> reasons,
             Integer seatsLeft,
             Long waitlistCount,
-            Registration myRegistration) {}
+            Registration myRegistration,
+            /* RL1: registration has closed, but the waitlist stays open until LIVE. */
+            Boolean waitlistOnly) {
+
+        public Eligibility(
+                Boolean eligible,
+                Boolean registrationOpen,
+                List<String> reasons,
+                Integer seatsLeft,
+                Long waitlistCount,
+                Registration myRegistration) {
+            this(eligible, registrationOpen, reasons, seatsLeft, waitlistCount, myRegistration, null);
+        }
+
+        public boolean onlyWaitlist() {
+            return Boolean.TRUE.equals(waitlistOnly);
+        }
+    }
 
     /** Result of a registration; {@code replayed} when the gateway answered from the Idempotency-Key store. */
     public record RegisterResult(Registration registration, boolean replayed) {}
@@ -246,7 +328,41 @@ public final class ApiModels {
             Boolean emailVerified,
             Boolean locked,
             Instant createdAt,
-            Instant lastLoginAt) {}
+            Instant lastLoginAt,
+            /* RL10: an admin banned the account. */
+            Boolean banned) {
+
+        public UserProfile(
+                UUID id,
+                String email,
+                String fullName,
+                String department,
+                Integer year,
+                String registerNumber,
+                List<String> roles,
+                Boolean emailVerified,
+                Boolean locked,
+                Instant createdAt,
+                Instant lastLoginAt) {
+            this(
+                    id,
+                    email,
+                    fullName,
+                    department,
+                    year,
+                    registerNumber,
+                    roles,
+                    emailVerified,
+                    locked,
+                    createdAt,
+                    lastLoginAt,
+                    null);
+        }
+
+        public boolean isBanned() {
+            return Boolean.TRUE.equals(banned);
+        }
+    }
 
     /** One registered instance and its health (gateway {@code GET /api/admin/health}, D15). */
     public record InstanceHealth(

@@ -78,6 +78,7 @@
                     <th th:text="#{pass.number}">Pass no.</th>
                     <th th:text="#{staff.gate}">Gate</th>
                     <th th:text="#{att.now}">Now</th>
+                    <th></th>
                 </tr></thead>
                 <tbody>
                 <tr th:each="a : ${attendees.content()}">
@@ -86,6 +87,11 @@
                     <td th:data-label="#{pass.number}" class="pass-number" th:text="${a.passNumber()}">TECHFEST26-000042-7</td>
                     <td th:data-label="#{staff.gate}" class="mono" th:text="${a.lastGate() == null} ? '—' : ${a.lastGate()}">MAIN</td>
                     <td th:data-label="#{att.now}"><span th:replace="~{layout :: badge(${a.presence()})}"></span></td>
+                    <td data-label="" class="right">
+                        <a class="btn btn--small btn--ghost" th:if="${a.sessionsAttended() != null and a.sessionsAttended() > 0}"
+                           th:href="@{/organizer/events/{id}/attendance/{pass}/void(id=${event.id()},pass=${a.passId()})}"
+                           th:text="#{void.link}">Void</a>
+                    </td>
                 </tr>
                 </tbody>
             </table>

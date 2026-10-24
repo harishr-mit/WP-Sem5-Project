@@ -39,4 +39,6 @@ public record EventDetailResponse(
         String passColor,
         /** Phase 5 (D14): checkin-service reads these. {@code certificateMinSessions} null = all sessions. */
         boolean reentryAllowed,
-        Integer certificateMinSessions) {}
+        Integer certificateMinSessions,
+        /** Phase 8 (RL1, D17). */
+        boolean waitlistEnabled) {}

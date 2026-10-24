@@ -146,6 +146,38 @@ class AuthFlowTests {
         signup("d.u.p" + id + "+fest@gmail.com", "Techfest2026").andExpect(status().isConflict());
     }
 
+    /** RL10: a banned account can't log in or refresh; nobody bans themselves; unbanning restores the login. */
+    @Test
+    void anAdminBansAndUnbansAUser() throws Exception {
+        User admin = accounts.verifiedUser(TestAccounts.uniqueGmail(), RoleName.ADMIN);
+        User student = accounts.verifiedUser(TestAccounts.uniqueGmail(), RoleName.STUDENT);
+        String adminToken = accessTokenOf(admin.getEmail());
+        String studentRefresh = JsonPath.read(
+                login(student.getEmail(), TestAccounts.PASSWORD)
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString(),
+                "$.refreshToken");
+
+        mvc.perform(post("/api/users/{id}/ban", student.getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.banned").value(true));
+        login(student.getEmail(), TestAccounts.PASSWORD)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.type").value("urn:mitpass:problem:account-disabled"));
+        refresh(studentRefresh).andExpect(status().isUnauthorized());
+
+        mvc.perform(post("/api/users/{id}/ban", admin.getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isUnprocessableContent());
+
+        mvc.perform(post("/api/users/{id}/unban", student.getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(jsonPath("$.banned").value(false));
+        login(student.getEmail(), TestAccounts.PASSWORD).andExpect(status().isOk());
+    }
+
     @Test
     void adminChangesRolesAndTheUsersSessionsEnd() throws Exception {
         User admin = accounts.verifiedUser(TestAccounts.uniqueGmail(), RoleName.ADMIN);
