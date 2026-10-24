@@ -2,6 +2,7 @@ package com.mitpass.checkin.web;
 
 import com.mitpass.checkin.client.EventCatalog;
 import com.mitpass.checkin.service.AttendanceReportService;
+import com.mitpass.checkin.service.CheckInVoids;
 import com.mitpass.checkin.service.CheckinProblems;
 import com.mitpass.checkin.service.LiveStats;
 import com.mitpass.checkin.service.PassCopyReconciler;
@@ -16,14 +17,19 @@ import com.mitpass.common.web.paging.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,6 +37,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,13 +55,19 @@ public class AttendanceController {
     private final PassCopyReconciler reconciler;
     private final LiveStats live;
     private final EventCatalog catalog;
+    private final CheckInVoids voids;
 
     public AttendanceController(
-            AttendanceReportService reports, PassCopyReconciler reconciler, LiveStats live, EventCatalog catalog) {
+            AttendanceReportService reports,
+            PassCopyReconciler reconciler,
+            LiveStats live,
+            EventCatalog catalog,
+            CheckInVoids voids) {
         this.reports = reports;
         this.reconciler = reconciler;
         this.live = live;
         this.catalog = catalog;
+        this.voids = voids;
     }
 
     @GetMapping("/events/{eventId}/live")
@@ -67,8 +80,33 @@ public class AttendanceController {
         return live.snapshot(eventId, catalog.event(eventId).capacity());
     }
 
-    @GetMapping("/events/{eventId}/summary")
+    /** RL12: a wrong check-in is voided by the event's organizer or an admin, with a reason (RL9: the portal asks). */
+    @PostMapping("/events/{eventId}/void")
     @PreAuthorize(OWNER_OR_ADMIN)
+    @Operation(
+            summary = "Void wrong check-ins of a pass (event organizer or ADMIN; RL12)",
+            description = "Without `sessionId`, every check-in of the pass at this event. The rows are kept for audit, "
+                    + "left out of every count and report, and the pass can be checked in again. 404 if there is "
+                    + "nothing to void. Publishes AttendanceVoided.")
+    public CheckInVoids.Voided voidCheckIns(
+            @PathVariable Long eventId, @Valid @RequestBody VoidRequest request, CurrentUser caller) {
+        return voids.voidCheckIns(
+                eventId,
+                request.passId(),
+                request.sessionId(),
+                request.reason().strip(),
+                caller.id().toString());
+    }
+
+    /** {@code reason}: why, for the audit trail (required). */
+    public record VoidRequest(
+            @NotNull UUID passId,
+            Long sessionId,
+            @NotBlank @Size(max = 200) String reason) {}
+
+    @GetMapping("/events/{eventId}/summary")
+    // SERVICE: event-service asks before an undo of LIVE whether anyone has checked in (RL3, P8)
+    @PreAuthorize("hasRole('SERVICE') or " + OWNER_OR_ADMIN)
     @Operation(summary = "Counts and percentages per event, session and gate (event organizer or ADMIN)")
     public AttendanceSummary summary(@PathVariable Long eventId) {
         return reports.summary(eventId);

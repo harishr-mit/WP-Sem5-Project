@@ -248,6 +248,7 @@ class EventControllerTest {
                 true,
                 null,
                 false,
-                null);
+                null,
+                false);
     }
 }

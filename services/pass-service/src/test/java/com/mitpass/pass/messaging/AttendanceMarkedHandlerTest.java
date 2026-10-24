@@ -5,6 +5,7 @@ import static com.mitpass.pass.PassFixtures.message;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mitpass.common.messaging.contract.AttendanceMarked;
+import com.mitpass.common.messaging.contract.AttendanceVoided;
 import com.mitpass.pass.PassFixtures;
 import com.mitpass.pass.PassFixtures.TestEvent;
 import com.mitpass.pass.PassIntegrationTest;
@@ -13,6 +14,7 @@ import com.mitpass.pass.domain.Pass;
 import com.mitpass.pass.repository.PassRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,6 +72,37 @@ class AttendanceMarkedHandlerTest {
         Pass reloaded = passes.findById(pass.getId()).orElseThrow();
         assertThat(reloaded.getCheckedInAt()).isEqualTo(first);
         assertThat(reloaded.getUsedAt()).isEqualTo(first);
+    }
+
+    /** RL12: voiding the last check-in makes the pass new again; voiding one of several leaves it checked in. */
+    @Test
+    void voidingTheLastCheckInClearsTheUseButOneOfSeveralDoesNot() {
+        Instant first = TestClock.START.plusSeconds(60);
+        listener.onMessage(message(marked(pass, 0, first, true)));
+
+        listener.onMessage(message(voided(pass, true)));
+        assertThat(passes.findById(pass.getId()).orElseThrow().getCheckedInAt()).isEqualTo(first);
+
+        listener.onMessage(message(voided(pass, false)));
+        Pass reloaded = passes.findById(pass.getId()).orElseThrow();
+        assertThat(reloaded.getCheckedInAt()).isNull();
+        assertThat(reloaded.getUsedAt()).isNull();
+
+        // and it records the next check-in as the first one again
+        Instant again = first.plusSeconds(600);
+        listener.onMessage(message(marked(pass, 0, again, true)));
+        assertThat(passes.findById(pass.getId()).orElseThrow().getCheckedInAt()).isEqualTo(again);
+    }
+
+    private static AttendanceVoided voided(Pass pass, boolean stillCheckedIn) {
+        return new AttendanceVoided(
+                pass.getId(),
+                pass.getEvent().getId(),
+                List.of(0L),
+                stillCheckedIn,
+                TestClock.START.plusSeconds(120),
+                "organizer",
+                "wrong person");
     }
 
     @Test

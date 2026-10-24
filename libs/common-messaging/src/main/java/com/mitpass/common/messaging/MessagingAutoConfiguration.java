@@ -170,6 +170,30 @@ public class MessagingAutoConfiguration {
         }
     }
 
+    /** Same conditions as the relay: a service that publishes has an {@code outbox_message} table. */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "io.micrometer.core.instrument.MeterRegistry")
+    @ConditionalOnBean(DataSource.class)
+    @ConditionalOnProperty(prefix = "mitpass.messaging.relay", name = "enabled", matchIfMissing = true)
+    static class OutboxMetrics {
+        /** {@code mitpass_outbox_lag_seconds}: age of the oldest unpublished row; 0 when the relay is caught up (D17). */
+        @Bean
+        MeterBinder outboxLagGauge(DataSource dataSource) {
+            JdbcClient jdbc = JdbcClient.create(dataSource);
+            return registry -> Gauge.builder("mitpass.outbox.lag", () -> {
+                        try {
+                            return jdbc.sql("""
+                                            SELECT COALESCE(EXTRACT(EPOCH FROM now() - MIN(occurred_at)), 0)
+                                            FROM outbox_message WHERE published_at IS NULL""").query(Double.class).single();
+                        } catch (RuntimeException e) {
+                            return Double.NaN;
+                        }
+                    })
+                    .baseUnit("seconds")
+                    .register(registry);
+        }
+    }
+
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = "io.micrometer.core.instrument.MeterRegistry")
     @ConditionalOnBean(Declarables.class) // as deadLetters(): member classes are evaluated before the outer beans

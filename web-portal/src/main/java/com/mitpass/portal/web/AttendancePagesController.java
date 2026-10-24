@@ -3,6 +3,7 @@ package com.mitpass.portal.web;
 import com.mitpass.portal.auth.PortalUser;
 import com.mitpass.portal.client.ApiModels;
 import com.mitpass.portal.client.ApiModels.AttendanceSummary;
+import com.mitpass.portal.client.ApiModels.AttendeeRow;
 import com.mitpass.portal.client.ApiModels.Binary;
 import com.mitpass.portal.client.ApiModels.SyncResult;
 import com.mitpass.portal.client.ApiProblemException;
@@ -10,6 +11,7 @@ import com.mitpass.portal.client.GatewayClient;
 import com.mitpass.portal.config.PortalProperties;
 import com.mitpass.portal.web.support.Htmx;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.UUID;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.CacheControl;
@@ -22,6 +24,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -61,6 +64,39 @@ public class AttendancePagesController {
         // "Sync passes now" is an admin tool only: the reconciler keeps the copy in step by itself (D14).
         model.addAttribute("isAdmin", user != null && user.hasRole("ADMIN"));
         return "organizer/attendance";
+    }
+
+    /** RL12 + RL9: a void leads to a confirmation page that asks for the reason; only a confirmed POST acts. */
+    @GetMapping("/organizer/events/{id}/attendance/{passId}/void")
+    public String confirmVoid(@PathVariable long id, @PathVariable UUID passId, Model model) {
+        AttendeeRow row = gateway.attendees(id).content().stream()
+                .filter(a -> passId.equals(a.passId()))
+                .findFirst()
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND));
+        model.addAttribute("attendee", row);
+        model.addAttribute("eventId", id);
+        return "organizer/confirm-void";
+    }
+
+    @PostMapping("/organizer/events/{id}/attendance/{passId}/void")
+    public String voidCheckIn(
+            @PathVariable long id,
+            @PathVariable UUID passId,
+            @RequestParam(defaultValue = "") String reason,
+            @RequestParam(defaultValue = "false") boolean confirmed,
+            RedirectAttributes redirect) {
+        if (!confirmed || reason.isBlank()) {
+            return "redirect:/organizer/events/" + id + "/attendance/" + passId + "/void";
+        }
+        try {
+            gateway.voidCheckIn(id, passId, reason.strip());
+            redirect.addFlashAttribute(
+                    "message", messages.getMessage("void.done", null, LocaleContextHolder.getLocale()));
+        } catch (ApiProblemException ex) {
+            redirect.addFlashAttribute("error", ex.getMessage());
+        }
+        return "redirect:/organizer/events/" + id + "/attendance";
     }
 
     /**

@@ -9,11 +9,15 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 /** Turns {@code mitpass.security.public-paths} entries ({@code "GET /api/events/**"} or {@code "/x/**"}) into matchers. */
 public final class PublicPaths {
 
-    /** Always public: health/info probes, the OpenAPI document, Swagger UI and the error page. */
+    /**
+     * Always public: health/info probes, metrics, the OpenAPI document, Swagger UI and the error page. Actuator paths
+     * exist only on the management port, which is never published or routed (D17).
+     */
     public static final List<String> INFRASTRUCTURE = List.of(
             "GET /actuator/health",
             "GET /actuator/health/**",
             "GET /actuator/info",
+            "GET /actuator/prometheus",
             "GET /v3/api-docs",
             "GET /v3/api-docs/**",
             "GET /swagger-ui.html",

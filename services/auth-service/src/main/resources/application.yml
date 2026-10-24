@@ -44,13 +44,24 @@ eureka:
     hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
 
 management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true   # Grafana's p95 latency panel (D17)
+  tracing:
+    sampling:
+      probability: 1.0   # every request is traced (a demo; Zipkin at localhost:9411 by default, D17)
+  server:
+    port: 18081   # 10000 + server port: actuator only here, never published or routed (D17)
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       show-components: always   # names and status for the admin health page (D15); details stay hidden
+      probes:
+        enabled: true   # /actuator/health/liveness and /readiness for the compose healthchecks
   health:
     mail:
       enabled: false   # Mailpit being down must not mark the service DOWN; sending is best-effort (after commit)
@@ -98,6 +109,9 @@ mitpass:
         notification-service:   # P7 (D16): reads registrations and static QR codes for emails
           subject: 00000000-0000-4000-8000-0000000000f2
           secret: ${MITPASS_SERVICE_SECRET_NOTIFICATION:dev-only-notification-secret}
+        event-service:   # P8 (RL3): asks checkin-service whether an event has check-ins
+          subject: 00000000-0000-4000-8000-0000000000f3
+          secret: ${MITPASS_SERVICE_SECRET_EVENT:dev-only-event-secret}
     signup:
       domains:
         - domain: student.annauniv.edu

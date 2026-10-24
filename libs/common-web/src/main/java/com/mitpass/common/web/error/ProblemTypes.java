@@ -13,6 +13,7 @@ public final class ProblemTypes {
     public static final URI UNAUTHORIZED = of("unauthorized");
     public static final URI FORBIDDEN = of("forbidden");
     public static final URI INTERNAL = of("internal");
+    public static final URI TOO_MANY_REQUESTS = of("too-many-requests");
     /** A state machine refused the move (409); the body lists {@code allowedStates}. */
     public static final URI ILLEGAL_TRANSITION = of("illegal-transition");
 

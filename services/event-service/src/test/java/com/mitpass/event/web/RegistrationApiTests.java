@@ -1,6 +1,7 @@
 package com.mitpass.event.web;
 
 import static com.mitpass.event.web.LifecycleTests.as;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -18,6 +19,8 @@ import com.mitpass.event.domain.TransitionTrigger;
 import com.mitpass.event.service.EventLifecycleService;
 import com.mitpass.event.service.EventService;
 import com.mitpass.security.test.TestJwtIssuer;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -45,6 +48,9 @@ public class RegistrationApiTests {
     @Autowired
     EventLifecycleService lifecycle;
 
+    @Autowired
+    MeterRegistry meters;
+
     long eventId;
 
     @BeforeEach
@@ -59,6 +65,8 @@ public class RegistrationApiTests {
 
     @Test
     void registerConfirmsThenWaitlistsWithLocation() throws Exception {
+        double confirmed = registrations("CONFIRMED");
+        double waitlisted = registrations("WAITLISTED");
         register(student("CSE", 2))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("/api/registrations/")))
@@ -70,6 +78,14 @@ public class RegistrationApiTests {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("WAITLISTED"))
                 .andExpect(jsonPath("$.waitlistPosition").value(1));
+        assertThat(registrations("CONFIRMED")).isEqualTo(confirmed + 1);
+        assertThat(registrations("WAITLISTED")).isEqualTo(waitlisted + 1);
+    }
+
+    private double registrations(String status) {
+        Counter counter =
+                meters.find("mitpass.registrations").tag("status", status).counter();
+        return counter == null ? 0 : counter.count();
     }
 
     @Test

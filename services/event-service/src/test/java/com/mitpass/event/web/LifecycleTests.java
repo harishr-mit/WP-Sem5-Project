@@ -3,6 +3,7 @@ package com.mitpass.event.web;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -41,6 +42,12 @@ public class LifecycleTests {
 
     @Autowired
     EventLifecycleService lifecycle;
+
+    @Autowired
+    com.mitpass.event.EventIntegrationTest.FakeCheckin checkin;
+
+    @Autowired
+    org.springframework.jdbc.core.simple.JdbcClient jdbc;
 
     long id;
     String code;
@@ -122,6 +129,88 @@ public class LifecycleTests {
         move(OWNER, "REGISTRATION_CLOSED", "Went live too early").andExpect(status().isOk());
         mvc.perform(as(OWNER, put("/api/events/{id}", id)).content(event(code, 2)))
                 .andExpect(status().isOk());
+    }
+
+    /** RL3 (D17): once anyone has checked in, LIVE can't be undone; if checkin-service can't say, it isn't risked. */
+    @Test
+    void undoingAStartIsRefusedOnceSomeoneHasCheckedInOrWhenCheckinServiceIsDown() throws Exception {
+        toClosed();
+        lifecycle.transition(id, EventStatus.LIVE, "system", TransitionTrigger.SCHEDULER, null);
+        try {
+            checkin.down = true;
+            move(OWNER, "REGISTRATION_CLOSED", "Too early").andExpect(status().isServiceUnavailable());
+            checkin.down = false;
+
+            checkin.withCheckIns.add(id);
+            move(OWNER, "REGISTRATION_CLOSED", "Too early")
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.detail").value(containsString("already checked in")));
+            mvc.perform(get("/api/events/{id}", id))
+                    .andExpect(jsonPath("$.status").value("LIVE"));
+            move(OWNER, "COMPLETED", null).andExpect(status().isOk());
+        } finally {
+            checkin.down = false;
+            checkin.withCheckIns.remove(id);
+        }
+    }
+
+    // ---- RL10 (D17): admin overrides --------------------------------------------------------------------------
+
+    @Test
+    void anAdminUnCancelsBackToTheStateItWasCancelledFromAndTheHistorySaysAdmin() throws Exception {
+        move(OWNER, "PUBLISHED", null);
+        move(OWNER, "CANCELLED", "Oops").andExpect(jsonPath("$.allowedTransitions", hasSize(0)));
+        move(OWNER, "PUBLISHED", null).andExpect(status().isConflict());
+
+        mvc.perform(as(ADMIN, get("/api/events/{id}", id)))
+                .andExpect(jsonPath("$.allowedTransitions", contains("PUBLISHED")));
+        move(ADMIN, "REGISTRATION_OPEN", null).andExpect(status().isConflict());
+        move(ADMIN, "PUBLISHED", "Cancelled by mistake")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"));
+        mvc.perform(as(ADMIN, get("/api/events/{id}/history", id)))
+                .andExpect(jsonPath("$[3].toStatus").value("PUBLISHED"))
+                .andExpect(jsonPath("$[3].trigger").value("ADMIN"));
+    }
+
+    @Test
+    void anAdminCanStartAnEventNowWhichMovesItsStartToNow() throws Exception {
+        toClosed();
+        move(OWNER, "LIVE", null).andExpect(status().isConflict());
+        move(ADMIN, "LIVE", "Doors opened early")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("LIVE"))
+                .andExpect(jsonPath("$.startsAt").value(not("2099-11-14T03:30:00Z")));
+    }
+
+    @Test
+    void anAdminReopensACompletedEventOnlyWhileItsEndIsStillAhead() throws Exception {
+        toClosed();
+        lifecycle.transition(id, EventStatus.LIVE, "system", TransitionTrigger.SCHEDULER, null);
+        move(OWNER, "COMPLETED", null).andExpect(status().isOk());
+        move(OWNER, "LIVE", null).andExpect(status().isConflict());
+
+        jdbc.sql("UPDATE event SET starts_at = now() - interval '3 hours', ends_at = now() - interval '1 hour', "
+                        + "registration_opens_at = NULL, registration_closes_at = NULL WHERE id = :id")
+                .param("id", id)
+                .update();
+        move(ADMIN, "LIVE", null).andExpect(status().isUnprocessableContent());
+
+        jdbc.sql("UPDATE event SET ends_at = now() + interval '2 hours' WHERE id = :id")
+                .param("id", id)
+                .update();
+        move(ADMIN, "LIVE", "Ended by mistake").andExpect(status().isOk());
+    }
+
+    @Test
+    void anAdminEditsALiveEventAnOrganizerCant() throws Exception {
+        toClosed();
+        lifecycle.transition(id, EventStatus.LIVE, "system", TransitionTrigger.SCHEDULER, null);
+        mvc.perform(as(OWNER, put("/api/events/{id}", id)).content(event(code, 2)))
+                .andExpect(status().isConflict());
+        mvc.perform(as(ADMIN, put("/api/events/{id}", id)).content(event(code, 2)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.capacity").value(42));
     }
 
     @Test

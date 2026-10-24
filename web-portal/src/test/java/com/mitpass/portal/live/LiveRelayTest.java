@@ -200,6 +200,11 @@ class LiveRelayTest {
         assertThat(frame).isNotNull();
         assertThat(new String((byte[]) frame.getPayload(), StandardCharsets.UTF_8))
                 .isEqualTo(LiveRelay.RECONNECT);
+        // The upstream closes on its own thread, after the frame went out: under a loaded build it can lag a little.
+        long deadline = System.currentTimeMillis() + 3000;
+        while (relay.openUpstreams() > 0 && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20);
+        }
         assertThat(relay.openUpstreams()).isZero();
     }
 

@@ -10,6 +10,29 @@ spring:
         webflux:
           # Services serve /api/... themselves, so routes forward the path unchanged (docs/plans/phase-1.md §4).
           routes:
+            # Rate limited (Redis token buckets, D17): login by the browser's IP, scans by the scanner's account.
+            - id: auth-service-login
+              uri: lb://auth-service
+              predicates:
+                - Path=/api/auth/login
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@clientIpKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${mitpass.gateway.rate-limit.login.replenish-rate}
+                    redis-rate-limiter.burstCapacity: ${mitpass.gateway.rate-limit.login.burst-capacity}
+                    redis-rate-limiter.requestedTokens: ${mitpass.gateway.rate-limit.login.requested-tokens}
+            - id: checkin-service-scans
+              uri: lb://checkin-service
+              predicates:
+                - Path=/api/scans/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@userKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${mitpass.gateway.rate-limit.scans.replenish-rate}
+                    redis-rate-limiter.burstCapacity: ${mitpass.gateway.rate-limit.scans.burst-capacity}
+                    redis-rate-limiter.requestedTokens: ${mitpass.gateway.rate-limit.scans.requested-tokens}
             - id: auth-service
               uri: lb://auth-service
               predicates:
@@ -47,7 +70,7 @@ spring:
             - id: checkin-service
               uri: lb://checkin-service
               predicates:
-                - Path=/api/scans/**,/api/attendance/**
+                - Path=/api/attendance/**
             # Phase 7: the live dashboard feed (STOMP over WebSocket); only the portal's server connects, with a token
             - id: checkin-service-live
               uri: lb:ws://checkin-service
@@ -94,6 +117,10 @@ spring:
           # Send X-Forwarded-* so services build links (Location, OpenAPI servers) that point back at the gateway.
           trusted-proxies: "127\\.0\\.0\\.1|0:0:0:0:0:0:0:1|::1"
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}   # rate-limit buckets only: nothing to keep (D17)
+
 eureka:
   client:
     service-url:
@@ -120,18 +147,43 @@ springdoc:
     persist-authorization: true   # keep the pasted bearer token across page reloads
 
 management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true   # Grafana's p95 latency panel (D17)
+  tracing:
+    sampling:
+      probability: 1.0   # every request is traced (a demo; Zipkin at localhost:9411 by default, D17)
+  server:
+    port: 18080   # 10000 + server port: actuator only here, never published or routed (D17)
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health,info,prometheus,gateway
   endpoint:
     health:
       show-components: always   # names and status for the admin health page (D15); details stay hidden
+      probes:
+        enabled: true   # /actuator/health/liveness and /readiness for the compose healthchecks
+  health:
+    redis:
+      enabled: false   # Redis only holds rate-limit buckets; without it requests pass, so it can't make the gateway DOWN
 
 mitpass:
   gateway:
     admin-health:
       timeout: 2s   # GET /api/admin/health: an instance silent this long is reported DOWN (D15)
+    # Token buckets per key (D17): replenish-rate tokens/s, each request costs requested-tokens, burst-capacity caps the
+    # bucket. Login: 1 token/s at 6 per request = 10 logins/min, burst 5 (30/6). Scans: 10/s, burst 20.
+    rate-limit:
+      login:
+        replenish-rate: 1
+        burst-capacity: 30
+        requested-tokens: 6
+      scans:
+        replenish-rate: 10
+        burst-capacity: 20
+        requested-tokens: 1
   security:
     # Edge pre-check only: requests on these paths pass without a token, everything else needs a valid one.
     # Each service enforces its own list (and all role rules) again. Keep this a superset of the services' lists.
@@ -163,6 +215,7 @@ mitpass:
       - GET /actuator/health
       - GET /actuator/health/**
       - GET /actuator/info
+      - GET /actuator/prometheus   # served on the management port only (D17)
   cors:
     # The web portal (Phase 6). Add the LAN address when phones load the portal.
     allowed-origins:

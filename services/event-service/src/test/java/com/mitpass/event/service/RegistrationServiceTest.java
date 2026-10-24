@@ -281,7 +281,8 @@ class RegistrationServiceTest {
                 current.staticQrAllowed(),
                 current.passColor(),
                 current.reentryAllowed(),
-                current.certificateMinSessions());
+                current.certificateMinSessions(),
+                null);
     }
 
     private int seatsTaken(long event) {

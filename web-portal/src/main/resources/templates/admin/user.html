@@ -30,9 +30,10 @@
             <dt th:text="#{profile.year}">Year</dt><dd th:text="${user.year() != null} ? ${user.year()} : '—'">3</dd>
             <dt th:text="#{profile.regNo}">Register no.</dt><dd class="mono" th:text="${user.registerNumber() != null} ? ${user.registerNumber()} : '—'">2026509001</dd>
             <dt th:text="#{registrations.status}">Status</dt>
-            <dd><span class="badge badge--err" th:if="${user.locked()}" th:text="#{admin.locked}">Locked</span>
+            <dd><span class="badge badge--err" th:if="${user.isBanned()}" th:text="#{admin.banned}">Banned</span>
+                <span class="badge badge--err" th:if="${user.locked()}" th:text="#{admin.locked}">Locked</span>
                 <span class="badge badge--warn" th:if="${!user.emailVerified()}" th:text="#{admin.unverified}">Unverified</span>
-                <span class="badge badge--ok" th:if="${!user.locked() and user.emailVerified()}" th:text="#{admin.active}">Active</span></dd>
+                <span class="badge badge--ok" th:if="${!user.isBanned() and !user.locked() and user.emailVerified()}" th:text="#{admin.active}">Active</span></dd>
             <dt th:text="#{profile.since}">Member since</dt><dd th:text="${@fmt.when(user.createdAt())}">Fri 9 Oct</dd>
             <dt th:text="#{admin.lastLogin}">Last login</dt><dd th:text="${user.lastLoginAt() != null} ? ${@fmt.when(user.lastLoginAt())} : '—'">—</dd>
         </dl>
@@ -70,6 +71,27 @@
                 </div>
             </form>
         </dialog>
+        <form th:if="${user.isBanned()}" th:action="@{/admin/users/{id}/unban(id=${user.id()})}" method="post" class="inline">
+            <button type="submit" class="btn--secondary" th:text="#{admin.unban}">Lift ban</button>
+        </form>
+        <th:block th:unless="${user.isBanned()}">
+        <form th:action="@{/admin/users/{id}/ban(id=${user.id()})}" method="post" class="inline">
+            <button type="submit" class="btn--danger" data-open-dialog="ban-user" th:text="#{admin.ban}">Ban user</button>
+        </form>
+        <dialog class="confirm" id="ban-user" aria-labelledby="ban-user-title">
+            <form th:action="@{/admin/users/{id}/ban(id=${user.id()})}" method="post">
+                <input type="hidden" name="confirmed" value="true">
+                <div class="confirm__body">
+                    <h2 id="ban-user-title" th:text="#{admin.ban.title(${user.fullName()})}">Ban this user?</h2>
+                    <p class="mb-0" th:text="#{admin.ban.text}">They can't log in any more.</p>
+                </div>
+                <div class="confirm__foot">
+                    <button type="button" class="btn--ghost" data-close-dialog th:text="#{common.goBack}">Go back</button>
+                    <button type="submit" class="btn--danger" th:text="#{admin.ban}">Ban user</button>
+                </div>
+            </form>
+        </dialog>
+        </th:block>
     </section>
 </main>
 </html>

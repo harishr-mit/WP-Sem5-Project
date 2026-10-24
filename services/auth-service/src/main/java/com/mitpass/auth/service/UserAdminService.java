@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,7 +43,10 @@ public class UserAdminService {
     /** Roles are loaded in batches ({@code @BatchSize} on {@code User.roles}), not one query per user. */
     @Transactional(readOnly = true)
     public Page<User> search(String q, RoleName role, Pageable pageable) {
-        Page<User> page = users.findAll(UserSpecifications.search(q, role), pageable);
+        // With text the order is relevance (the specification's similarity), so the page's own sort is dropped.
+        Pageable paging =
+                q == null || q.isBlank() ? pageable : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        Page<User> page = users.findAll(UserSpecifications.search(q, role), paging);
         page.forEach(user -> {
             user.getRoles().size();
             user.getDepartment().getCode();
@@ -70,6 +74,29 @@ public class UserAdminService {
         user.replaceRoles(resolved);
         users.saveAndFlush(user);
         sessions.revokeAll(id, RevokeReason.ROLE_CHANGE);
+        return get(id);
+    }
+
+    /**
+     * Ban or unban an account (RL10, D17). A ban ends every session at once; an access token already issued runs out
+     * within its lifetime (15 min). Nobody can ban themselves or the last admin who can still log in.
+     */
+    @Transactional
+    public User setBanned(UUID id, boolean banned, UUID actingAdmin) {
+        User user = get(id);
+        if (banned) {
+            if (id.equals(actingAdmin)) {
+                throw new BusinessRuleException("You can't ban yourself");
+            }
+            if (user.hasRole(RoleName.ADMIN) && user.isEnabled() && users.countEnabledAdmins() <= 1) {
+                throw new BusinessRuleException("You can't ban the last admin");
+            }
+        }
+        user.setEnabled(!banned);
+        users.saveAndFlush(user);
+        if (banned) {
+            sessions.revokeAll(id, RevokeReason.DISABLED);
+        }
         return get(id);
     }
 

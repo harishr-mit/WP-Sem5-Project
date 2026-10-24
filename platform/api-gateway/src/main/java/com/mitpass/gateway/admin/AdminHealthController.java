@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 
 /**
@@ -73,7 +74,13 @@ public class AdminHealthController {
     }
 
     private Mono<InstanceHealth> check(ServiceInstance instance) {
-        String url = instance.getUri().toString();
+        // Actuator lives on the management port (D17), which Spring Cloud puts in the instance metadata.
+        String managementPort = instance.getMetadata().get("management.port");
+        String url = managementPort == null
+                ? instance.getUri().toString()
+                : UriComponentsBuilder.fromUri(instance.getUri())
+                        .port(managementPort)
+                        .toUriString();
         return http.get()
                 .uri(url + "/actuator/health")
                 .accept(MediaType.APPLICATION_JSON)

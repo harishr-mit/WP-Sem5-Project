@@ -1,0 +1,148 @@
+# Phase 8 demo requests (docs/plans/phase-8.md, docs/DECISIONS.md D17): the waitlist setting, voiding a check-in, the
+# admin overrides, ban/unban, search, and the rate limit. Run with the VS Code REST Client or IntelliJ's HTTP client, top
+# to bottom, against `docker compose up --build` (README "Quick start"). Metrics and traces: Grafana :3000, Zipkin :9411.
+
+@gw = http://localhost:8080
+
+### --- log in ------------------------------------------------------------------------------------------------------
+
+# @name organizer
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "organizer.a@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name admin
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "admin@mitpass.test", "password": "Passw0rd!"}
+
+###
+# @name priya
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{"email": "2026509001@student.annauniv.edu", "password": "Passw0rd!"}
+
+### --- 1. RL1: the waitlist is a per-event setting, off by default -------------------------------------------------
+
+### 201 A one-seat event WITHOUT a waitlist (change the code on a rerun)
+# @name event
+POST {{gw}}/api/events
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"code": "P8DEMO1", "title": "Phase 8 demo (1 seat)", "categoryId": 1, "venueId": 1, "capacity": 1,
+ "startsAt": "{{$datetime iso8601 25 m}}", "endsAt": "{{$datetime iso8601 4 h}}",
+ "registrationClosesAt": "{{$datetime iso8601 20 m}}", "waitlistEnabled": false}
+
+###
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "PUBLISHED"}
+
+###
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "REGISTRATION_OPEN"}
+
+### 201 CONFIRMED (the one seat)
+POST {{gw}}/api/registrations
+Authorization: Bearer {{priya.response.body.accessToken}}
+Content-Type: application/json
+
+{"eventId": {{event.response.body.id}}}
+
+### 409 `event-full`: no seat and no waitlist (a second student; use any other student login)
+POST {{gw}}/api/registrations
+Authorization: Bearer {{admin.response.body.accessToken}}
+Content-Type: application/json
+
+{"eventId": {{event.response.body.id}}}
+
+### --- 2. RL3 + RL10: the gate opens; an admin starts the event now ------------------------------------------------
+
+### 200 Close registration (organizer)
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "REGISTRATION_CLOSED"}
+
+### 409 An organizer can't start an event (the scheduler does)
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "LIVE"}
+
+### 200 An ADMIN can: LIVE now, the start time moves to now (the history says trigger ADMIN)
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{admin.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "LIVE", "reason": "Doors opened early"}
+
+### 200 Admins may edit an event in any state (capacity can't drop below the seats taken)
+GET {{gw}}/api/events/{{event.response.body.id}}/history
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+### --- 3. RL12: void a wrong check-in (scan first: docs/http/phase-5.http) -----------------------------------------
+
+### 200 The event's organizer or an admin voids a pass's check-ins (404 if there is nothing to void; 403 for a volunteer)
+POST {{gw}}/api/attendance/events/{{event.response.body.id}}/void
+Authorization: Bearer {{organizer.response.body.accessToken}}
+Content-Type: application/json
+
+{"passId": "REPLACE-WITH-THE-PASS-ID", "reason": "Scanned the wrong ticket"}
+
+### --- 4. RL10: end an event, then reopen it (a cancelled one is reinstated the same way: "to" = the state it was cancelled from) ---
+
+### 200 End the event (an organizer or admin may) …
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{admin.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "COMPLETED"}
+
+### 200 … an admin reopens a completed event (its end time must still be ahead; passes that expired get new ones)
+POST {{gw}}/api/events/{{event.response.body.id}}/transitions
+Authorization: Bearer {{admin.response.body.accessToken}}
+Content-Type: application/json
+
+{"to": "LIVE", "reason": "Ended by mistake"}
+
+### 201 Issue a new pass for one revoked pass (ADMIN; 409 if it isn't revoked or the registration has a valid pass)
+POST {{gw}}/api/passes/REPLACE-WITH-A-REVOKED-PASS-ID/reissue
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+### --- 5. RL10: users, search, ban ---------------------------------------------------------------------------------
+
+### 200 Search by part of a name, email or register number (trigram index; best match first)
+GET {{gw}}/api/users?q=priya
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+### 200 Ban a user (their sessions end; login answers 403 account-disabled); 422 for yourself or the last admin
+POST {{gw}}/api/users/00000000-0000-4000-8000-000000000006/ban
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+###
+POST {{gw}}/api/users/00000000-0000-4000-8000-000000000006/unban
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+### 200 Catalogue search is indexed too
+GET {{gw}}/api/events?q=hackathon
+
+### --- 6. The rate limit: 11 logins in a minute from one address → 429 with Retry-After --------------------------------
+### Run this one request a dozen times quickly.
+POST {{gw}}/api/auth/login
+X-Forwarded-For: 203.0.113.9
+Content-Type: application/json
+
+{"email": "nobody@example.com", "password": "wrong"}

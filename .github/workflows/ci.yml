@@ -25,3 +25,35 @@ jobs:
       # Formatting (Spotless), enforcer, compile, unit + Testcontainers tests.
       - name: Verify
         run: ./mvnw -B -ntp verify
+
+  # Phase 8 (D17): the whole stack in Docker, then register -> pass -> scan -> attendance through the gateway.
+  # Pull requests only: it builds every image (about 10 minutes), so pushes keep the fast `build` job alone.
+  e2e:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      # MITPASS_PROFILE=none: no bulk seed (the test makes its own data and the seed would only slow the start).
+      - name: Start the stack
+        run: docker compose up -d --build --wait --wait-timeout 900
+        env:
+          MITPASS_PROFILE: none
+
+      - name: End-to-end test
+        run: ./mvnw -B -ntp -Pe2e -pl e2e-tests verify
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v

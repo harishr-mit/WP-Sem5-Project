@@ -7,5 +7,7 @@ public enum TransitionTrigger {
     /** The time-based lifecycle scheduler. */
     SCHEDULER,
     /** A side effect of another change (for example, a waitlist promotion). */
-    SYSTEM
+    SYSTEM,
+    /** An admin override that no organizer may make (RL10, D17): un-cancel, force LIVE, reopen. */
+    ADMIN
 }

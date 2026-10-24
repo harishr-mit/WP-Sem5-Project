@@ -4,6 +4,7 @@ import com.mitpass.common.security.Roles;
 import com.mitpass.security.test.TestJwtIssuer;
 import com.mitpass.security.test.TestReactiveSecurityConfig;
 import java.net.URI;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -35,6 +36,9 @@ class AdminHealthTest {
     @Autowired
     WebTestClient web;
 
+    @Autowired
+    Environment env;
+
     @TestConfiguration
     static class FakeRegistry {
         /** Not @Primary: Spring Cloud's composite client (primary) merges it, as it would merge Eureka's. */
@@ -51,8 +55,12 @@ class AdminHealthTest {
                     URI uri = "API-GATEWAY".equals(serviceId)
                             ? URI.create("http://localhost:" + env.getProperty("local.server.port"))
                             : URI.create("http://localhost:1");
+                    // Actuator answers only on the management port, as Eureka's metadata says (D17).
+                    Map<String, String> metadata = "API-GATEWAY".equals(serviceId)
+                            ? Map.of("management.port", env.getProperty("local.management.port"))
+                            : Map.of();
                     return Flux.just(new DefaultServiceInstance(
-                            serviceId + "-1", serviceId, uri.getHost(), uri.getPort(), false));
+                            serviceId + "-1", serviceId, uri.getHost(), uri.getPort(), false, metadata));
                 }
 
                 @Override
@@ -86,6 +94,19 @@ class AdminHealthTest {
                 .isEqualTo("DOWN")
                 .jsonPath("$[1].detail")
                 .isEqualTo("not reachable");
+    }
+
+    @Test
+    void metricsAnswerOnTheManagementPortWithoutATokenAndActuatorIsGoneFromTheMainPort() {
+        WebTestClient.bindToServer()
+                .baseUrl("http://localhost:" + env.getProperty("local.management.port"))
+                .build()
+                .get()
+                .uri("/actuator/prometheus")
+                .exchange()
+                .expectStatus()
+                .isOk();
+        web.get().uri("/actuator/health").exchange().expectStatus().isNotFound();
     }
 
     @Test

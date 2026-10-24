@@ -230,6 +230,29 @@ class GatewayClientTest {
     }
 
     @Test
+    void loginForwardsTheBrowsersIpForTheGatewaysRateLimit() {
+        var page = new org.springframework.mock.web.MockHttpServletRequest();
+        page.setRemoteAddr("192.168.137.42");
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+                new org.springframework.web.context.request.ServletRequestAttributes(page));
+        try {
+            server.expect(requestTo("http://gateway.test/api/auth/login"))
+                    .andExpect(header("X-Forwarded-For", "192.168.137.42"))
+                    .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS)
+                            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                            .body("{\"type\":\"urn:mitpass:problem:too-many-requests\",\"status\":429}"));
+
+            assertThatThrownBy(() -> client.login("a@b.c", "x"))
+                    .isInstanceOfSatisfying(
+                            ApiProblemException.class,
+                            ex -> assertThat(ex.getStatus()).isEqualTo(429));
+            server.verify();
+        } finally {
+            org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+        }
+    }
+
+    @Test
     void aNonJsonErrorStillBecomesAnApiProblem() {
         server.expect(requestTo("http://gateway.test/api/events/5"))
                 .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE).body("upstream down"));

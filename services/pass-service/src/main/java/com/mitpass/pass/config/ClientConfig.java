@@ -19,11 +19,12 @@ public class ClientConfig {
 
     @Bean(defaultCandidate = false)
     @LoadBalanced
-    RestClient.Builder loadBalancedRestClientBuilder() {
+    RestClient.Builder loadBalancedRestClientBuilder(RestClient.Builder boot) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(2));
         factory.setReadTimeout(Duration.ofSeconds(3));
-        return RestClient.builder().requestFactory(factory);
+        // Boot's (prototype) builder: tracing and the circuit breaker (common-resilience) come with it (D17).
+        return boot.requestFactory(factory);
     }
 
     /** The event detail is public, so no token is relayed. */

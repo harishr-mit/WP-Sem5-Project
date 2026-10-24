@@ -9,11 +9,13 @@ import com.mitpass.event.domain.Category;
 import com.mitpass.event.domain.Event;
 import com.mitpass.event.domain.EventSession;
 import com.mitpass.event.domain.EventStatus;
+import com.mitpass.event.domain.RegistrationStatus;
 import com.mitpass.event.domain.Venue;
 import com.mitpass.event.mapper.EventMapper;
 import com.mitpass.event.repository.CategoryRepository;
 import com.mitpass.event.repository.EventRepository;
 import com.mitpass.event.repository.EventSpecifications;
+import com.mitpass.event.repository.RegistrationRepository;
 import com.mitpass.event.repository.VenueRepository;
 import com.mitpass.event.web.dto.EventCreateRequest;
 import com.mitpass.event.web.dto.EventDetailResponse;
@@ -47,6 +49,7 @@ public class EventService {
     private final EventMapper mapper;
     private final EventLifecycleService lifecycle;
     private final WaitlistService waitlist;
+    private final RegistrationRepository registrations;
     private final EntityManager entityManager;
     private final ZoneId zone;
 
@@ -57,6 +60,7 @@ public class EventService {
             EventMapper mapper,
             EventLifecycleService lifecycle,
             WaitlistService waitlist,
+            RegistrationRepository registrations,
             EntityManager entityManager,
             @Value("${mitpass.time-zone:Asia/Kolkata}") String timeZone) {
         this.events = events;
@@ -65,6 +69,7 @@ public class EventService {
         this.mapper = mapper;
         this.lifecycle = lifecycle;
         this.waitlist = waitlist;
+        this.registrations = registrations;
         this.entityManager = entityManager;
         this.zone = ZoneId.of(timeZone);
     }
@@ -97,6 +102,7 @@ public class EventService {
         event.setEligibleDepartments(request.eligibleDepartments());
         event.setStaticQrAllowed(!Boolean.FALSE.equals(request.staticQrAllowed()));
         event.setReentryAllowed(Boolean.TRUE.equals(request.reentryAllowed()));
+        event.setWaitlistEnabled(Boolean.TRUE.equals(request.waitlistEnabled()));
         event.assignOrganizer(organizer.id(), organizer.name() != null ? organizer.name() : organizer.email());
         assignCategoryAndVenue(event, request.categoryId(), request.venueId());
 
@@ -123,7 +129,9 @@ public class EventService {
                     "Event %d was changed by someone else (now version %d). Reload it and try again."
                             .formatted(id, event.getVersion()));
         }
-        CatalogRules.requireEditable(event);
+        if (!AllowedTransitions.isAdmin()) {
+            CatalogRules.requireEditable(event); // admins edit in any state (RL10); every other rule still holds
+        }
         CatalogRules.requireCodeUnchanged(event, request.code());
         CatalogRules.requireYearRange(request.minYear(), request.maxYear());
         if (events.existsByCodeAndIdNot(request.code(), id)) {
@@ -145,6 +153,16 @@ public class EventService {
         }
         if (request.reentryAllowed() != null) {
             event.setReentryAllowed(request.reentryAllowed());
+        }
+        if (Boolean.FALSE.equals(request.waitlistEnabled()) && event.isWaitlistEnabled()) {
+            long waiting = registrations.countByEventAndStatus(id, RegistrationStatus.WAITLISTED);
+            if (waiting > 0) {
+                throw new BusinessRuleException(
+                        "The waitlist can't be turned off while %d student(s) are on it".formatted(waiting));
+            }
+        }
+        if (request.waitlistEnabled() != null) {
+            event.setWaitlistEnabled(request.waitlistEnabled());
         }
         assignCategoryAndVenue(event, request.categoryId(), request.venueId());
         for (EventSession session : event.getSessions()) {

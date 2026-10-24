@@ -97,3 +97,6 @@ UPDATE event SET static_qr_allowed = FALSE WHERE code = 'AIWS26';
 -- certificate for 2 of its 3 sessions. Everything else: single entry, all sessions.
 UPDATE event SET reentry_allowed = TRUE WHERE code = 'RANG26';
 UPDATE event SET certificate_min_sessions = 2 WHERE code = 'AIWS26';
+
+-- Phase 8 (RL1, D17): the waitlist is per event and off by default; the one-seat quiz demonstrates it.
+UPDATE event SET waitlist_enabled = TRUE WHERE code = 'MINIQUIZ26';

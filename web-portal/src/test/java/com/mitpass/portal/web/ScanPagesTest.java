@@ -454,4 +454,48 @@ class ScanPagesTest {
                 Instant.parse("2026-11-14T03:30:00Z"),
                 false);
     }
+
+    /** RL12: the attendee list offers a void; it asks for a reason first and only a confirmed post acts. */
+    @Test
+    void voidingACheckInAsksForTheReasonFirst() throws Exception {
+        UUID passId = UUID.randomUUID();
+        given(gateway.attendees(1L))
+                .willReturn(new Page<>(
+                        List.of(new AttendeeRow(
+                                passId,
+                                NUMBER,
+                                "Priya Raman",
+                                "p@gmail.com",
+                                "VALID",
+                                1,
+                                Instant.parse("2026-11-14T03:30:00Z"),
+                                "MAIN",
+                                "IN")),
+                        0,
+                        100,
+                        1,
+                        1));
+
+        mvc.perform(get("/organizer/events/1/attendance/{p}/void", passId)
+                        .with(authentication(TestTokens.login(organizer))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Priya Raman")))
+                .andExpect(content().string(containsString("name=\"reason\"")));
+
+        mvc.perform(post("/organizer/events/1/attendance/{p}/void", passId)
+                        .with(csrf())
+                        .with(authentication(TestTokens.login(organizer)))
+                        .param("confirmed", "true")
+                        .param("reason", " "))
+                .andExpect(redirectedUrl("/organizer/events/1/attendance/" + passId + "/void"));
+        verify(gateway, never()).voidCheckIn(anyLong(), any(), any());
+
+        mvc.perform(post("/organizer/events/1/attendance/{p}/void", passId)
+                        .with(csrf())
+                        .with(authentication(TestTokens.login(organizer)))
+                        .param("confirmed", "true")
+                        .param("reason", "Scanned the wrong ticket"))
+                .andExpect(redirectedUrl("/organizer/events/1/attendance"));
+        verify(gateway).voidCheckIn(1L, passId, "Scanned the wrong ticket");
+    }
 }

@@ -1,6 +1,7 @@
 package com.mitpass.event;
 
 import com.mitpass.event.client.AuthServiceClient;
+import com.mitpass.event.client.CheckinClient;
 import com.mitpass.security.test.TestSecurityConfig;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -8,6 +9,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -54,6 +56,30 @@ public @interface EventIntegrationTest {
         }
     }
 
+    /** checkin-service's answer to "has anyone checked in?" (RL3): no, unless a test says so. */
+    class FakeCheckin extends CheckinClient {
+
+        public final Set<Long> withCheckIns = ConcurrentHashMap.newKeySet();
+
+        public volatile boolean down;
+
+        FakeCheckin() {
+            super(RestClient.create());
+        }
+
+        @Override
+        public boolean hasCheckIns(long eventId) {
+            if (down) {
+                throw new com.mitpass.common.web.error.ProblemException(
+                        org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                        com.mitpass.common.web.error.ProblemTypes.of("dependency-unavailable"),
+                        "Service unavailable",
+                        "checkin-service is down (test)");
+            }
+            return withCheckIns.contains(eventId);
+        }
+    }
+
     @TestConfiguration(proxyBeanMethods = false)
     class AuthStub {
 
@@ -61,6 +87,12 @@ public @interface EventIntegrationTest {
         @Primary
         FakeAuthService fakeAuthService() {
             return new FakeAuthService();
+        }
+
+        @Bean
+        @Primary
+        FakeCheckin fakeCheckin() {
+            return new FakeCheckin();
         }
     }
 }

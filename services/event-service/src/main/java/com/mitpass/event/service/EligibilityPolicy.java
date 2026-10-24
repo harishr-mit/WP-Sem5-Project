@@ -20,11 +20,16 @@ public class EligibilityPolicy {
         List<String> reasons = new ArrayList<>();
 
         boolean open = true;
-        if (event.getStatus() != EventStatus.REGISTRATION_OPEN) {
+        boolean waitlistOnly = false;
+        // The status is the gate, but the scheduler runs every 30 s: the closing time counts right away.
+        boolean closedByTime =
+                event.getStatus() == EventStatus.REGISTRATION_OPEN && !now.isBefore(event.registrationEndsAt());
+        if (event.isWaitlistEnabled() && (closedByTime || event.getStatus() == EventStatus.REGISTRATION_CLOSED)) {
+            waitlistOnly = true; // RL1: after closing, until LIVE, students can still join the waitlist
+        } else if (event.getStatus() != EventStatus.REGISTRATION_OPEN) {
             open = false;
             reasons.add("Registration is not open (the event is %s)".formatted(event.getStatus()));
-        } else if (!now.isBefore(event.registrationEndsAt())) {
-            // The status is the gate, but the scheduler runs every 30 s: the closing time counts right away.
+        } else if (closedByTime) {
             open = false;
             reasons.add("Registration closed at %s".formatted(event.registrationEndsAt()));
         }
@@ -50,7 +55,7 @@ public class EligibilityPolicy {
             }
         }
 
-        return new Eligibility(reasons.isEmpty(), open, reasons);
+        return new Eligibility(reasons.isEmpty(), open, reasons, waitlistOnly);
     }
 
     private static String describeYears(Integer min, Integer max) {

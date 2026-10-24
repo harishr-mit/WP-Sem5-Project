@@ -49,7 +49,9 @@ public final class AuthResponses {
             boolean emailVerified,
             boolean locked,
             Instant createdAt,
-            Instant lastLoginAt) {
+            Instant lastLoginAt,
+            /** Phase 8 (RL10): an admin banned the account; it can't log in. */
+            boolean banned) {
 
         /** Needs roles and department loaded. */
         public static UserResponse from(User user, Instant now) {
@@ -64,7 +66,8 @@ public final class AuthResponses {
                     user.isEmailVerified(),
                     user.isLocked(now),
                     user.getCreatedAt(),
-                    user.getLastLoginAt());
+                    user.getLastLoginAt(),
+                    !user.isEnabled());
         }
     }
 

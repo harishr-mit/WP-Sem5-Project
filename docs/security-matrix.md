@@ -50,10 +50,12 @@ pipeline's first step (`403 scan/unauthorized-scanner`, a business answer), so t
 | `GET /api/users/lookup?email=…` | organizer, admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 200 |
 | `PUT /api/users/{id}/roles` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 |
 | `POST /api/users/{id}/unlock` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 204 |
+| `POST /api/users/{id}/ban` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 |
+| `POST /api/users/{id}/unban` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 |
 | `DELETE /api/users/{id}/sessions` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 204 |
 | `POST /api/auth/keys/rotate` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 201 |
 
-90 / 90 cells as expected.
+100 / 100 cells as expected.
 
 ### event-service
 
@@ -102,13 +104,14 @@ pipeline's first step (`403 scan/unauthorized-scanner`, a business answer), so t
 | `GET /api/passes/{id}/qr/static` | student (holder), service (checkin) | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 |
 | `GET /api/passes/{id}/ticket.pdf` | student (holder) | ✅ 401 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 |
 | `POST /api/passes/{id}/revoke` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `POST /api/passes/{id}/reissue` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 409 | ✅ 403 |
 | `GET /api/revocations` | volunteer, organizer (owner), organizer (other), admin, service (checkin) | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
 | `GET /.well-known/pass-jwks.json` | public | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
 | `POST /api/passes/keys/rotate` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `GET /api/dead-letters` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `DELETE /api/dead-letters/{messageId}` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 404 | ✅ 403 |
 
-104 / 104 cells as expected.
+112 / 112 cells as expected.
 
 ### checkin-service
 
@@ -118,17 +121,18 @@ pipeline's first step (`403 scan/unauthorized-scanner`, a business answer), so t
 | `POST /api/scans/batch` | volunteer (assigned), volunteer (not assigned), organizer (owner), organizer (other) | ✅ 401 | ✅ 403 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 403 | ✅ 403 |
 | `GET /api/scans/manifest` | volunteer (assigned), organizer (owner) | ✅ 401 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 |
 | `GET /api/scans/lookup` | volunteer (assigned), volunteer (not assigned), organizer (owner), organizer (other) | ✅ 401 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 403 | ✅ 403 |
-| `GET /api/attendance/events/{id}/summary` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `GET /api/attendance/events/{id}/summary` | organizer (owner), admin, service token | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 200 |
 | `GET /api/attendance/events/{id}/live` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `GET /api/attendance/events/{id}/attendees` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `GET /api/attendance/events/{id}/export.csv` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `GET /api/attendance/events/{id}/certificates` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `POST /api/attendance/events/{id}/sync` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 | ✅ 200 | ✅ 403 |
+| `POST /api/attendance/events/{id}/void` | organizer (owner), admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 404 | ✅ 403 | ✅ 404 | ✅ 403 |
 | `GET /api/attendance/me` | any logged-in user | ✅ 401 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 | ✅ 200 |
 | `GET /api/dead-letters` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 200 | ✅ 403 |
 | `DELETE /api/dead-letters/{messageId}` | admin | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 403 | ✅ 404 | ✅ 403 |
 
-104 / 104 cells as expected.
+112 / 112 cells as expected.
 
 ### notification-service
 
@@ -150,3 +154,9 @@ health overview (D15), so here the gateway owns the role rule. Measured by `Admi
 | `GET /api/admin/health` | ADMIN | ✅ 401 | ✅ 403 | ✅ 403 | ✅ 200 |
 | `/api/admin/dead-letters/{service}/**` (P7, routed to the consumer's `/api/dead-letters/**`) | ADMIN | ✅ 401 | ✅ 403 | ✅ 403 | ✅ routed |
 | `GET /ws/checkin` (P7, WebSocket to checkin-service `/ws`; only the portal's server connects) | any valid token | ✅ 401 | ✅ routed | ✅ routed | ✅ routed |
+| `POST /api/auth/login` (P8, D17) | public, **rate limited** per browser address (`X-Forwarded-For`): 10/min, burst 5 | n/a | n/a | n/a | n/a |
+| `POST /api/scans/**` (P8, D17) | VOLUNTEER/ORGANIZER, **rate limited** per account: 10/s, burst 20 | ✅ 401 | n/a | n/a | n/a |
+
+Over the limit the gateway answers `429` with a ProblemDetail and `Retry-After` (`RateLimitTest`, against a real Redis). Redis being down lets requests through.
+
+**Actuator (P8, D17).** `/actuator/health`, `/info` and `/prometheus` are served only on each service's management port (10000 + its port, never published or routed), so the gateway's public paths do not reach them (`AdminHealthTest`, `ManagementPortTest`).

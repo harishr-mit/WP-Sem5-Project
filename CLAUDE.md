@@ -26,8 +26,9 @@ Rows marked (P3+) and so on describe parts that don't exist yet. They apply once
 | Part | Where | When you change it, also … |
 |---|---|---|
 | Build and versions | root `pom.xml`, `mvnw`, `.mvn/` | versions are pinned only in the root POM (D1); CI (`.github/workflows/ci.yml`) must stay green |
-| Shared libraries | `libs/common-web`, `libs/common-security`, `libs/security-test-support`, `libs/common-messaging` (P3+), `libs/common-pass` (P5+: pass numbers, pass-token verifier) | every service depends on them, so run the full `./mvnw verify`; register auto-configuration in `META-INF/spring/…AutoConfiguration.imports`; keep D6/D7 in step |
+| Shared libraries | `libs/common-web`, `libs/common-security`, `libs/security-test-support`, `libs/common-messaging` (P3+), `libs/common-pass` (P5+: pass numbers, pass-token verifier), `libs/common-resilience` (P8: a circuit breaker on every RestClient built from Boot's builder; `mitpass.resilience.*`), `libs/seed-data` (P8: the fake students for the `bulk-seed` profile of auth- and event-service, which must agree) | every service depends on them, so run the full `./mvnw verify`; register auto-configuration in `META-INF/spring/…AutoConfiguration.imports`; keep D6/D7 in step |
 | Infrastructure | `infra/docker-compose.yml`, `infra/postgres/init.sql` | `init.sql` runs only on an empty data volume, so a new database or role needs `docker compose down -v` (say so in README and `log.md`); update README ports. Redis (P7) holds only rebuildable live counters: nothing to migrate |
+| Whole stack and observability (P8) | root `docker-compose.yml` (includes `infra/docker-compose.yml`), `Dockerfile`, `infra/prometheus/`, `infra/grafana/` | every service has a management port (10000 + its port; actuator, Prometheus, probes; never published) that the compose healthchecks, Prometheus targets and `AdminHealthController` rely on: a new service needs its port in all three, its `JAR` build arg and healthcheck in the root compose, and a Prometheus target. A new metric used in the Grafana dashboard (`infra/grafana/dashboards/*.json`) is checked against `/actuator/prometheus`. `docker compose up --build` must stay green from a clean clone; XML comments in POMs must not contain `--` |
 | Gateway and discovery | `platform/api-gateway`, `platform/discovery-server` | a new service needs a route pair, a `swagger-ui.urls` entry (D6) and its public paths; JWT pre-check rules (D7). The gateway's own endpoints (`/api/admin/**`, ADMIN; P6, D15) are authorized by the gateway itself and have their own section in `docs/security-matrix.md`; a new consumer also gets a `/api/admin/dead-letters/<service>/**` route (P7). WebSocket routes use `lb:ws://` and keep the token pre-check |
 | Database schema | `services/*/src/main/resources/db/migration` | never edit an applied `V*` migration; add a new one. Demo data lives in repeatable `db/seed/R__*.sql`, which is off in tests |
 | REST APIs | `services/*` controllers and DTOs | D6 conventions (paths, ProblemDetail, `PageResponse`); `@PreAuthorize`; a row in the service's `SecurityMatrixTest` and `docs/security-matrix.md`; the phase's `docs/http/*.http` |
@@ -40,6 +41,7 @@ Rows marked (P3+) and so on describe parts that don't exist yet. They apply once
 | Web portal (P3+) | `web-portal` (templates, `static/css/tokens.css` + `portal.css`, `messages*.properties`, `ui-checks/`) | tokens never reach the browser (BFF; `NoTokensInPagesTest` covers every page); gateway calls get their token only through `TokenRefresher` (per-session lock, D15), never from the session directly; new text gets a key in **both** bundles (`I18nTest`; the owner checks the Tamil); colours only as tokens, for light and dark; a page answers HTMX with a fragment and still works without JS; a page change gets a Playwright check (*Working rules*); the UI reference (`PROJECT.md` §2). P7: the live dashboard reaches checkin-service only through `LiveRelay` (`/portal-ws`, upstream with the user's token); the offline bundle and queue carry no token (`NoTokensInPagesTest` covers the bundle); a message key with arguments writes an apostrophe as `''` (MessageFormat) |
 | Demo accounts | `db/seed` in auth- and event-service | fixed ids shared by both seeds (D8); change them together |
 | Tests | `src/test` in each module | tests for new behaviour; the full suite passes before a commit |
+| End-to-end and load tests (P8) | `e2e-tests`, `load-tests` (only in the `e2e` / `load` Maven profiles) | they drive a running stack through the gateway: `./mvnw -Pe2e -pl e2e-tests verify` (CI job `e2e` on pull requests), `./mvnw -Pload -pl load-tests gatling:test` (needs the bulk seed). A change to the core flow (register → pass → scan → attendance) updates `FullFlowE2ETest` |
 | Docs | `PROJECT.md`, `docs/DECISIONS.md`, README, `log.md`, `docs/plans/`, `docs/http/`, `docs/security-matrix.md`, `docs/REVIEW-LATER.md` (questions parked for the owner, reviewed after P8) | `PROJECT.md` first, then everything else that states the old behaviour |
 
 ## Working rules
@@ -78,3 +80,11 @@ At the end of the run, before the fininshing summary, please ensure the followin
 * Ensure all running instances are terminated, unless explicitly requested for a running instance.
 * Ensure 0 background tasks and 0 open sockets remaining.
 * Review the docs related to the current task/bug and add/modify them to reflect changes/fixes made.
+
+## Advisor use
+- For hard tasks, consult the advisor before committing to an approach: multi-file refactors, unclear root causes, architecture or data-model decisions, security-sensitive changes, and any task with several viable options.
+- Before declaring a non-trivial task done, get an advisor review of the result against the original request.
+- If a fix attempt fails twice, consult the advisor before trying a third.
+- Skip the advisor for simple edits, lookups, formatting, and routine commands.
+- When you consult the advisor, state the goal, the constraints, what you've already tried, and the specific decision you need help with.
+- Briefly tell me when you consulted the advisor and why.

@@ -1,0 +1,170 @@
+# The whole MITPass stack from a clean clone (docs/DECISIONS.md D17):
+#   docker compose up --build        # first build compiles everything inside Docker (a few minutes)
+#   docker compose down              # keep data      |   docker compose down -v   # wipe data
+# Needs Docker with Compose v2.20+ and about 6 GB of memory for it. infra/docker-compose.yml (only the infrastructure,
+# for running the services from Maven or the IDE) is included unchanged.
+# Portal http://localhost:8090 · gateway http://localhost:8080 · Eureka :8761 · Mailpit :8025 · RabbitMQ :15672
+# Grafana http://localhost:3000 (admin/admin) · Prometheus :9090 · Zipkin :9411
+name: mitpass
+
+include:
+  - infra/docker-compose.yml
+
+x-service: &service
+  restart: unless-stopped
+  depends_on:
+    postgres: {condition: service_healthy}
+    rabbitmq: {condition: service_healthy}
+    redis: {condition: service_healthy}
+    mailpit: {condition: service_healthy}
+    discovery-server: {condition: service_healthy}
+  environment: &service-env
+    EUREKA_URL: http://discovery-server:8761/eureka
+    DB_HOST: postgres
+    RABBITMQ_HOST: rabbitmq
+    REDIS_HOST: redis
+    MAIL_HOST: mailpit
+    MAILPIT_URL: http://mailpit:8025
+    GATEWAY_URL: http://api-gateway:8080
+    MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+    LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs   # JSON logs with trace and correlation ids
+
+services:
+  discovery-server:
+    build: {context: ., args: {JAR: platform/discovery-server/target/discovery-server.jar}}
+    restart: unless-stopped
+    mem_limit: 320m
+    ports: ["8761:8761"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:18761/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+
+  auth-service:
+    <<: *service
+    build: {context: ., args: {JAR: services/auth-service/target/auth-service.jar}}
+    mem_limit: 640m
+    environment:
+      <<: *service-env
+      EUREKA_INSTANCE_HOSTNAME: auth-service
+      SPRING_PROFILES_ACTIVE: ${MITPASS_PROFILE:-bulk-seed}   # 2,000 students; MITPASS_PROFILE=none for a bare stack
+      MANAGEMENT_SERVER_PORT: 18081   # the same as application.yml; the healthcheck reads it
+    healthcheck: &health
+      test: ["CMD-SHELL", "curl -fs http://localhost:$$MANAGEMENT_SERVER_PORT/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  event-service:
+    <<: *service
+    # Started last: its bulk seed publishes messages, and a message sent before its queue exists is dropped.
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      mailpit: {condition: service_healthy}
+      discovery-server: {condition: service_healthy}
+      auth-service: {condition: service_healthy}
+      pass-service: {condition: service_healthy}
+      checkin-service: {condition: service_healthy}
+      notification-service: {condition: service_healthy}
+    build: {context: ., args: {JAR: services/event-service/target/event-service.jar}}
+    mem_limit: 640m
+    environment:
+      <<: *service-env
+      EUREKA_INSTANCE_HOSTNAME: event-service
+      SPRING_PROFILES_ACTIVE: ${MITPASS_PROFILE:-bulk-seed}
+      MANAGEMENT_SERVER_PORT: 18082   # the same as application.yml; the healthcheck reads it
+    healthcheck: *health
+
+  pass-service:
+    <<: *service
+    build: {context: ., args: {JAR: services/pass-service/target/pass-service.jar}}
+    mem_limit: 640m
+    environment:
+      <<: *service-env
+      EUREKA_INSTANCE_HOSTNAME: pass-service
+      MANAGEMENT_SERVER_PORT: 18083   # the same as application.yml; the healthcheck reads it
+    healthcheck: *health
+
+  checkin-service:
+    <<: *service
+    build: {context: ., args: {JAR: services/checkin-service/target/checkin-service.jar}}
+    mem_limit: 640m
+    environment:
+      <<: *service-env
+      EUREKA_INSTANCE_HOSTNAME: checkin-service
+      MANAGEMENT_SERVER_PORT: 18084   # the same as application.yml; the healthcheck reads it
+    healthcheck: *health
+
+  notification-service:
+    <<: *service
+    build: {context: ., args: {JAR: services/notification-service/target/notification-service.jar}}
+    mem_limit: 640m
+    environment:
+      <<: *service-env
+      EUREKA_INSTANCE_HOSTNAME: notification-service
+      MANAGEMENT_SERVER_PORT: 18085   # the same as application.yml; the healthcheck reads it
+    healthcheck: *health
+
+  api-gateway:
+    <<: *service
+    build: {context: ., args: {JAR: platform/api-gateway/target/api-gateway.jar}}
+    mem_limit: 640m
+    ports: ["8080:8080"]
+    environment:
+      <<: *service-env
+      EUREKA_INSTANCE_HOSTNAME: api-gateway
+      # Logins are limited per browser address (D17): 5 in a row, then one every 6 s. Every browser on this laptop shares
+      # one address inside Docker, so a presenter switching accounts quickly may hit it: LOGIN_BURST_CAPACITY=300
+      # LOGIN_REPLENISH_RATE=10 docker compose up -d api-gateway raises it (a token per second: 6 tokens a login).
+      MITPASS_GATEWAY_RATE_LIMIT_LOGIN_BURST_CAPACITY: ${LOGIN_BURST_CAPACITY:-30}
+      MITPASS_GATEWAY_RATE_LIMIT_LOGIN_REPLENISH_RATE: ${LOGIN_REPLENISH_RATE:-1}
+      MANAGEMENT_SERVER_PORT: 18080   # the same as application.yml; the healthcheck reads it
+    healthcheck: *health
+
+  web-portal:
+    <<: *service
+    build: {context: ., args: {JAR: web-portal/target/web-portal.jar}}
+    mem_limit: 640m
+    ports: ["8090:8090"]
+    depends_on:
+      discovery-server: {condition: service_healthy}
+      api-gateway: {condition: service_healthy}
+    environment:
+      <<: *service-env
+      EUREKA_INSTANCE_HOSTNAME: web-portal
+      MANAGEMENT_SERVER_PORT: 18090   # the same as application.yml; the healthcheck reads it
+    healthcheck: *health
+
+  # ---- observability (D17) ---------------------------------------------------------------------------------------
+  zipkin:
+    image: openzipkin/zipkin:3
+    restart: unless-stopped
+    mem_limit: 384m
+    ports: ["9411:9411"]
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    restart: unless-stopped
+    mem_limit: 256m
+    ports: ["9090:9090"]
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: grafana/grafana:12.2.0
+    restart: unless-stopped
+    mem_limit: 256m
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"        # a demo: the dashboard opens without logging in
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [prometheus, zipkin]

@@ -1,11 +1,14 @@
 package com.mitpass.pass.service;
 
 import com.mitpass.common.messaging.contract.AttendanceMarked;
+import com.mitpass.common.messaging.contract.AttendanceVoided;
 import com.mitpass.common.messaging.contract.EventRescheduled;
 import com.mitpass.common.messaging.contract.EventStateChanged;
 import com.mitpass.common.messaging.contract.RegistrationCancelled;
 import com.mitpass.common.messaging.contract.RegistrationConfirmed;
 import com.mitpass.common.pass.PassNumber;
+import com.mitpass.common.web.error.BusinessRuleException;
+import com.mitpass.common.web.error.ConflictException;
 import com.mitpass.common.web.error.NotFoundException;
 import com.mitpass.pass.domain.EventRef;
 import com.mitpass.pass.domain.Pass;
@@ -22,7 +25,9 @@ import com.mitpass.pass.repository.RevocationRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -105,34 +110,122 @@ public class PassLifecycleService {
                     confirmed.registrationId());
             return Optional.empty();
         }
-        int seq = eventStore.nextPassSeq(event.getId());
-        Pass pass = passes.save(new Pass(
-                UUID.randomUUID(),
-                PassNumber.of(event.getCode(), seq),
-                confirmed.registrationId(),
+        Pass pass = newPass(
                 event,
+                confirmed.registrationId(),
                 confirmed.userId(),
                 confirmed.userName(),
                 confirmed.userEmail(),
-                now));
-        record(
-                pass,
-                null,
-                PassStatus.ISSUED,
                 now,
                 SYSTEM,
                 TransitionTrigger.SYSTEM,
                 confirmed.viaPromotion() ? "Promoted from the waitlist" : "Registration confirmed");
+        return Optional.of(pass);
+    }
+
+    /** A new ISSUED pass with the next number (ACTIVE at once if its live code has unlocked), plus PassIssued. */
+    private Pass newPass(
+            EventRef event,
+            UUID registrationId,
+            UUID userId,
+            String holderName,
+            String holderEmail,
+            Instant now,
+            String actor,
+            TransitionTrigger trigger,
+            String reason) {
+        int seq = eventStore.nextPassSeq(event.getId());
+        Pass pass = passes.save(new Pass(
+                UUID.randomUUID(),
+                PassNumber.of(event.getCode(), seq),
+                registrationId,
+                event,
+                userId,
+                holderName,
+                holderEmail,
+                now));
+        record(pass, null, PassStatus.ISSUED, now, actor, trigger, reason);
         if (policy.isUnlocked(event, now) && !policy.isOver(event, now)) {
             move(pass, PassStatus.ACTIVE, now, SYSTEM, TransitionTrigger.SYSTEM, "Live code already unlocked");
         }
         events.issued(pass);
-        log.info(
-                "Issued pass {} ({}) for registration {}",
-                pass.getPassNumber(),
-                pass.getStatus(),
-                confirmed.registrationId());
-        return Optional.of(pass);
+        log.info("Issued pass {} ({}) for registration {}", pass.getPassNumber(), pass.getStatus(), registrationId);
+        return pass;
+    }
+
+    /**
+     * RL10: an admin brought the event back (un-cancel, or reopen after it ended). Each registration whose current pass
+     * was revoked by the cancellation, or expired with the event, gets a new pass; registrations cancelled meanwhile
+     * don't. Safe to repeat: a registration that already has a valid pass is skipped.
+     */
+    private void reissueAfter(long eventId, boolean uncancelled, Instant now) {
+        EventRef event = eventRefs.findById(eventId).orElseThrow();
+        Map<UUID, Pass> current = new HashMap<>();
+        for (Pass pass : passes.findByEvent_Id(eventId, org.springframework.data.domain.Pageable.unpaged())) {
+            current.merge(pass.getRegistrationId(), pass, (a, b) -> currentOf(a, b));
+        }
+        int issued = 0;
+        for (Pass pass : current.values()) {
+            boolean due = uncancelled
+                    ? pass.getStatus() == PassStatus.REVOKED && pass.getRevokeReason() == RevokeReason.EVENT_CANCELLED
+                    : pass.getStatus() == PassStatus.EXPIRED;
+            if (due && !eventStore.isCancelled(pass.getRegistrationId())) {
+                newPass(
+                        event,
+                        pass.getRegistrationId(),
+                        pass.getUserId(),
+                        pass.getHolderName(),
+                        pass.getHolderEmail(),
+                        now,
+                        SYSTEM,
+                        TransitionTrigger.SYSTEM,
+                        "Re-issued: event " + (uncancelled ? "reinstated" : "reopened") + " (replaces "
+                                + pass.getPassNumber() + ")");
+                issued++;
+            }
+        }
+        log.info("Event {} {}: re-issued {} pass(es)", eventId, uncancelled ? "reinstated" : "reopened", issued);
+    }
+
+    private static Pass currentOf(Pass a, Pass b) {
+        if (a.getStatus().isValid() != b.getStatus().isValid()) {
+            return a.getStatus().isValid() ? a : b;
+        }
+        return a.getIssuedAt().isAfter(b.getIssuedAt()) ? a : b;
+    }
+
+    /**
+     * An admin re-issues one revoked pass (RL10): a new pass for the same registration, unless the registration was
+     * cancelled, it already has a valid pass, or the event is over or cancelled.
+     */
+    public Pass reissueByAdmin(UUID passId, String actor) {
+        Pass old = passes.findDetailedById(passId).orElseThrow(() -> NotFoundException.of("Pass", passId));
+        if (old.getStatus() != PassStatus.REVOKED) {
+            throw new ConflictException(
+                    "Only a revoked pass can be re-issued (this one is %s)".formatted(old.getStatus()));
+        }
+        if (passes.findByRegistrationId(old.getRegistrationId())
+                .map(p -> p.getStatus().isValid())
+                .orElse(false)) {
+            throw new ConflictException("This registration already has a valid pass");
+        }
+        if (eventStore.isCancelled(old.getRegistrationId())) {
+            throw new BusinessRuleException("The registration was cancelled, so it gets no pass");
+        }
+        EventRef event = old.getEvent();
+        if ("CANCELLED".equals(event.getStatus()) || "COMPLETED".equals(event.getStatus())) {
+            throw new BusinessRuleException("The event is %s: bring it back first".formatted(event.getStatus()));
+        }
+        return newPass(
+                event,
+                old.getRegistrationId(),
+                old.getUserId(),
+                old.getHolderName(),
+                old.getHolderEmail(),
+                clock.instant(),
+                actor,
+                TransitionTrigger.MANUAL,
+                "Re-issued by an admin (replaces " + old.getPassNumber() + ")");
     }
 
     /** {@code RegistrationCancelled}: a CONFIRMED registration's pass is revoked; none yet → tombstone. */
@@ -140,9 +233,10 @@ public class PassLifecycleService {
         if (!"CONFIRMED".equals(cancelled.previousStatus())) {
             return; // a waitlisted registration never had a pass
         }
+        // Always remembered: a pass revoked by an event cancellation must not come back for it (RL10 re-issue).
+        eventStore.markCancelled(cancelled.registrationId(), cancelled.cancelledAt());
         Optional<Pass> pass = passes.findByRegistrationId(cancelled.registrationId());
         if (pass.isEmpty()) {
-            eventStore.markCancelled(cancelled.registrationId(), cancelled.cancelledAt());
             return;
         }
         if (pass.get().getStatus().isValid()) {
@@ -168,6 +262,11 @@ public class PassLifecycleService {
         if (!eventStore.updateStatus(changed.eventId(), changed.toStatus(), changed.changedAt(), now)) {
             log.info("Ignoring an older state change of event {} ({})", changed.eventId(), changed.toStatus());
             return;
+        }
+        if ("CANCELLED".equals(changed.fromStatus())) {
+            reissueAfter(changed.eventId(), true, now);
+        } else if ("COMPLETED".equals(changed.fromStatus()) && "LIVE".equals(changed.toStatus())) {
+            reissueAfter(changed.eventId(), false, now);
         }
         switch (changed.toStatus()) {
             case "CANCELLED" -> {
@@ -208,6 +307,17 @@ public class PassLifecycleService {
                 .ifPresentOrElse(
                         pass -> pass.recordCheckIn(marked.checkedInAt(), marked.singleEntry()),
                         () -> log.warn("AttendanceMarked for unknown pass {}; ignored", marked.passId()));
+    }
+
+    /** {@code AttendanceVoided} (RL12): with no check-in left, the pass counts as never used again. */
+    public void attendanceVoided(AttendanceVoided voided) {
+        if (voided.stillCheckedIn()) {
+            return;
+        }
+        passes.findById(voided.passId())
+                .ifPresentOrElse(
+                        Pass::clearCheckIn,
+                        () -> log.warn("AttendanceVoided for unknown pass {}; ignored", voided.passId()));
     }
 
     /** An organizer or admin revokes a pass (409 {@code illegal-transition} if it is no longer valid). */

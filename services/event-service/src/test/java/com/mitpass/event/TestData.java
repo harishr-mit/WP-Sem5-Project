@@ -35,10 +35,11 @@ public final class TestData {
         event.setStartsAt(startsAt);
         event.setEndsAt(startsAt.plusSeconds(3 * 3600));
         event.assignOrganizer(ORGANIZER_ID, "Test Organizer");
+        event.setWaitlistEnabled(true); // tests written before RL1 expect a waitlist
         return event;
     }
 
-    /** An event in 2099 at venue 1 (Main Auditorium, V2 reference data), category 1. */
+    /** An event in 2099 at venue 1 (Main Auditorium, V2 reference data), category 1, with a waitlist (RL1). */
     public static EventCreateRequest createRequest(
             String code, int capacity, List<String> departments, Integer minYear, Integer maxYear) {
         return new EventCreateRequest(
@@ -60,6 +61,7 @@ public final class TestData {
                 null,
                 null,
                 null,
-                null);
+                null,
+                Boolean.TRUE);
     }
 }

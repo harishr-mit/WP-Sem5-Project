@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.mitpass</groupId>
+        <artifactId>mitpass-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>load-tests</artifactId>
+    <name>MITPass :: Load tests</name>
+    <description>Gatling: 1,000 students arriving in 10 minutes across 4 gates (docs/DECISIONS.md D17). Only in the load profile.</description>
+
+    <!--
+        Not part of ./mvnw verify. Needs the stack from `docker compose up - build` with the bulk seed loaded:
+          ./mvnw -Pload -pl load-tests gatling:test
+        The report is written to load-tests/target/gatling/; docs/load-test/ keeps the one we ship.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>com.mitpass</groupId>
+            <artifactId>seed-data</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.gatling.highcharts</groupId>
+            <artifactId>gatling-charts-highcharts</artifactId>
+            <version>${gatling.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.gatling</groupId>
+                <artifactId>gatling-maven-plugin</artifactId>
+                <version>${gatling-maven-plugin.version}</version>
+                <configuration>
+                    <simulationClass>com.mitpass.load.ArrivalSimulation</simulationClass>
+                    <runMultipleSimulations>false</runMultipleSimulations>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

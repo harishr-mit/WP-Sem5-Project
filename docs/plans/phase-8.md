@@ -204,6 +204,46 @@ Commits: the owner approves each one (pre-phase commit of this plan, a mid-run c
 6. **Q6: Void check-in reason** is required (free text, max 200 chars).
 7. **Pre-phase commit:** the owner commits this plan (`chore: phase 8 plan`) before T10.1.
 
-## 18. As built
+## 18. As built (2026-10-24)
 
-*(filled in during the phase)*
+### Exit criteria
+
+1. **Clean start.** The committable tree (tracked plus untracked, non-ignored files) was copied to a fresh folder and `docker compose up -d --build --wait` brought up all 15 containers healthy; the bulk seed ran by itself (12 events, 2,046 users, 2,547 confirmed + 335 waitlisted registrations, one pass and one check-in copy per confirmed registration, 40 volunteers assigned); every queue and DLQ empty. Nothing was installed on the host apart from Docker.
+2. **Observability.** Prometheus 8/8 targets up; Grafana loads *MITPass overview* (12 panels; every query returns series); one scan is one Zipkin trace across api-gateway, checkin-service, event-service and pass-service, with the `pass-service.inbox receive` consumer span: the trace crosses RabbitMQ.
+3. **Graceful degradation.** With pass-service stopped, a scan is still ACCEPTED, a repeat is ALREADY_CHECKED_IN, and Admin · Health shows pass-service DOWN.
+4. **Rate limits.** `RateLimitTest` (real Redis): login 429 per address, scans 429 per scanner, ProblemDetail with `Retry-After`. The Playwright run hit the login limit for real (12 logins in a minute): the portal showed *Too many login attempts. Please wait a minute and try again.* (checked). All browsers on the laptop share one address inside Docker, so a presenter switching accounts quickly can hit it: `LOGIN_BURST_CAPACITY` / `LOGIN_REPLENISH_RATE` in the root compose raise it (verified: 15 rapid logins pass; the default allows 5, then 429). The default is the owner's Q1 value: to be discussed.
+5. **End to end.** `FullFlowE2ETest` is green against the running stack (8–18 s): sign-up with email verification through Mailpit, event, registration, pass, admin start-now, scan, duplicate, attendance, pass email, scan trace. CI job `e2e` runs it on pull requests.
+6. **Load test.** 1,000 arrivals in 10 minutes with 300 in the first minute: 4,000 requests, 0 failures, p95 104 ms, p99 833 ms (`docs/load-test/`).
+7. **RL features.** Waitlist setting (RL1), undo-LIVE refused after a check-in (RL3), admin overrides and ban (RL10), void check-in (RL12), trigram search; each has tests (module counts below) and a portal path.
+8. **Demo script.** `docs/DEMO_SCRIPT.md`. Exercised in this phase: the API journey (e2e test: sign-up with the email, registration, pass, scan, duplicate, attendance, trace), steps 4.1 and 7 and the void in a real browser (`p8-flows.mjs`: Start now, Void check-in, Issue a new pass, Cancel → Reinstate, Ban → Lift ban; phone dark and desktop light), Grafana/Prometheus/Zipkin through their APIs, scanning with pass-service stopped. **Not run in a browser by me in this phase:** the sign-up page with the Mailpit link (`signup.mjs`, Phase 6), the live dashboard and the offline scanner (`p7.mjs`, Phase 7: not re-run), reading the Grafana and Zipkin pages by eye, and anything with phones (RL14). The owner's live run covers them.
+9. **Tests.** Full `./mvnw verify` green, security matrix rows for every new endpoint (ban, unban, re-issue, void, summary for SERVICE) and the gateway's rate-limited routes. Playwright: `p8.mjs` (57 checks at 360 px and 1280 px, light and dark, no console errors) and `p8-flows.mjs` (22 checks per run; desktop light and phone dark).
+
+### Different from the plan
+
+- **K1:** one Dockerfile with a `JAR` build argument instead of one target per service.
+- **K7:** Prometheus uses static targets on the management ports (Eureka discovery gives the main port). `mem_limit` is 640 MB per service (512 MB was reached under load; the 640 MB setting came after the load test and was not re-measured under load).
+- **K8:** the e2e test drives an already-running stack (CI starts it with `docker compose up --wait`) instead of `ComposeContainer`.
+- **K11:** a full event without a waitlist answers 409 `event-full`, not 422.
+- **K16:** voided check-ins move to `voided_attendance` instead of carrying a flag.
+- **§6:** `spring-cloud-circuitbreaker-resilience4j` was not used (its TimeLimiter runs calls on another thread, which breaks the thread-bound token relay); `libs/common-resilience` is one interceptor on Boot's `RestClient.Builder`. Settings live under `mitpass.resilience.*`.
+- **§7:** a scanner's 429 shows as the red error card in the portal, not amber.
+- **§8:** migration numbers: event-service V9 = search, V10 = waitlist setting, V11 = admin transitions.
+- **Seed:** a 60 s start delay (a mail dead-lettered when event-service was not yet discoverable); volunteer assignments inserted directly.
+
+### Bugs found and fixed during the phase
+
+1. `OutboxRelay` edited while a background build compiled it: a `NoSuchMethodError` in the test run (not a code bug; don't edit during a build).
+2. `AdminHealthController` built the management URL from `getScheme()`, which can be null; it now swaps the port on `getUri()`.
+3. `LiveRelayTest.theUpstreamIsClosedAfterReconnectEvery…` asserted at once what happens on another thread: it now waits (flaky under full-build load).
+4. A student who cancelled after the event's cancellation was invisible to pass-service, so a re-issue would have given them a pass: `registrationCancelled` now always records it.
+5. "Start now" with a registration window ahead broke `ck_event_registration_closes`: the override now ends registration at the new start.
+6. `CheckInVoids`: a Java text block lost the space after `WHERE` (`VoidCheckInTest` caught it).
+7. The seed dead-lettered one email at startup (see above), and Mailpit's default retention pruned the seed's mails (`MP_MAX_MESSAGES` raised).
+
+### Open
+
+- `AuthFlowTests.signUpVerifyLoginRefreshAndCatchReuse` failed once ("verification link invalid or expired") and passed in 7 reruns; cause unknown. Watch CI.
+- pass-service's `EventCopyReconciler` only looks at events with valid passes, so a lost "un-cancel" message would not be repaired by it (a purged queue would be needed to lose it).
+- After closing, a late student on a waitlist-enabled event is always WAITLISTED even if a seat is free (the owner's rule); the seat goes to the waitlist on the next cancellation.
+- The two-phone run (RL14) and RL4 (e) are the owner's review after this phase.
+- **Linux check (2026-10-24, WSL2 Ubuntu 26.04 on the owner's machine).** A throwaway commit of the committable tree was cloned inside Ubuntu (ext4): 762 files, `mvnw` mode 755, no CRLF in any file, every shell script parses. `docker compose build` ran from that checkout (all 8 images built); the containers then had to run from a Windows copy of the same files, because Docker Desktop's WSL integration is not enabled for Ubuntu (bind mounts from the Ubuntu filesystem fail). Against that stack the CI's e2e step (`mvnw -Pe2e -pl e2e-tests verify`) passed on Linux with a project-local JDK 21.0.13 and Maven 3.9.16 (Spotless included). **Not run on Linux:** the CI `build` job (`./mvnw verify` with Testcontainers: needs Docker inside Ubuntu) and the real workflow on GitHub. **Finding:** this Ubuntu has no `unzip`; `./mvnw` then fails with "Failed to validate Maven distribution SHA-256" (the wrapper falls back to the `.tar.gz` but checks the pinned `.zip` checksum). GitHub's `ubuntu-latest` has `unzip`, so CI is unaffected; README now says so.

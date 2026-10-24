@@ -185,6 +185,70 @@ class PassLifecycleServiceTest {
         assertThat(passes.findByRegistrationId(late)).isEmpty();
     }
 
+    // ---- RL10 (D17): an admin brings an event back; REVOKED and EXPIRED stay final, new passes are issued -----
+
+    @Test
+    void reinstatingACancelledEventReissuesPassesExceptForRegistrationsCancelledMeanwhile() {
+        UUID kept = UUID.randomUUID();
+        UUID leftMeanwhile = UUID.randomUUID();
+        listener.onMessage(message(confirmed(event, kept, UUID.randomUUID())));
+        listener.onMessage(message(confirmed(event, leftMeanwhile, UUID.randomUUID())));
+        String oldNumber = pass(kept).getPassNumber();
+        listener.onMessage(message(stateChanged(event, "REGISTRATION_OPEN", "CANCELLED", TestClock.START)));
+        // the pass is already revoked, but the cancellation must still be remembered
+        listener.onMessage(message(cancelled(event, leftMeanwhile, UUID.randomUUID(), "CONFIRMED")));
+
+        listener.onMessage(
+                message(stateChanged(event, "CANCELLED", "REGISTRATION_OPEN", TestClock.START.plusSeconds(60))));
+
+        Pass fresh = pass(kept);
+        assertThat(fresh.getStatus()).isEqualTo(PassStatus.ISSUED);
+        assertThat(fresh.getPassNumber()).isNotEqualTo(oldNumber);
+        assertThat(passes.findAllByRegistrationId(kept))
+                .extracting(Pass::getStatus)
+                .containsExactlyInAnyOrder(PassStatus.REVOKED, PassStatus.ISSUED);
+        assertThat(passes.findAllByRegistrationId(leftMeanwhile)).hasSize(1);
+        assertThat(outboxCount("pass.issued", event)).isEqualTo(3);
+
+        // Another un-cancel message (say, the reconciler's) changes nothing: the registration has a valid pass.
+        listener.onMessage(
+                message(stateChanged(event, "CANCELLED", "REGISTRATION_OPEN", TestClock.START.plusSeconds(120))));
+        assertThat(passes.findAllByRegistrationId(kept)).hasSize(2);
+    }
+
+    @Test
+    void reopeningACompletedEventReissuesItsExpiredPasses() {
+        UUID registration = UUID.randomUUID();
+        listener.onMessage(message(confirmed(event, registration, UUID.randomUUID())));
+        listener.onMessage(message(stateChanged(event, "REGISTRATION_CLOSED", "LIVE", TestClock.START)));
+        listener.onMessage(message(stateChanged(event, "LIVE", "COMPLETED", TestClock.START.plusSeconds(60))));
+        String expired = pass(registration).getPassNumber();
+
+        listener.onMessage(message(stateChanged(event, "COMPLETED", "LIVE", TestClock.START.plusSeconds(120))));
+
+        Pass fresh = pass(registration);
+        assertThat(fresh.getStatus()).isEqualTo(PassStatus.ACTIVE);
+        assertThat(fresh.getPassNumber()).isNotEqualTo(expired);
+    }
+
+    @Test
+    void anAdminReissuesOneRevokedPassOnce() {
+        UUID registration = UUID.randomUUID();
+        listener.onMessage(message(confirmed(event, registration, UUID.randomUUID())));
+        Pass old = pass(registration);
+        lifecycle.revokeByStaff(old.getId(), "admin", true, "wrong person");
+
+        Pass fresh = lifecycle.reissueByAdmin(old.getId(), "admin");
+        assertThat(fresh.getStatus()).isEqualTo(PassStatus.ISSUED);
+        assertThat(fresh.getRegistrationId()).isEqualTo(registration);
+        assertThat(passes.findById(old.getId()).orElseThrow().getStatus()).isEqualTo(PassStatus.REVOKED);
+
+        assertThatThrownBy(() -> lifecycle.reissueByAdmin(old.getId(), "admin"))
+                .isInstanceOf(com.mitpass.common.web.error.ConflictException.class);
+        assertThatThrownBy(() -> lifecycle.reissueByAdmin(fresh.getId(), "admin"))
+                .isInstanceOf(com.mitpass.common.web.error.ConflictException.class);
+    }
+
     @Test
     void completedExpiresAndLiveActivates() {
         UUID registration = UUID.randomUUID();

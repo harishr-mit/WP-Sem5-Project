@@ -25,16 +25,16 @@ public interface EventMapper {
     @Mapping(target = "categoryName", source = "category.name")
     @Mapping(target = "venueId", source = "venue.id")
     @Mapping(target = "venueName", source = "venue.name")
-    @Mapping(target = "allowedTransitions", expression = "java(java.util.List.copyOf(event.getStatus().manualNext()))")
+    @Mapping(target = "allowedTransitions", expression = "java(com.mitpass.event.service.AllowedTransitions.of(event))")
     EventSummaryResponse toSummary(Event event);
 
-    @Mapping(target = "allowedTransitions", expression = "java(java.util.List.copyOf(event.getStatus().manualNext()))")
+    @Mapping(target = "allowedTransitions", expression = "java(com.mitpass.event.service.AllowedTransitions.of(event))")
     EventDetailResponse toDetail(Event event);
 
     SessionResponse toResponse(EventSession session);
 
     // eligibleDepartments is set by the service: MapStruct would clear() the entity's read-only getter list.
-    // staticQrAllowed and reentryAllowed too: null means "default" on create and "unchanged" on update.
+    // staticQrAllowed, reentryAllowed, waitlistEnabled too: null means "default" on create and "unchanged" on update.
     @Mapping(target = "category", ignore = true)
     @Mapping(target = "venue", ignore = true)
     @Mapping(target = "sessions", ignore = true)
@@ -43,6 +43,7 @@ public interface EventMapper {
     @Mapping(target = "eligibleDepartments", ignore = true)
     @Mapping(target = "staticQrAllowed", ignore = true)
     @Mapping(target = "reentryAllowed", ignore = true)
+    @Mapping(target = "waitlistEnabled", ignore = true)
     void apply(EventCreateRequest request, @MappingTarget Event event);
 
     @Mapping(target = "category", ignore = true)
@@ -53,5 +54,6 @@ public interface EventMapper {
     @Mapping(target = "eligibleDepartments", ignore = true)
     @Mapping(target = "staticQrAllowed", ignore = true)
     @Mapping(target = "reentryAllowed", ignore = true)
+    @Mapping(target = "waitlistEnabled", ignore = true)
     void apply(EventUpdateRequest request, @MappingTarget Event event);
 }

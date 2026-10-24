@@ -29,7 +29,7 @@
                     <a th:href="@{/events/{id}(id=${e.id()})}" th:text="${e.title()}">HackNight 26</a>
                     <br><small class="mono" th:text="${e.code()}">TECHFEST26</small>
                     <div class="row mt-0" style="font-size:.88rem">
-                        <a th:if="${e.status() != 'LIVE' and e.status() != 'COMPLETED' and e.status() != 'CANCELLED'}"
+                        <a th:if="${currentUser.hasRole('ADMIN') or (e.status() != 'LIVE' and e.status() != 'COMPLETED' and e.status() != 'CANCELLED')}"
                            th:href="@{/organizer/events/{id}/edit(id=${e.id()})}" th:text="#{org.edit}">Edit</a>
                         <a th:href="@{/organizer/events/{id}/registrations(id=${e.id()})}" th:text="#{org.tab.registrations}">Registrations</a>
                         <a th:href="@{/organizer/events/{id}/staff(id=${e.id()})}" th:text="#{org.tab.staff}">Volunteers</a>

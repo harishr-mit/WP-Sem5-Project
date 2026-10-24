@@ -131,6 +131,12 @@ class SecurityMatrixTest {
                         "/api/passes/{id}/revoke",
                         f -> "/api/passes/" + f.pass() + "/revoke",
                         ownerAdmin),
+                // RL10: admins only (the fixture pass isn't revoked, so an admin gets 409, past security)
+                endpoint(
+                        HttpMethod.POST,
+                        "/api/passes/{id}/reissue",
+                        f -> "/api/passes/" + f.pass() + "/reissue",
+                        Rule.only(ADMIN)),
                 endpoint(
                         HttpMethod.GET,
                         "/api/revocations",
